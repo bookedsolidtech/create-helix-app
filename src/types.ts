@@ -1,6 +1,7 @@
 export type Framework =
   | 'react-next'
   | 'react-vite'
+  | 'remix'
   | 'vue-nuxt'
   | 'vue-vite'
   | 'svelte-kit'
