@@ -1,5 +1,11 @@
 # create-helix
 
+## 0.7.3
+
+### Patch Changes
+
+- 7c24bff: Add --eslint and --no-eslint flags for non-interactive mode
+
 ## 0.7.2
 
 ### Patch Changes
