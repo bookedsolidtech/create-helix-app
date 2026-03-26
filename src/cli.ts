@@ -125,6 +125,137 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
     p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX + Drupal.'));
 }
 
+export function runInfoCommand(templateId: string | null, isJson: boolean): void {
+  if (templateId === null) {
+    console.error('Usage: create-helix info <template-or-preset-id>');
+    process.exit(1);
+  }
+
+  const template = TEMPLATES.find((t) => t.id === templateId);
+  if (template) {
+    if (isJson) {
+      console.log(
+        JSON.stringify(
+          {
+            type: 'template',
+            id: template.id,
+            name: template.name,
+            description: template.description,
+            hint: template.hint,
+            dependencies: template.dependencies,
+            devDependencies: template.devDependencies,
+            features: template.features,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    console.log('');
+    console.log(pc.bold('  ' + template.name));
+    console.log(pc.dim('  ' + template.description));
+    console.log('');
+    console.log(pc.dim('  ID:   ') + pc.cyan(template.id));
+    console.log(pc.dim('  Type: ') + pc.white('Framework Template'));
+    console.log('');
+
+    if (Object.keys(template.dependencies).length > 0) {
+      console.log(pc.bold('  Dependencies'));
+      for (const [pkg, version] of Object.entries(template.dependencies)) {
+        console.log(`    ${pc.cyan(pkg.padEnd(36))} ${pc.dim(version)}`);
+      }
+      console.log('');
+    }
+
+    if (Object.keys(template.devDependencies).length > 0) {
+      console.log(pc.bold('  Dev Dependencies'));
+      for (const [pkg, version] of Object.entries(template.devDependencies)) {
+        console.log(`    ${pc.cyan(pkg.padEnd(36))} ${pc.dim(version)}`);
+      }
+      console.log('');
+    }
+
+    if (template.features.length > 0) {
+      console.log(pc.bold('  Features'));
+      for (const feature of template.features) {
+        console.log(`    ${pc.white('•')} ${feature}`);
+      }
+      console.log('');
+    }
+    return;
+  }
+
+  const preset = PRESETS.find((pr) => pr.id === templateId);
+  if (preset) {
+    if (isJson) {
+      console.log(
+        JSON.stringify(
+          {
+            type: 'preset',
+            id: preset.id,
+            name: preset.name,
+            description: preset.description,
+            sdcList: preset.sdcList,
+            dependencies: preset.dependencies,
+            architectureNotes: preset.architectureNotes,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    console.log('');
+    console.log(pc.bold('  ' + preset.name));
+    console.log(pc.dim('  ' + preset.description));
+    console.log('');
+    console.log(pc.dim('  ID:   ') + pc.cyan(preset.id));
+    console.log(pc.dim('  Type: ') + pc.white('Drupal Preset'));
+    console.log('');
+
+    if (preset.sdcList.length > 0) {
+      console.log(pc.bold('  SDC Components'));
+      for (const sdc of preset.sdcList) {
+        console.log(`    ${pc.white('•')} ${sdc}`);
+      }
+      console.log('');
+    }
+
+    if (Object.keys(preset.dependencies).length > 0) {
+      console.log(pc.bold('  Dependencies'));
+      for (const [pkg, version] of Object.entries(preset.dependencies)) {
+        console.log(`    ${pc.cyan(pkg.padEnd(36))} ${pc.dim(version)}`);
+      }
+      console.log('');
+    }
+
+    if (preset.architectureNotes) {
+      console.log(pc.bold('  Architecture Notes'));
+      console.log(`    ${pc.dim(preset.architectureNotes)}`);
+      console.log('');
+    }
+    return;
+  }
+
+  // Not found — show error with suggestions
+  const allIds = [...TEMPLATES.map((t) => t.id), ...PRESETS.map((pr) => pr.id)];
+  const suggestions = allIds.filter(
+    (id) => id.includes(templateId) || templateId.includes(id.split('-')[0]),
+  );
+
+  console.error(`Template or preset not found: "${templateId}"`);
+  if (suggestions.length > 0) {
+    console.error(`Did you mean: ${suggestions.join(', ')}?`);
+  } else {
+    console.error(`Available templates: ${TEMPLATES.map((t) => t.id).join(', ')}`);
+    console.error(`Available presets: ${PRESETS.map((pr) => pr.id).join(', ')}`);
+  }
+  process.exit(1);
+}
+
 export function runListCommand(isJson: boolean): void {
   if (isJson) {
     const output = {
@@ -163,6 +294,13 @@ export async function runCLI(): Promise<void> {
 
   if (args[0] === 'list') {
     runListCommand(args.includes('--json'));
+    process.exit(0);
+  }
+
+  if (args[0] === 'info') {
+    const isJson = args.includes('--json');
+    const templateId = args.find((a) => !a.startsWith('--') && a !== 'info') ?? null;
+    runInfoCommand(templateId, isJson);
     process.exit(0);
   }
 
