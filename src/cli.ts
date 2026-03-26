@@ -149,6 +149,7 @@ export async function runCLI(): Promise<void> {
     --drupal                Scaffold a Drupal theme instead of a web app
     --preset <name>         Select a Drupal preset directly (standard, blog, healthcare, intranet)
     --dry-run               Show files that would be created without writing them
+    --no-install            Skip dependency installation after scaffolding
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
 
@@ -163,6 +164,7 @@ export async function runCLI(): Promise<void> {
   }
 
   const isDryRun = args.includes('--dry-run');
+  const isNoInstall = args.includes('--no-install');
   const isDrupal = args.includes('--drupal');
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
@@ -238,10 +240,12 @@ export async function runCLI(): Promise<void> {
         }),
 
       installDeps: () =>
-        p.confirm({
-          message: 'Install dependencies?',
-          initialValue: true,
-        }),
+        isNoInstall
+          ? Promise.resolve(false)
+          : p.confirm({
+              message: 'Install dependencies?',
+              initialValue: true,
+            }),
     },
     {
       onCancel() {
@@ -280,6 +284,12 @@ export async function runCLI(): Promise<void> {
   s.start('Scaffolding project...');
   await scaffoldProject(options);
   s.stop(pc.green('Project scaffolded'));
+
+  if (isNoInstall) {
+    console.log(
+      pc.dim('  Skipping dependency installation. Run `npm install` when ready.'),
+    );
+  }
 
   if (options.installDeps) {
     s.start('Installing dependencies...');
