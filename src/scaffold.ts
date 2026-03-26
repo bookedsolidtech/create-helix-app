@@ -1616,6 +1616,8 @@ export default function ExamplesLayout({
 }
 `,
   );
+
+  await writeReactErrorBoundary(options);
 }
 
 async function scaffoldReactVite(options: ProjectOptions): Promise<void> {
@@ -1711,6 +1713,8 @@ body {
 }
 `,
   );
+
+  await writeReactErrorBoundary(options);
 }
 
 async function scaffoldRemix(options: ProjectOptions): Promise<void> {
@@ -1923,6 +1927,8 @@ export default function Index() {
 }
 `,
   );
+
+  await writeReactErrorBoundary(options);
 }
 
 async function scaffoldVueVite(options: ProjectOptions): Promise<void> {
@@ -2069,6 +2075,8 @@ body {
 }
 `,
   );
+
+  await writeVueErrorBoundary(options);
 }
 
 async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
@@ -2438,6 +2446,8 @@ function handleInput(e: Event) {
 </style>
 `,
   );
+
+  await writeVueErrorBoundary(options);
 }
 
 async function scaffoldAngular(options: ProjectOptions): Promise<void> {
@@ -3153,6 +3163,8 @@ body {
 }
 `,
   );
+
+  await writeReactErrorBoundary(options);
 }
 
 async function scaffoldStencil(options: ProjectOptions): Promise<void> {
@@ -3263,6 +3275,189 @@ export class MyComponent {
     path.join(srcDir, 'index.ts'),
     `export * from './components/my-component/my-component';
 ${options.designTokens ? "import '../helix-tokens.css';" : "import '@helixui/library';"}
+`,
+  );
+}
+
+// ─── Error boundary components ────────────────────────────────────────────────
+
+async function writeReactErrorBoundary(options: ProjectOptions): Promise<void> {
+  const componentsDir = path.join(options.directory, 'src', 'components');
+  await safeEnsureDir(componentsDir);
+
+  await safeWriteFile(
+    path.join(componentsDir, 'ErrorBoundary.tsx'),
+    `import { Component, type ReactNode } from 'react';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+/**
+ * ErrorBoundary — catches rendering errors in child component trees.
+ *
+ * Wrap any subtree to prevent an unhandled render error from crashing
+ * the entire application. Shows a fallback UI with error details and
+ * a retry button when an error is caught.
+ *
+ * Usage:
+ *   <ErrorBoundary>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ *
+ *   // Custom fallback:
+ *   <ErrorBoundary fallback={<p>Something went wrong.</p>}>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ */
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack: string }): void {
+    console.error('[ErrorBoundary] Caught error:', error, info.componentStack);
+  }
+
+  private handleReset = (): void => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div
+          role="alert"
+          style={{
+            padding: '2rem',
+            border: '1px solid var(--hx-color-danger, #dc3545)',
+            borderRadius: 'var(--hx-radius-md, 0.5rem)',
+            background: 'var(--hx-color-danger-surface, #fff5f5)',
+            color: 'var(--hx-color-danger, #dc3545)',
+          }}
+        >
+          <h2 style={{ marginBottom: '0.5rem' }}>Something went wrong</h2>
+          {this.state.error && (
+            <pre
+              style={{
+                fontSize: '0.85rem',
+                overflowX: 'auto',
+                marginBottom: '1rem',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {this.state.error.message}
+            </pre>
+          )}
+          <button
+            onClick={this.handleReset}
+            style={{
+              padding: '0.5rem 1rem',
+              cursor: 'pointer',
+              borderRadius: 'var(--hx-radius-md, 0.5rem)',
+              border: '1px solid var(--hx-color-danger, #dc3545)',
+              background: 'transparent',
+              color: 'var(--hx-color-danger, #dc3545)',
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+`,
+  );
+}
+
+async function writeVueErrorBoundary(options: ProjectOptions): Promise<void> {
+  const componentsDir = path.join(options.directory, 'src', 'components');
+  await safeEnsureDir(componentsDir);
+
+  await safeWriteFile(
+    path.join(componentsDir, 'ErrorBoundary.vue'),
+    `<script setup lang="ts">
+import { ref, onErrorCaptured } from 'vue';
+
+/**
+ * ErrorBoundary — catches errors thrown in descendant components.
+ *
+ * Uses Vue's onErrorCaptured lifecycle hook to intercept errors bubbling
+ * up through the component tree. Renders a fallback UI with error details
+ * and a retry button, or falls back to the default slot when no error is active.
+ *
+ * Usage:
+ *   <ErrorBoundary>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ */
+
+const error = ref<Error | null>(null);
+
+onErrorCaptured((err: Error): boolean => {
+  error.value = err;
+  console.error('[ErrorBoundary] Caught error:', err);
+  // Return false to stop propagation up the component tree
+  return false;
+});
+
+function reset(): void {
+  error.value = null;
+}
+</script>
+
+<template>
+  <div v-if="error" role="alert" class="hx-error-boundary">
+    <h2>Something went wrong</h2>
+    <pre class="hx-error-boundary__message">{{ error.message }}</pre>
+    <button class="hx-error-boundary__retry" @click="reset">Try again</button>
+  </div>
+  <slot v-else />
+</template>
+
+<style scoped>
+.hx-error-boundary {
+  padding: 2rem;
+  border: 1px solid var(--hx-color-danger, #dc3545);
+  border-radius: var(--hx-radius-md, 0.5rem);
+  background: var(--hx-color-danger-surface, #fff5f5);
+  color: var(--hx-color-danger, #dc3545);
+}
+
+.hx-error-boundary__message {
+  font-size: 0.85rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+}
+
+.hx-error-boundary__retry {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-radius: var(--hx-radius-md, 0.5rem);
+  border: 1px solid var(--hx-color-danger, #dc3545);
+  background: transparent;
+  color: var(--hx-color-danger, #dc3545);
+}
+</style>
 `,
   );
 }
