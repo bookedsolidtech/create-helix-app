@@ -209,6 +209,23 @@ export const TEMPLATES: TemplateConfig[] = [
     devDependencies: {},
     features: ['zero-config', 'cdn', 'no-build-step'],
   },
+  {
+    id: 'lit-vite',
+    name: 'Lit + Vite',
+    description: 'Lightweight web components with Google Lit and Vite build tooling',
+    hint: 'fast web components, small footprint',
+    color: pc.blue,
+    dependencies: {
+      lit: '^3.2.0',
+      '@helixui/library': '^1.0.0',
+      '@helixui/tokens': '^0.3.0',
+    },
+    devDependencies: {
+      vite: '^6.4.0',
+      typescript: '^5.7.0',
+    },
+    features: ['web-components', 'reactive-properties', 'decorators', 'shadow-dom'],
+  },
 ];
 
 export const COMPONENT_BUNDLES: ComponentBundleConfig[] = [

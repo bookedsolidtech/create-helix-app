@@ -22,10 +22,11 @@ describe('TEMPLATES', () => {
     'angular',
     'astro',
     'vanilla',
+    'lit-vite',
   ];
 
-  it('defines exactly 11 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(11);
+  it('defines exactly 12 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(12);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {

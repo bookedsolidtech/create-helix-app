@@ -9,7 +9,8 @@ export type Framework =
   | 'svelte-kit'
   | 'angular'
   | 'astro'
-  | 'vanilla';
+  | 'vanilla'
+  | 'lit-vite';
 
 export type ComponentBundle =
   | 'all'
