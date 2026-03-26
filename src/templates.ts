@@ -191,6 +191,24 @@ export const TEMPLATES: TemplateConfig[] = [
     devDependencies: {},
     features: ['zero-config', 'cdn', 'no-build-step'],
   },
+  {
+    id: 'qwik-vite',
+    name: 'Qwik + Vite',
+    description: 'Resumable SSR with zero hydration, native web component support via Qwik City',
+    hint: 'resumable, zero hydration',
+    color: pc.cyan,
+    dependencies: {
+      '@builder.io/qwik': '^1.9.0',
+      '@builder.io/qwik-city': '^1.9.0',
+      '@helixui/library': '^1.0.0',
+      '@helixui/tokens': '^0.3.0',
+    },
+    devDependencies: {
+      vite: '^6.4.0',
+      typescript: '^5.7.0',
+    },
+    features: ['resumability', 'zero-hydration', 'ssr', 'qwik-city', 'native-wc-support'],
+  },
 ];
 
 export const COMPONENT_BUNDLES: ComponentBundleConfig[] = [

@@ -105,6 +105,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     case 'angular':
       await scaffoldAngular(options);
       break;
+    case 'qwik-vite':
+      await scaffoldQwikVite(options);
+      break;
     default:
       // For templates without generators yet, write a minimal starter
       await scaffoldMinimal(options);
@@ -193,6 +196,12 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       return {
         dev: 'ng serve',
         build: 'ng build',
+      };
+    case 'qwik-vite':
+      return {
+        dev: 'vite',
+        build: 'vite build',
+        preview: 'vite preview',
       };
     case 'vanilla':
       return {
@@ -2479,6 +2488,211 @@ body {
   max-width: 800px;
   margin: 0 auto;
 }
+`,
+  );
+}
+
+async function scaffoldQwikVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  const routesDir = path.join(srcDir, 'routes');
+  await fs.ensureDir(routesDir);
+
+  // Qwik requires jsx: 'react-jsx' with jsxImportSource: '@builder.io/qwik'
+  if (options.typescript) {
+    await fs.writeJson(
+      path.join(options.directory, 'tsconfig.json'),
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: true,
+          esModuleInterop: true,
+          skipLibCheck: true,
+          forceConsistentCasingInFileNames: true,
+          resolveJsonModule: true,
+          isolatedModules: true,
+          jsx: 'react-jsx',
+          jsxImportSource: '@builder.io/qwik',
+        },
+        include: ['src'],
+        exclude: ['node_modules', 'dist'],
+      },
+      { spaces: 2 },
+    );
+  }
+
+  // vite.config.ts — qwikVite and qwikCity plugins for resumable SSR
+  await fs.writeFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+import { qwikVite } from '@builder.io/qwik/optimizer';
+import { qwikCity } from '@builder.io/qwik-city/vite';
+
+// Qwik + Vite: resumable SSR with zero hydration
+// qwikCity provides file-based routing (src/routes/)
+// qwikVite handles the Qwik component optimizer
+export default defineConfig({
+  plugins: [qwikCity(), qwikVite()],
+});
+`,
+  );
+
+  // src/root.tsx — root component with QwikCityProvider
+  await fs.writeFile(
+    path.join(srcDir, 'root.tsx'),
+    `import { component$${options.darkMode ? ', useSignal$' : ''} } from '@builder.io/qwik';
+import {
+  QwikCityProvider,
+  RouterOutlet,
+  ServiceWorkerRegister,
+} from '@builder.io/qwik-city';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+import './global.css';
+
+/**
+ * Root component — wraps the entire app with QwikCityProvider.
+ * Qwik uses resumability: the server serializes component state and the
+ * browser resumes execution without re-running component code (zero hydration).
+ */
+export default component$(() => {${
+      options.darkMode
+        ? `
+  // Qwik reactive signal for dark mode — uses Qwik's fine-grained reactivity
+  // Toggle by setting isDark.value; data-theme is applied to <body>
+  const isDark = useSignal$(false);
+`
+        : ''
+    }
+  return (
+    <QwikCityProvider>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${options.name}</title>
+      </head>
+      <body${options.darkMode ? ' document:data-theme={isDark.value ? "dark" : "light"}' : ''}>
+        <RouterOutlet />
+        <ServiceWorkerRegister />
+      </body>
+    </QwikCityProvider>
+  );
+});
+`,
+  );
+
+  // src/global.css
+  await fs.writeFile(
+    path.join(srcDir, 'global.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--hx-font-family, system-ui, -apple-system, sans-serif);
+  color: var(--hx-color-text, #1a1a1a);
+  background: var(--hx-color-surface, #ffffff);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+`,
+  );
+
+  // src/routes/index.tsx — home route (Qwik City file-based routing)
+  await fs.writeFile(
+    path.join(routesDir, 'index.tsx'),
+    `import { component$${options.darkMode ? ', useSignal$' : ''} } from '@builder.io/qwik';
+import type { DocumentHead } from '@builder.io/qwik-city';
+
+/**
+ * Home route — rendered on the server, resumed on the client.
+ * No hydration cost: Qwik only loads JS for interactive components.
+ */
+export default component$(() => {${
+      options.darkMode
+        ? `
+  const isDark = useSignal$(false);
+`
+        : ''
+    }
+  return (
+    <div class="container">
+      <h1>${options.name}</h1>
+      <hx-card>
+        <div slot="header">
+          <h2>HELiX + Qwik + Vite</h2>
+          <hx-badge variant="info">Resumable SSR</hx-badge>
+        </div>
+        <p>
+          This app uses Qwik's resumability architecture — no hydration means
+          zero JavaScript execution cost on page load. Components are serialized
+          on the server and resumed in the browser only when interacted with.
+        </p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <hx-button variant="primary" size="sm">Get Started</hx-button>
+          <hx-button variant="secondary" size="sm">Learn More</hx-button>
+        </div>
+      </hx-card>
+${
+  options.darkMode
+    ? `
+      <hx-card style="margin-top: 1.5rem">
+        <div slot="header"><h2>Dark Mode</h2></div>
+        <p>Toggle dark mode using Qwik reactive signals.</p>
+        <hx-button
+          variant="secondary"
+          onClick$={() => { isDark.value = !isDark.value; }}
+          style="margin-top: 1rem"
+        >
+          {isDark.value ? 'Switch to Light' : 'Switch to Dark'}
+        </hx-button>
+      </hx-card>
+`
+    : ''
+}    </div>
+  );
+});
+
+export const head: DocumentHead = {
+  title: '${options.name}',
+  meta: [
+    {
+      name: 'description',
+      content: 'Built with HELiX web components and Qwik',
+    },
+  ],
+};
+`,
+  );
+
+  // src/routes/layout.tsx — shared layout for all routes
+  await fs.writeFile(
+    path.join(routesDir, 'layout.tsx'),
+    `import { component$, Slot } from '@builder.io/qwik';
+
+/**
+ * Shared layout component — wraps all routes in this directory.
+ * Use <Slot /> to render nested routes.
+ */
+export default component$(() => {
+  return (
+    <>
+      <main>
+        <Slot />
+      </main>
+    </>
+  );
+});
 `,
   );
 }

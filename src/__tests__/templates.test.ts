@@ -21,10 +21,11 @@ describe('TEMPLATES', () => {
     'angular',
     'astro',
     'vanilla',
+    'qwik-vite',
   ];
 
-  it('defines exactly 10 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(10);
+  it('defines exactly 11 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(11);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
@@ -83,6 +84,28 @@ describe('getTemplate', () => {
     expect(template!.name).toBe('React + Next.js 15');
   });
 
+  it('qwik-vite template has correct hint', () => {
+    const template = getTemplate('qwik-vite');
+    expect(template).toBeDefined();
+    expect(template!.hint).toBe('resumable, zero hydration');
+  });
+
+  it('qwik-vite template includes Qwik dependencies', () => {
+    const template = getTemplate('qwik-vite');
+    expect(template).toBeDefined();
+    expect(template!.dependencies['@builder.io/qwik']).toBeDefined();
+    expect(template!.dependencies['@builder.io/qwik-city']).toBeDefined();
+    expect(template!.devDependencies['vite']).toBeDefined();
+    expect(template!.devDependencies['typescript']).toBeDefined();
+  });
+
+  it('qwik-vite template has resumability features', () => {
+    const template = getTemplate('qwik-vite');
+    expect(template).toBeDefined();
+    expect(template!.features).toContain('resumability');
+    expect(template!.features).toContain('zero-hydration');
+  });
+
   it('returns undefined for an unknown framework ID', () => {
     expect(getTemplate('ember')).toBeUndefined();
   });
@@ -100,6 +123,7 @@ describe('getTemplate', () => {
     ['angular', 'Angular 18'],
     ['astro', 'Astro'],
     ['vanilla', 'Vanilla (HTML + CDN)'],
+    ['qwik-vite', 'Qwik + Vite'],
   ] as const)('getTemplate(%s) returns name "%s"', (id, expectedName) => {
     const template = getTemplate(id);
     expect(template).toBeDefined();

@@ -648,6 +648,119 @@ describe('scaffoldProject — solid-vite', () => {
   });
 });
 
+// ─── Qwik + Vite ─────────────────────────────────────────────────────────────
+
+describe('scaffoldProject — qwik-vite', () => {
+  it('generates expected file structure', async () => {
+    const opts = makeOptions({ name: 'qwik-app', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+
+    const expectedFiles = [
+      'package.json',
+      'vite.config.ts',
+      'src/root.tsx',
+      'src/global.css',
+      'src/routes/index.tsx',
+      'src/routes/layout.tsx',
+    ];
+
+    for (const file of expectedFiles) {
+      expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
+    }
+  });
+
+  it('package.json has vite scripts', async () => {
+    const opts = makeOptions({ name: 'qwik-scripts', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.scripts.dev).toBe('vite');
+    expect(pkg.scripts.build).toBe('vite build');
+    expect(pkg.scripts.preview).toBe('vite preview');
+  });
+
+  it('vite.config.ts uses qwikVite and qwikCity plugins', async () => {
+    const opts = makeOptions({ name: 'qwik-vite-config', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
+    expect(viteConfig).toContain('qwikVite');
+    expect(viteConfig).toContain('qwikCity');
+    expect(viteConfig).toContain('@builder.io/qwik/optimizer');
+    expect(viteConfig).toContain('@builder.io/qwik-city/vite');
+  });
+
+  it('src/root.tsx uses QwikCityProvider and RouterOutlet', async () => {
+    const opts = makeOptions({ name: 'qwik-root', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const root = await fs.readFile(path.join(opts.directory, 'src', 'root.tsx'), 'utf-8');
+    expect(root).toContain('QwikCityProvider');
+    expect(root).toContain('RouterOutlet');
+    expect(root).toContain('@builder.io/qwik');
+    expect(root).toContain('@builder.io/qwik-city');
+  });
+
+  it('src/routes/index.tsx exports a DocumentHead', async () => {
+    const opts = makeOptions({ name: 'qwik-index', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const index = await fs.readFile(
+      path.join(opts.directory, 'src', 'routes', 'index.tsx'),
+      'utf-8',
+    );
+    expect(index).toContain('DocumentHead');
+    expect(index).toContain('component$');
+    expect(index).toContain('@builder.io/qwik');
+  });
+
+  it('package.json includes @builder.io/qwik dependencies', async () => {
+    const opts = makeOptions({ name: 'qwik-deps', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.dependencies['@builder.io/qwik']).toBeDefined();
+    expect(pkg.dependencies['@builder.io/qwik-city']).toBeDefined();
+    expect(pkg.dependencies['@helixui/library']).toBeDefined();
+    expect(pkg.devDependencies['vite']).toBeDefined();
+    expect(pkg.devDependencies['typescript']).toBeDefined();
+  });
+
+  it('tsconfig.json has jsx: react-jsx with qwik jsxImportSource when typescript is true', async () => {
+    const opts = makeOptions({ name: 'qwik-tsconfig', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const tsconfig = await fs.readJson(path.join(opts.directory, 'tsconfig.json'));
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('@builder.io/qwik');
+    expect(tsconfig.compilerOptions.strict).toBe(true);
+  });
+
+  it('root.tsx includes dark mode signal when darkMode is true', async () => {
+    const opts = makeOptions({ name: 'qwik-dark', framework: 'qwik-vite', darkMode: true });
+    await scaffoldProject(opts);
+    const root = await fs.readFile(path.join(opts.directory, 'src', 'root.tsx'), 'utf-8');
+    expect(root).toContain('useSignal$');
+    expect(root).toContain('isDark');
+  });
+
+  it('routes/index.tsx includes dark mode toggle when darkMode is true', async () => {
+    const opts = makeOptions({ name: 'qwik-dark-route', framework: 'qwik-vite', darkMode: true });
+    await scaffoldProject(opts);
+    const index = await fs.readFile(
+      path.join(opts.directory, 'src', 'routes', 'index.tsx'),
+      'utf-8',
+    );
+    expect(index).toContain('isDark');
+    expect(index).toContain('onClick$');
+  });
+
+  it('src/routes/layout.tsx uses Slot component', async () => {
+    const opts = makeOptions({ name: 'qwik-layout', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const layout = await fs.readFile(
+      path.join(opts.directory, 'src', 'routes', 'layout.tsx'),
+      'utf-8',
+    );
+    expect(layout).toContain('Slot');
+    expect(layout).toContain('component$');
+  });
+});
+
 // ─── Security: path traversal prevention ─────────────────────────────────────
 
 describe('scaffoldProject — path traversal security', () => {

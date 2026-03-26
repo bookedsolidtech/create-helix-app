@@ -8,7 +8,8 @@ export type Framework =
   | 'svelte-kit'
   | 'angular'
   | 'astro'
-  | 'vanilla';
+  | 'vanilla'
+  | 'qwik-vite';
 
 export type ComponentBundle =
   | 'all'
