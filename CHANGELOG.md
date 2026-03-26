@@ -1,5 +1,15 @@
 # create-helix
 
+## 0.2.0
+
+### Minor Changes
+
+- 3f0bd66: Add Solid.js + Vite as a new framework target with fine-grained reactivity support, native web component integration, and full feature flag compatibility.
+
+### Patch Changes
+
+- 2dd3335: Add --version / -v and --help / -h CLI flags
+
 ## 0.1.1
 
 ### Patch Changes
