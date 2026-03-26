@@ -4,6 +4,29 @@ import type { DrupalOptions, PresetConfig } from '../types.js';
 import { getPreset } from '../presets/loader.js';
 import { generateLibrariesYml } from './libraries.js';
 
+/**
+ * SECURITY: Path traversal guard.
+ *
+ * Validates that `targetPath` does not contain directory traversal sequences
+ * (e.g. "../" or "..\\" that normalize to ".."). Throws if any path segment
+ * is "..".
+ *
+ * The CLI already blocks traversal sequences through input validation
+ * (theme names match /^[a-z][a-z0-9_]*$/), but this check guards the
+ * programmatic API against misuse where callers may not apply the same
+ * sanitization.
+ */
+function assertNoPathTraversal(targetPath: string): void {
+  const normalized = path.normalize(targetPath);
+  const segments = normalized.split(path.sep);
+  if (segments.includes('..')) {
+    throw new Error(
+      `Security: path "${targetPath}" contains directory traversal sequences. ` +
+        `Aborting to prevent unauthorized file system access.`,
+    );
+  }
+}
+
 function toTitleCase(str: string): string {
   return str
     .split(/[-_]/)
@@ -145,6 +168,12 @@ export async function scaffoldDrupalTheme(options: DrupalOptions): Promise<void>
   const preset = getPreset(options.preset);
   const dir = options.directory;
   const themeName = options.themeName;
+
+  // SECURITY: Validate the output directory path before writing any files.
+  // Defense-in-depth: CLI validates theme names via /^[a-z][a-z0-9_]*$/, making
+  // traversal sequences impossible through normal usage. This check protects
+  // programmatic API callers that may not apply the same sanitization.
+  assertNoPathTraversal(dir);
 
   // Create root directory
   await fs.ensureDir(dir);

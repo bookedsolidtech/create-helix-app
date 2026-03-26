@@ -59,6 +59,10 @@ async function runDrupalCLI(presetArg: string | null): Promise<void> {
     placeholder: 'my-helix-theme',
     validate(value) {
       if (!value) return 'Theme name is required';
+      // SECURITY: Whitelist-only validation — enforces a valid Drupal machine
+      // name (lowercase letters, digits, underscores; must start with a letter).
+      // Rejects path traversal sequences, shell metacharacters, and null bytes.
+      // This name is used as the directory name and embedded in YAML/JSON files.
       if (!/^[a-z][a-z0-9_]*$/.test(value))
         return 'Use only lowercase letters, numbers, and underscores (must start with a letter)';
       return undefined;
@@ -146,6 +150,9 @@ export async function runCLI(): Promise<void> {
           initialValue: argName ?? '',
           validate(value) {
             if (!value) return 'Project name is required';
+            // SECURITY: Whitelist-only validation — rejects path traversal
+            // sequences (../), shell metacharacters, and null bytes.
+            // This name becomes both the directory name and package name.
             if (!/^[a-z0-9-_]+$/i.test(value))
               return 'Use only letters, numbers, hyphens, and underscores';
             return undefined;
@@ -224,6 +231,14 @@ export async function runCLI(): Promise<void> {
 
   if (options.installDeps) {
     s.start('Installing dependencies...');
+    // SECURITY: execSync is used here with hardcoded command strings — no
+    // user input is interpolated into the shell command itself, so command
+    // injection is not possible. The `cwd` option sets the working directory
+    // to the scaffolded project folder, which is validated by:
+    //   1. Project name regex (/^[a-z0-9-_]+$/i) — prevents path traversal
+    //   2. path.resolve(process.cwd(), name) — produces an absolute path
+    //   3. assertWithinBase() in scaffoldProject() — defense-in-depth check
+    // stdio: 'pipe' suppresses noisy installer output from the terminal.
     const { execSync } = await import('node:child_process');
     try {
       execSync('pnpm install', {
