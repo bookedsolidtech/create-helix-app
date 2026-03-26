@@ -1,6 +1,6 @@
 {
   "name": "create-helix",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Scaffold a new project with HELiX web components — TUI-powered CLI",
   "type": "module",
   "bin": {

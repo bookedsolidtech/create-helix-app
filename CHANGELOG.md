@@ -1,5 +1,14 @@
 # create-helix
 
+## 0.12.0
+
+### Minor Changes
+
+- feat: error boundary components for React and Vue generated templates
+  - React ErrorBoundary.tsx with getDerivedStateFromError + componentDidCatch for react-next, react-vite, remix, preact-vite
+  - Vue ErrorBoundary.vue with onErrorCaptured composition API for vue-vite, vue-nuxt
+  - 1190+ tests across 52 test files
+
 ## 0.11.0
 
 ### Minor Changes
