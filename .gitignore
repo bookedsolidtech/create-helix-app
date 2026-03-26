@@ -1,4 +1,6 @@
+node_modules
 node_modules/
+dist
 dist/
 .cache/
 *.tgz
@@ -15,6 +17,7 @@ coverage/
 .worktrees/
 
 # protoLabs Studio local files
+.automaker-lock
 protolab.config
 proto.config.yaml
 protoLabs.report.html
