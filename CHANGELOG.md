@@ -1,5 +1,11 @@
 # create-helix
 
+## 0.8.1
+
+### Patch Changes
+
+- b3145fe: Refactor: extract CLI argument parser into dedicated `src/args.ts` module for better testability and maintainability.
+
 ## 0.8.0
 
 ### Minor Changes
