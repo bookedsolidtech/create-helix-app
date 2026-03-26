@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
+import { validateDirectory } from '../validation.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
@@ -115,6 +116,15 @@ export function buildUpgradePlan(installed: Record<string, string>): UpgradePlan
  */
 export function runUpgrade(dir: string, options: UpgradeOptions = {}): void {
   const { dryRun = false } = options;
+
+  // SECURITY: Validate the directory path before reading any files.
+  // This prevents path traversal attacks when the directory argument is
+  // supplied programmatically or via future CLI flags.
+  const dirError = validateDirectory(dir);
+  if (dirError !== undefined) {
+    p.log.error(pc.red(`Invalid directory: ${dirError}`));
+    process.exit(1);
+  }
 
   if (!detectHelixProject(dir)) {
     p.log.error(
