@@ -3,7 +3,7 @@ import path from 'node:path';
 import pc from 'picocolors';
 import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
-import type { ProjectOptions, AnyTemplateConfig } from './types.js';
+import type { ProjectOptions, AnyTemplateConfig, ScaffoldTiming } from './types.js';
 import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
@@ -53,7 +53,36 @@ export function getDryRunEntries(): { path: string; size: number }[] {
   return [..._dryRunEntries];
 }
 
+// ---------------------------------------------------------------------------
+// Timing instrumentation
+// Module-level state is safe for a single-threaded CLI process.
+// ---------------------------------------------------------------------------
+
+let _lastTiming: ScaffoldTiming | null = null;
+
+/**
+ * Returns the timing data from the last scaffoldProject() call, or null if
+ * no scaffold has run yet.
+ */
+export function getLastScaffoldTiming(): ScaffoldTiming | null {
+  return _lastTiming;
+}
+
+/**
+ * Track bytes written during scaffold (used alongside file-write tracking).
+ */
+let _bytesWritten = 0;
+
+function _trackWrite(content: string): void {
+  _bytesWritten += Buffer.byteLength(content, 'utf8');
+}
+
+function _trackWriteJson(data: unknown, spaces = 2): void {
+  _bytesWritten += Buffer.byteLength(JSON.stringify(data, null, spaces), 'utf8');
+}
+
 async function safeWriteFile(filePath: string, content: string): Promise<void> {
+  _trackWrite(content);
   if (_dryRunActive) {
     _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(content, 'utf8') });
     return;
@@ -66,6 +95,7 @@ async function safeWriteJson(
   data: unknown,
   opts?: { spaces: number },
 ): Promise<void> {
+  _trackWriteJson(data, opts?.spaces ?? 2);
   if (_dryRunActive) {
     const json = JSON.stringify(data, null, opts?.spaces ?? 2);
     _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(json, 'utf8') });
@@ -177,6 +207,14 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     }
   };
 
+  // Reset timing state for this run
+  _lastTiming = null;
+  _bytesWritten = 0;
+  const totalStart = performance.now();
+
+  // ── Phase 1: Validation ──────────────────────────────────────────────────
+  const validationStart = performance.now();
+
   // Check custom templates first (they take precedence over built-ins with the same ID)
   const template: AnyTemplateConfig | undefined =
     options.customTemplates?.find((t) => t.id === options.framework) ??
@@ -184,9 +222,6 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   if (!template) {
     throw new Error(`Unknown framework: ${options.framework}`);
   }
-
-  logVerbose(`Template: ${template.id} (${template.name})`);
-  logVerbose(`Directory: ${options.directory}`);
 
   // SECURITY: Validate the output directory path before writing any files.
   // Defense-in-depth: CLI validates project names via /^[a-z0-9-_]+$/i, making
@@ -207,6 +242,10 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     }
   }
 
+  const validationMs = performance.now() - validationStart;
+
+  logVerbose(`[timing] validation: ${validationMs.toFixed(1)}ms`);
+
   // Activate dry-run collection if requested
   if (options.dryRun) {
     _dryRunActive = true;
@@ -216,19 +255,42 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   // Track whether the directory existed before scaffolding, for cleanup on failure.
   const dirExistedBefore = await fs.pathExists(options.directory);
 
+  // ── Phase 2: Template resolution ────────────────────────────────────────
+  const templateResolutionStart = performance.now();
+
+  logVerbose(`Template: ${template.id} (${template.name})`);
+  logVerbose(`Directory: ${options.directory}`);
+
+  // Check if template directory exists (bundled with package)
+  const templateDir = path.join(
+    new URL('.', import.meta.url).pathname,
+    '..',
+    'templates',
+    options.framework,
+  );
+  const hasTemplate = await fs.pathExists(templateDir);
+
+  const templateResolutionMs = performance.now() - templateResolutionStart;
+
+  logVerbose(`[timing] template resolution: ${templateResolutionMs.toFixed(1)}ms`);
+
+  // Count dependencies for timing summary
+  const dependencyCount =
+    Object.keys(template.dependencies ?? {}).length +
+    Object.keys(template.devDependencies ?? {}).length;
+
+  // ── Phases 3 & 4: File generation and file writing ───────────────────────
+  // These phases are interleaved in practice; we track them together under
+  // "file generation" (framework-specific logic) and "file writing" (I/O).
+  const fileGenerationStart = performance.now();
+
+  let fileWritingMs = 0;
+
   try {
     await safeEnsureDir(options.directory);
 
-    // Check if template directory exists (bundled with package)
-    const templateDir = path.join(
-      new URL('.', import.meta.url).pathname,
-      '..',
-      'templates',
-      options.framework,
-    );
-    const hasTemplate = await fs.pathExists(templateDir);
-
     if (hasTemplate) {
+      const writeStart = performance.now();
       if (_dryRunActive) {
         // Walk the template directory and collect file paths + sizes
         const templateFiles = await walkDirRecursive(templateDir);
@@ -239,11 +301,13 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
             path: path.join(options.directory, rel),
             size: stat.size,
           });
+          _bytesWritten += stat.size;
         }
       } else {
         // Copy the full template
         await fs.copy(templateDir, options.directory, { overwrite: true });
       }
+      fileWritingMs += performance.now() - writeStart;
     }
 
     logVerbose(`Component bundles: ${options.componentBundles.join(', ')}`);
@@ -252,6 +316,8 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     );
 
     // Generate/overwrite core files based on options
+    const writeStart2 = performance.now();
+
     logVerbose(`Writing ${path.join(options.directory, 'package.json')}`);
     await writePackageJson(options, template);
     logVerbose(`Writing ${path.join(options.directory, 'README.md')}`);
@@ -277,6 +343,8 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       logVerbose(`Writing ${path.join(options.directory, 'tsconfig.json')}`);
       await writeTsConfig(options);
     }
+
+    fileWritingMs += performance.now() - writeStart2;
 
     // Framework-specific generation (always runs, fills gaps if no template dir)
     logVerbose(`Running ${options.framework} scaffold generator`);
@@ -332,6 +400,8 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
         break;
     }
 
+    const writeStart3 = performance.now();
+
     // Write the HELiX integration helper
     logVerbose(`Writing ${path.join(options.directory, 'src', 'helix-setup.ts')}`);
     await writeHelixSetup(options);
@@ -339,6 +409,8 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     // Write .gitignore
     logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
     await writeGitignore(options);
+
+    fileWritingMs += performance.now() - writeStart3;
   } catch (err) {
     _dryRunActive = false;
 
@@ -356,6 +428,51 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   } finally {
     _dryRunActive = false;
   }
+
+  const fileGenerationMs = performance.now() - fileGenerationStart;
+
+  logVerbose(`[timing] file generation+writing: ${fileGenerationMs.toFixed(1)}ms`);
+
+  const totalMs = performance.now() - totalStart;
+
+  // Collect file count
+  let fileCount = 0;
+  if (options.dryRun) {
+    fileCount = _dryRunEntries.length;
+  } else {
+    try {
+      const allFiles = await walkDirRecursive(options.directory);
+      fileCount = allFiles.length;
+    } catch {
+      fileCount = 0;
+    }
+  }
+
+  // Store timing summary
+  _lastTiming = {
+    totalMs,
+    phases: {
+      validationMs,
+      templateResolutionMs,
+      fileGenerationMs,
+      fileWritingMs,
+    },
+    fileCount,
+    bytesWritten: _bytesWritten,
+    dependencyCount,
+  };
+
+  // Always log timing at debug level
+  logger.debug('scaffold timing', {
+    totalMs: Math.round(totalMs),
+    validationMs: Math.round(validationMs),
+    templateResolutionMs: Math.round(templateResolutionMs),
+    fileGenerationMs: Math.round(fileGenerationMs),
+    fileWritingMs: Math.round(fileWritingMs),
+    fileCount,
+    bytesWritten: _bytesWritten,
+    dependencyCount,
+  });
 
   if (options.dryRun) {
     printDryRunTree(options.directory, _dryRunEntries);

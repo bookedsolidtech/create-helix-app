@@ -96,3 +96,25 @@ export interface DrupalOptions {
   directory: string;
   preset: DrupalPreset;
 }
+
+/**
+ * Per-phase timing data collected during scaffold operations.
+ * All durations are in milliseconds.
+ */
+export interface ScaffoldPhaseTiming {
+  validationMs: number;
+  templateResolutionMs: number;
+  fileGenerationMs: number;
+  fileWritingMs: number;
+}
+
+/**
+ * Full timing summary produced after a scaffold run.
+ */
+export interface ScaffoldTiming {
+  totalMs: number;
+  phases: ScaffoldPhaseTiming;
+  fileCount: number;
+  bytesWritten: number;
+  dependencyCount: number;
+}

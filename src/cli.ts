@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { TEMPLATES, COMPONENT_BUNDLES, mergeWithCustomTemplates } from './templates.js';
 import { loadCustomTemplates } from './custom-templates.js';
-import { scaffoldProject, getDryRunEntries } from './scaffold.js';
+import { scaffoldProject, getDryRunEntries, getLastScaffoldTiming } from './scaffold.js';
 import type { Framework, ComponentBundle, ProjectOptions, AnyTemplateConfig, CustomTemplateConfig } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
@@ -182,6 +182,19 @@ export function runListCommand(isJson: boolean, configFile?: string | null): voi
   console.log('');
 }
 
+interface ScaffoldTimingJson {
+  totalMs: number;
+  phases: {
+    validationMs: number;
+    templateResolutionMs: number;
+    fileGenerationMs: number;
+    fileWritingMs: number;
+  };
+  fileCount: number;
+  bytesWritten: number;
+  dependencyCount: number;
+}
+
 interface ScaffoldJsonResult {
   success: boolean;
   project?: {
@@ -196,6 +209,7 @@ interface ScaffoldJsonResult {
   };
   files?: string[];
   dryRun?: boolean;
+  timing?: ScaffoldTimingJson;
   error?: string;
 }
 
@@ -271,6 +285,7 @@ export async function runJsonScaffold(
       files = await collectFiles(directory);
     }
 
+    const timing = getLastScaffoldTiming();
     const result: ScaffoldJsonResult = {
       success: true,
       project: {
@@ -285,6 +300,20 @@ export async function runJsonScaffold(
       },
       files,
       dryRun: opts.isDryRun,
+      timing: timing !== null
+        ? {
+            totalMs: Math.round(timing.totalMs),
+            phases: {
+              validationMs: Math.round(timing.phases.validationMs),
+              templateResolutionMs: Math.round(timing.phases.templateResolutionMs),
+              fileGenerationMs: Math.round(timing.phases.fileGenerationMs),
+              fileWritingMs: Math.round(timing.phases.fileWritingMs),
+            },
+            fileCount: timing.fileCount,
+            bytesWritten: timing.bytesWritten,
+            dependencyCount: timing.dependencyCount,
+          }
+        : undefined,
     };
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {
@@ -743,6 +772,29 @@ ${presetList}
   if (!isQuiet) s.start('Scaffolding project...');
   await scaffoldProject(options);
   if (!isQuiet) s.stop(pc.green('Project scaffolded'));
+
+  // Show timing summary after scaffold completes
+  const scaffoldTiming = getLastScaffoldTiming();
+  if (scaffoldTiming !== null && !isQuiet) {
+    const formattedBytes =
+      scaffoldTiming.bytesWritten < 1024
+        ? `${scaffoldTiming.bytesWritten} B`
+        : scaffoldTiming.bytesWritten < 1024 * 1024
+          ? `${(scaffoldTiming.bytesWritten / 1024).toFixed(1)} KB`
+          : `${(scaffoldTiming.bytesWritten / (1024 * 1024)).toFixed(1)} MB`;
+    console.log(
+      pc.dim('  Performance: ') +
+        pc.white(`${scaffoldTiming.totalMs.toFixed(0)}ms`) +
+        pc.dim(` · ${scaffoldTiming.fileCount} files · ${formattedBytes} · ${scaffoldTiming.dependencyCount} deps`),
+    );
+    if (isVerbose) {
+      console.log(pc.dim('  ┌─ Per-phase timing:'));
+      console.log(pc.dim(`  │  validation:          ${scaffoldTiming.phases.validationMs.toFixed(1)}ms`));
+      console.log(pc.dim(`  │  template resolution: ${scaffoldTiming.phases.templateResolutionMs.toFixed(1)}ms`));
+      console.log(pc.dim(`  │  file generation:     ${scaffoldTiming.phases.fileGenerationMs.toFixed(1)}ms`));
+      console.log(pc.dim(`  └─ file writing:        ${scaffoldTiming.phases.fileWritingMs.toFixed(1)}ms`));
+    }
+  }
 
   if (isNoInstall) {
     console.log(pc.dim('  Skipping dependency installation. Run `npm install` when ready.'));
