@@ -381,7 +381,7 @@ export async function runCLI(): Promise<void> {
 
   if (subcommand === 'upgrade') {
     const { runUpgrade } = await import('./commands/upgrade.js');
-    runUpgrade(process.cwd(), { dryRun: isDryRun });
+    await runUpgrade(process.cwd(), { dryRun: isDryRun });
     process.exit(0);
   }
 
