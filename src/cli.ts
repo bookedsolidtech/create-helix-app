@@ -46,10 +46,10 @@ function banner(): void {
   console.log();
 }
 
-async function runDrupalCLI(presetArg: string | null): Promise<void> {
-  banner();
+async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise<void> {
+  if (!isQuiet) banner();
 
-  p.intro(pc.bgCyan(pc.black(' create-helix — Drupal theme ')));
+  if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix — Drupal theme ')));
 
   // Validate preset if provided via flag
   if (presetArg !== null && !isValidPreset(presetArg)) {
@@ -105,15 +105,15 @@ async function runDrupalCLI(presetArg: string | null): Promise<void> {
   const directory = path.resolve(process.cwd(), themeNameStr);
 
   const s = p.spinner();
-  s.start('Scaffolding Drupal theme...');
+  if (!isQuiet) s.start('Scaffolding Drupal theme...');
 
   await scaffoldDrupalTheme({ themeName: themeNameStr, directory, preset });
 
-  s.stop(pc.green('Drupal theme scaffolded'));
+  if (!isQuiet) s.stop(pc.green('Drupal theme scaffolded'));
 
   const nextSteps = [`Copy ${themeNameStr}/ to your Drupal themes directory`, 'drush cr'];
 
-  p.note(nextSteps.join('\n'), 'Next steps');
+  if (!isQuiet) p.note(nextSteps.join('\n'), 'Next steps');
 
   console.log();
   console.log(pc.dim('  Theme:     ') + pc.cyan(themeNameStr));
@@ -121,7 +121,8 @@ async function runDrupalCLI(presetArg: string | null): Promise<void> {
   console.log(pc.dim('  Directory: ') + pc.white(directory));
   console.log();
 
-  p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX + Drupal.'));
+  if (!isQuiet)
+    p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX + Drupal.'));
 }
 
 export function runListCommand(isJson: boolean): void {
@@ -178,6 +179,7 @@ export async function runCLI(): Promise<void> {
     --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
+    --quiet, -q             Suppress banner, spinners, and decorative output (CI-friendly)
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
 
@@ -220,6 +222,7 @@ ${presetList}
   const isDryRun = args.includes('--dry-run');
   const isForce = args.includes('--force');
   const isNoInstall = args.includes('--no-install');
+  const isQuiet = args.includes('--quiet') || args.includes('-q');
   const isDrupal = args.includes('--drupal');
   const typescriptFlag = args.includes('--no-typescript') ? false : true;
   const eslintFlag = args.includes('--no-eslint') ? false : true;
@@ -272,13 +275,13 @@ ${presetList}
   }
 
   if (isDrupal || presetArg !== null) {
-    await runDrupalCLI(presetArg);
+    await runDrupalCLI(presetArg, isQuiet);
     return;
   }
 
-  banner();
+  if (!isQuiet) banner();
 
-  p.intro(pc.bgCyan(pc.black(' create-helix ')));
+  if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix ')));
 
   const argName = process.argv[2];
 
@@ -387,24 +390,24 @@ ${presetList}
   const s = p.spinner();
 
   if (isDryRun) {
-    s.start('Collecting files (dry run)...');
+    if (!isQuiet) s.start('Collecting files (dry run)...');
     await scaffoldProject(options);
-    s.stop(pc.cyan('Dry run complete'));
+    if (!isQuiet) s.stop(pc.cyan('Dry run complete'));
 
-    p.outro(pc.cyan('Dry run finished.') + ' ' + pc.dim('No files were written.'));
+    if (!isQuiet) p.outro(pc.cyan('Dry run finished.') + ' ' + pc.dim('No files were written.'));
     return;
   }
 
-  s.start('Scaffolding project...');
+  if (!isQuiet) s.start('Scaffolding project...');
   await scaffoldProject(options);
-  s.stop(pc.green('Project scaffolded'));
+  if (!isQuiet) s.stop(pc.green('Project scaffolded'));
 
   if (isNoInstall) {
     console.log(pc.dim('  Skipping dependency installation. Run `npm install` when ready.'));
   }
 
   if (options.installDeps) {
-    s.start('Installing dependencies...');
+    if (!isQuiet) s.start('Installing dependencies...');
     // SECURITY: execSync is used here with hardcoded command strings — no
     // user input is interpolated into the shell command itself, so command
     // injection is not possible. The `cwd` option sets the working directory
@@ -419,16 +422,16 @@ ${presetList}
         cwd: options.directory,
         stdio: 'pipe',
       });
-      s.stop(pc.green('Dependencies installed'));
+      if (!isQuiet) s.stop(pc.green('Dependencies installed'));
     } catch {
       try {
         execSync('npm install', {
           cwd: options.directory,
           stdio: 'pipe',
         });
-        s.stop(pc.green('Dependencies installed (npm)'));
+        if (!isQuiet) s.stop(pc.green('Dependencies installed (npm)'));
       } catch {
-        s.stop(pc.yellow('Could not install dependencies — run manually'));
+        if (!isQuiet) s.stop(pc.yellow('Could not install dependencies — run manually'));
       }
     }
   }
@@ -438,33 +441,36 @@ ${presetList}
     options.framework === 'vanilla' ? 'open index.html' : 'npm run dev',
   ];
 
-  p.note(nextSteps.join('\n'), 'Next steps');
+  if (!isQuiet) p.note(nextSteps.join('\n'), 'Next steps');
 
   console.log();
+  console.log(pc.dim('  Project:    ') + pc.cyan(project.name as string));
   console.log(pc.dim('  Framework:  ') + (template?.color(template.name) ?? project.framework));
   console.log(pc.dim('  Directory:  ') + pc.white(options.directory));
-  console.log(pc.dim('  TypeScript: ') + (options.typescript ? pc.green('yes') : pc.dim('no')));
-  console.log(
-    pc.dim('  Bundles:    ') +
-      pc.white(
-        options.componentBundles.includes('all')
-          ? '98 components (full library)'
-          : `${options.componentBundles.join(', ')}`,
-      ),
-  );
-  console.log(
-    pc.dim('  Features:   ') +
-      pc.white(
-        [
-          options.eslint && 'ESLint',
-          options.designTokens && 'Design Tokens',
-          options.darkMode && 'Dark Mode',
-        ]
-          .filter(Boolean)
-          .join(', ') || 'None',
-      ),
-  );
+  if (!isQuiet) {
+    console.log(pc.dim('  TypeScript: ') + (options.typescript ? pc.green('yes') : pc.dim('no')));
+    console.log(
+      pc.dim('  Bundles:    ') +
+        pc.white(
+          options.componentBundles.includes('all')
+            ? '98 components (full library)'
+            : `${options.componentBundles.join(', ')}`,
+        ),
+    );
+    console.log(
+      pc.dim('  Features:   ') +
+        pc.white(
+          [
+            options.eslint && 'ESLint',
+            options.designTokens && 'Design Tokens',
+            options.darkMode && 'Dark Mode',
+          ]
+            .filter(Boolean)
+            .join(', ') || 'None',
+        ),
+    );
+  }
   console.log();
 
-  p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX.'));
+  if (!isQuiet) p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX.'));
 }
