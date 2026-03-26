@@ -1,5 +1,16 @@
 # create-helix
 
+## 0.3.0
+
+### Minor Changes
+
+- 9cdc15a: Add Qwik + Vite as a new framework template option. Qwik uses resumability with zero hydration cost and native web component support.
+
+### Patch Changes
+
+- 8b586cc: Add Remix framework integration test
+- 6d99895: Add Solid.js framework integration test
+
 ## 0.2.1
 
 ### Patch Changes
