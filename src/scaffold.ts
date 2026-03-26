@@ -222,6 +222,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       case 'angular':
         await scaffoldAngular(options);
         break;
+      case 'lit-vite':
+        await scaffoldLitVite(options);
+        break;
       default:
         // For templates without generators yet, write a minimal starter
         await scaffoldMinimal(options);
@@ -290,6 +293,7 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       };
     case 'vue-vite':
     case 'solid-vite':
+    case 'lit-vite':
       return {
         dev: 'vite',
         build: 'vite build',
@@ -2763,6 +2767,128 @@ body {
 .container {
   max-width: 800px;
   margin: 0 auto;
+}
+`,
+  );
+}
+
+async function scaffoldLitVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  await safeEnsureDir(srcDir);
+
+  // vite.config.ts — Lit needs no special plugin, Vite handles it natively
+  await safeWriteFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+
+export default defineConfig({
+  build: {
+    target: 'es2022',
+  },
+});
+`,
+  );
+
+  // index.html
+  await safeWriteFile(
+    path.join(options.directory, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${options.name}</title>
+  </head>
+  <body>
+    <my-element></my-element>
+    <script type="module" src="/src/my-element.ts"></script>
+  </body>
+</html>
+`,
+  );
+
+  // src/my-element.ts — Lit component with TypeScript decorators
+  await safeWriteFile(
+    path.join(srcDir, 'my-element.ts'),
+    `import { LitElement, html, css } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+
+@customElement('my-element')
+export class MyElement extends LitElement {
+  static styles = css\`
+    :host {
+      display: block;
+      padding: 2rem;
+      font-family: var(--hx-font-family, system-ui, sans-serif);
+      color: var(--hx-color-text, #1a1a1a);
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+  \`;
+
+  @property({ type: Number })
+  count = 0;
+
+  render() {
+    return html\`
+      <div class="container">
+        <h1>HELiX + Lit + Vite</h1>
+        <hx-card>
+          <div slot="header"><h2>Counter Demo</h2></div>
+          <p>Count: \${this.count}</p>
+          <hx-button variant="primary" @click=\${() => this.count++}>
+            Increment
+          </hx-button>
+          <hx-button
+            variant="secondary"
+            style="margin-left: 0.5rem"
+            @click=\${() => (this.count = 0)}
+          >
+            Reset
+          </hx-button>
+        </hx-card>
+
+        <hx-card style="margin-top: 1.5rem">
+          <div slot="header">
+            <h2>Lit + Web Components</h2>
+            <hx-badge variant="info">Native Support</hx-badge>
+          </div>
+          <p>Lit builds on the Web Components standards — Custom Elements,
+          Shadow DOM, and HTML Templates — making it ideal for composing
+          HELiX components with minimal overhead.</p>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <hx-button variant="primary" size="sm">Primary</hx-button>
+            <hx-button variant="secondary" size="sm">Secondary</hx-button>
+            <hx-button variant="danger" size="sm">Danger</hx-button>
+          </div>
+        </hx-card>
+      </div>
+    \`;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'my-element': MyElement;
+  }
+}
+`,
+  );
+
+  // index.css
+  await safeWriteFile(
+    path.join(srcDir, 'index.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 2rem;
+  color: var(--hx-color-text, #1a1a1a);
 }
 `,
   );
