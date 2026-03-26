@@ -256,6 +256,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       case 'preact-vite':
         await scaffoldPreactVite(options);
         break;
+      case 'stencil':
+        await scaffoldStencil(options);
+        break;
       default:
         // For templates without generators yet, write a minimal starter
         await scaffoldMinimal(options);
@@ -374,6 +377,13 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       return {
         dev: 'ng serve',
         build: 'ng build',
+      };
+    case 'stencil':
+      return {
+        start: 'stencil build --dev --watch --serve',
+        build: 'stencil build',
+        test: 'stencil test --spec',
+        generate: 'stencil generate',
       };
     case 'vanilla':
       return {
@@ -3074,6 +3084,118 @@ body {
   max-width: 800px;
   margin: 0 auto;
 }
+`,
+  );
+}
+
+async function scaffoldStencil(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  const myComponentDir = path.join(srcDir, 'components', 'my-component');
+  await safeEnsureDir(myComponentDir);
+
+  // Override tsconfig for Stencil — needs experimentalDecorators for @Component,
+  // @Prop etc., plus jsx: 'react' with h as factory so IDE tooling works correctly.
+  if (options.typescript) {
+    await safeWriteJson(
+      path.join(options.directory, 'tsconfig.json'),
+      {
+        compilerOptions: {
+          allowSyntheticDefaultImports: true,
+          declaration: true,
+          experimentalDecorators: true,
+          lib: ['dom', 'dom.iterable', 'esnext'],
+          moduleResolution: 'node',
+          module: 'esnext',
+          target: 'ES2017',
+          strict: true,
+          skipLibCheck: true,
+          jsx: 'react',
+          jsxFactory: 'h',
+          jsxFragmentFactory: 'Fragment',
+        },
+        include: ['src'],
+        exclude: ['node_modules'],
+      },
+      { spaces: 2 },
+    );
+  }
+
+  // stencil.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'stencil.config.ts'),
+    `import { Config } from '@stencil/core';
+
+export const config: Config = {
+  namespace: '${options.name}',
+  outputTargets: [
+    {
+      type: 'dist',
+      esmLoaderPath: '../loader',
+    },
+    {
+      type: 'dist-custom-elements',
+    },
+    {
+      type: 'docs-readme',
+    },
+    {
+      type: 'www',
+      serviceWorker: null,
+    },
+  ],
+  testing: {
+    browserHeadless: 'shell',
+  },
+};
+`,
+  );
+
+  // src/components/my-component/my-component.tsx
+  await safeWriteFile(
+    path.join(myComponentDir, 'my-component.tsx'),
+    `import { Component, Prop, h } from '@stencil/core';
+
+@Component({
+  tag: 'my-component',
+  styleUrl: 'my-component.css',
+  shadow: true,
+})
+export class MyComponent {
+  @Prop() name: string = 'World';
+
+  render() {
+    return (
+      <div class="my-component">
+        <h2>Hello, {this.name}!</h2>
+        <p>Built with HELiX + Stencil web components.</p>
+        <slot></slot>
+      </div>
+    );
+  }
+}
+`,
+  );
+
+  // src/components/my-component/my-component.css
+  await safeWriteFile(
+    path.join(myComponentDir, 'my-component.css'),
+    `:host {
+  display: block;
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+}
+
+.my-component {
+  padding: var(--hx-spacing-md, 1rem);
+  color: var(--hx-color-text, #1a1a1a);
+}
+`,
+  );
+
+  // src/index.ts
+  await safeWriteFile(
+    path.join(srcDir, 'index.ts'),
+    `export * from './components/my-component/my-component';
+${options.designTokens ? "import '../helix-tokens.css';" : "import '@helixui/library';"}
 `,
   );
 }
