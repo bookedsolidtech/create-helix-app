@@ -4,15 +4,15 @@ The standard preset provides the core SDC set for a general-purpose Drupal site.
 
 ## SDCs Included
 
-| SDC | Purpose |
-|-----|---------|
-| `node-teaser` | Teaser display of a node entity |
-| `views-grid` | Grid layout wrapper for Views output |
-| `hero-banner` | Full-width hero with title and CTA |
-| `site-header` | Global site header with navigation |
-| `site-footer` | Global site footer with links |
-| `breadcrumb` | Breadcrumb navigation trail |
-| `search-form` | Site search input and submit |
+| SDC           | Purpose                              |
+| ------------- | ------------------------------------ |
+| `node-teaser` | Teaser display of a node entity      |
+| `views-grid`  | Grid layout wrapper for Views output |
+| `hero-banner` | Full-width hero with title and CTA   |
+| `site-header` | Global site header with navigation   |
+| `site-footer` | Global site footer with links        |
+| `breadcrumb`  | Breadcrumb navigation trail          |
+| `search-form` | Site search input and submit         |
 
 ## Dependencies
 

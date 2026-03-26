@@ -163,9 +163,9 @@ describe('drupal theme scaffolding', () => {
       preset: 'standard',
     });
 
-    const composer = JSON.parse(
-      fs.readFileSync(path.join(dir, 'composer.json'), 'utf-8'),
-    ) as { type: string };
+    const composer = JSON.parse(fs.readFileSync(path.join(dir, 'composer.json'), 'utf-8')) as {
+      type: string;
+    };
     expect(composer.type).toBe('drupal-theme');
   });
 
