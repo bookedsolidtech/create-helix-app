@@ -1,5 +1,15 @@
 # create-helix
 
+## 0.10.0
+
+### Minor Changes
+
+- feat: add upgrade command, verbose flag, and ecommerce Drupal preset
+  - New `create-helix upgrade` subcommand to update existing HELiX projects
+  - `--verbose` flag for detailed scaffolding output
+  - New ecommerce Drupal preset with 8 commerce SDCs (product-card, cart-summary, etc.)
+  - Integration tests for all Drupal preset scaffolding
+
 ## 0.9.0
 
 ### Minor Changes
