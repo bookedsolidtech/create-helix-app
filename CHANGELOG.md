@@ -1,5 +1,11 @@
 # create-helix
 
+## 0.5.1
+
+### Patch Changes
+
+- ef0c8e1: Expand Astro framework integration test coverage
+
 ## 0.5.0
 
 ### Minor Changes
