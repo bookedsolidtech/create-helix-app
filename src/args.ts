@@ -30,6 +30,9 @@ export interface ParsedArgs {
   darkMode: boolean;
   tokens: boolean;
 
+  // Config
+  noConfig: boolean;
+
   // Meta
   showVersion: boolean;
   showHelp: boolean;
@@ -60,6 +63,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const quiet = argv.includes('--quiet') || argv.includes('-q');
   const json = argv.includes('--json');
   const isDrupal = argv.includes('--drupal');
+  const noConfig = argv.includes('--no-config');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -130,6 +134,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     eslint,
     darkMode,
     tokens,
+    noConfig,
     showVersion,
     showHelp,
   };

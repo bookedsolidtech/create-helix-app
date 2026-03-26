@@ -11,6 +11,7 @@ import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
 import { validateProjectName } from './validation.js';
 import { parseArgs } from './args.js';
+import { loadConfig } from './config.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -257,11 +258,12 @@ export function runInfoCommand(templateId: string | null, isJson: boolean): void
   process.exit(1);
 }
 
-export function runListCommand(isJson: boolean): void {
+export function runListCommand(isJson: boolean, configFile: string | null = null): void {
   if (isJson) {
     const output = {
       templates: TEMPLATES.map((t) => ({ id: t.id, name: t.name, hint: t.hint })),
       presets: PRESETS.map((pr) => ({ id: pr.id, name: pr.name, description: pr.description })),
+      configFile,
     };
     console.log(JSON.stringify(output, null, 2));
     return;
@@ -430,16 +432,46 @@ export async function runCLI(): Promise<void> {
     quiet: isQuiet,
     json: isJson,
     isDrupal,
-    template: templateArg,
+    template: templateArgRaw,
     preset: presetArg,
-    bundles: bundlesFromFlag,
+    bundles: bundlesFromFlagRaw,
     outputDir: outputDirArg,
-    typescript: typescriptFlag,
-    eslint: eslintFlag,
-    darkMode: darkModeFlag,
-    tokens: tokensFlag,
+    noConfig,
     projectName,
   } = parsed;
+
+  // Load config file and apply defaults (CLI flags override config)
+  const { config, configFile } = loadConfig(noConfig);
+  const cfgDefaults = config.defaults ?? {};
+
+  // Resolve booleans: --no-* flags always win; otherwise apply config default then built-in default
+  const typescriptFlag = argv.includes('--no-typescript') ? false : (cfgDefaults.typescript ?? true);
+  const eslintFlag = argv.includes('--no-eslint') ? false : (cfgDefaults.eslint ?? true);
+  const darkModeFlag = argv.includes('--no-dark-mode') ? false : (cfgDefaults.darkMode ?? true);
+  const tokensFlag = argv.includes('--no-tokens') ? false : (cfgDefaults.tokens ?? true);
+
+  // Resolve template: CLI wins if set, otherwise use config default (validated below)
+  let templateArg = templateArgRaw;
+  if (templateArg === null && cfgDefaults.template !== undefined) {
+    const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
+    if (validFrameworks.includes(cfgDefaults.template as Framework)) {
+      templateArg = cfgDefaults.template as Framework;
+    } else {
+      console.warn(`Warning: invalid template "${cfgDefaults.template}" in config file — ignoring`);
+    }
+  }
+
+  // Resolve bundles: CLI wins if set, otherwise use config default (validated below)
+  let bundlesFromFlag = bundlesFromFlagRaw;
+  if (bundlesFromFlag === null && cfgDefaults.bundles !== undefined) {
+    const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
+    const invalid = cfgDefaults.bundles.filter((b) => !validBundles.includes(b as ComponentBundle));
+    if (invalid.length > 0) {
+      console.warn(`Warning: invalid bundle(s) ${invalid.map((b) => `"${b}"`).join(', ')} in config file — ignoring`);
+    } else {
+      bundlesFromFlag = cfgDefaults.bundles as ComponentBundle[];
+    }
+  }
 
   if (showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
@@ -447,7 +479,7 @@ export async function runCLI(): Promise<void> {
   }
 
   if (subcommand === 'list') {
-    runListCommand(isJson);
+    runListCommand(isJson, configFile);
     process.exit(0);
   }
 
@@ -469,6 +501,7 @@ export async function runCLI(): Promise<void> {
     --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
+    --no-config             Skip loading .helixrc.json config file
     --quiet, -q             Suppress banner, spinners, and decorative output (CI-friendly)
     --json                  Output scaffold result as JSON (suppresses all TUI output)
     --version, -v           Print version and exit
