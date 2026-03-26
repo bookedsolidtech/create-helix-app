@@ -9,7 +9,12 @@ import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
-import { validateProjectName } from './validation.js';
+import {
+  validateProjectName,
+  validateFramework,
+  validatePreset,
+  validateDirectory,
+} from './validation.js';
 import { parseArgs } from './args.js';
 import { loadConfig } from './config.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
@@ -54,8 +59,9 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix — Drupal theme ')));
 
-  // Validate preset if provided via flag
-  if (presetArg !== null && !isValidPreset(presetArg)) {
+  // Validate preset if provided via flag — use both isValidPreset (legacy) and
+  // validatePreset (new hardened type guard) for defense-in-depth
+  if (presetArg !== null && (!isValidPreset(presetArg) || !validatePreset(presetArg))) {
     console.error(
       `Invalid preset: "${presetArg}". Valid presets: standard, blog, healthcare, intranet, ecommerce`,
     );
@@ -328,7 +334,8 @@ export async function runJsonScaffold(
 ): Promise<void> {
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
 
-  if (!validFrameworks.includes(templateArg as Framework)) {
+  // Use both the template list check and the hardened validateFramework type guard
+  if (!validFrameworks.includes(templateArg as Framework) || !validateFramework(templateArg)) {
     const result: ScaffoldJsonResult = {
       success: false,
       error: `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
@@ -558,6 +565,14 @@ ${presetList}
   }
 
   if (outputDirArg !== null) {
+    // SECURITY: Validate the output directory argument before resolving it to an
+    // absolute path or attempting any filesystem operations.
+    const dirError = validateDirectory(outputDirArg);
+    if (dirError !== undefined) {
+      console.error(`Invalid output directory: ${dirError}`);
+      process.exit(1);
+    }
+
     const resolvedOutputDir = path.resolve(process.cwd(), outputDirArg);
     try {
       fs.mkdirSync(resolvedOutputDir, { recursive: true });
