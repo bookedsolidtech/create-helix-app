@@ -394,8 +394,8 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       };
     case 'remix':
       return {
-        dev: 'remix vite:dev',
-        build: 'remix vite:build',
+        dev: 'vite',
+        build: 'vite build',
         start: 'remix-serve ./build/server/index.js',
         typecheck: 'tsc',
       };

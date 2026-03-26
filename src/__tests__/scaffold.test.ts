@@ -500,8 +500,8 @@ describe('scaffoldProject — remix', () => {
     const opts = makeOptions({ name: 'remix-scripts', framework: 'remix' });
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
-    expect(pkg.scripts.dev).toBe('remix vite:dev');
-    expect(pkg.scripts.build).toBe('remix vite:build');
+    expect(pkg.scripts.dev).toBe('vite');
+    expect(pkg.scripts.build).toBe('vite build');
     expect(pkg.scripts.start).toBe('remix-serve ./build/server/index.js');
   });
 
