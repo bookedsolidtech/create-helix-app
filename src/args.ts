@@ -5,7 +5,7 @@ import { HelixError, ErrorCode } from './errors.js';
 
 export interface ParsedArgs {
   // Subcommands
-  subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | null;
+  subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | 'config' | null;
   subcommandArg: string | null;
 
   // Project
@@ -48,15 +48,20 @@ export interface ParsedArgs {
 
 export function parseArgs(argv: string[]): ParsedArgs {
   // Subcommand detection
-  let subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | null = null;
+  let subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | 'config' | null = null;
   if (argv[0] === 'list') subcommand = 'list';
   else if (argv[0] === 'info') subcommand = 'info';
   else if (argv[0] === 'doctor') subcommand = 'doctor';
   else if (argv[0] === 'upgrade') subcommand = 'upgrade';
+  else if (argv[0] === 'config') subcommand = 'config';
 
-  // Subcommand arg (for 'info' command)
+  // Subcommand arg (for 'info' and 'config' commands)
   const subcommandArg =
-    subcommand === 'info' ? (argv.find((a) => !a.startsWith('--') && a !== 'info') ?? null) : null;
+    subcommand === 'info'
+      ? (argv.find((a) => !a.startsWith('--') && a !== 'info') ?? null)
+      : subcommand === 'config'
+        ? (argv.find((a) => !a.startsWith('--') && a !== 'config') ?? null)
+        : null;
 
   // Project name: first arg if not a flag and not a subcommand
   const projectName =
