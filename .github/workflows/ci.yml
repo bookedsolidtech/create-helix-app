@@ -226,14 +226,29 @@ jobs:
           node-version: 20
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level=critical
+      - run: pnpm audit --audit-level=high
+
+  license-check:
+    name: License Compliance
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run license-check
 
   quality-gates:
     name: Quality Gates
     runs-on: ubuntu-latest
     timeout-minutes: 1
     needs:
-      [secret-scan, lint, format, type-check, test, coverage-enforcement, build, audit, smoke-test]
+      [secret-scan, lint, format, type-check, test, coverage-enforcement, build, audit, license-check, smoke-test]
     if: always()
     steps:
       - name: Check all gates
@@ -246,10 +261,11 @@ jobs:
           echo "Coverage Enforcement: ${{ needs.coverage-enforcement.result }}"
           echo "Build:                ${{ needs.build.result }}"
           echo "Audit:                ${{ needs.audit.result }}"
+          echo "License Check:        ${{ needs.license-check.result }}"
           echo "Smoke Test:           ${{ needs.smoke-test.result }}"
 
           FAIL=0
-          for gate in secret-scan lint format type-check test coverage-enforcement build audit smoke-test; do
+          for gate in secret-scan lint format type-check test coverage-enforcement build audit license-check smoke-test; do
             result="skipped"
             case "$gate" in
               secret-scan)          result="${{ needs.secret-scan.result }}" ;;
@@ -260,6 +276,7 @@ jobs:
               coverage-enforcement) result="${{ needs.coverage-enforcement.result }}" ;;
               build)                result="${{ needs.build.result }}" ;;
               audit)                result="${{ needs.audit.result }}" ;;
+              license-check)        result="${{ needs.license-check.result }}" ;;
               smoke-test)           result="${{ needs.smoke-test.result }}" ;;
             esac
             if [[ "$result" != "success" ]]; then

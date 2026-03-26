@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "verify": "pnpm run lint && pnpm run format:check && pnpm run type-check",
     "preflight": "pnpm run verify && pnpm run test",
+    "license-check": "npx license-checker --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD' --summary",
     "sbom": "cyclonedx-npm --output-format JSON --output-file sbom.json",
     "prepare": "husky",
     "changeset": "changeset",
