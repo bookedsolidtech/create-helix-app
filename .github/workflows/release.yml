@@ -1,26 +1,42 @@
 name: Release
+
 on:
   push:
     branches: [main]
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
+
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
+
       - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build
+
       - name: Create Release PR or Publish
+        id: changesets
         uses: changesets/action@v1
         with:
           publish: pnpm changeset:publish
@@ -31,3 +47,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Notify Discord on release
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "create-helix-app released!",
+                "description": "A new version of `create-helix-app` has been published to npm!\n\n**Install:** `npm create helix-app`\n**npx:** `npx create-helix-app`",
+                "color": 5025616,
+                "fields": [
+                  { "name": "Package", "value": "[create-helix-app](https://www.npmjs.com/package/create-helix-app)", "inline": true },
+                  { "name": "Repository", "value": "[GitHub](https://github.com/bookedsolidtech/create-helix-app)", "inline": true }
+                ],
+                "footer": { "text": "Booked Solid - HELiX Ecosystem" },
+                "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+              }]
+            }' \
+            "$DISCORD_WEBHOOK_URL"
