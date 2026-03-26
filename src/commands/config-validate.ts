@@ -21,10 +21,7 @@ interface JsonOutput {
 export function runConfigValidate(opts: ConfigValidateOptions = {}): void {
   const candidates = opts.filePath
     ? [path.resolve(process.cwd(), opts.filePath)]
-    : [
-        path.resolve(process.cwd(), '.helixrc.json'),
-        path.resolve(os.homedir(), '.helixrc.json'),
-      ];
+    : [path.resolve(process.cwd(), '.helixrc.json'), path.resolve(os.homedir(), '.helixrc.json')];
 
   let raw: string | null = null;
   let resolvedPath: string | null = null;
@@ -97,9 +94,7 @@ export function runConfigValidate(opts: ConfigValidateOptions = {}): void {
     process.exit(1);
   } else if (result.warnings.length > 0) {
     const wCount = result.warnings.length;
-    console.log(
-      pc.yellow(`  Config is valid with ${wCount} warning${wCount !== 1 ? 's' : ''}`),
-    );
+    console.log(pc.yellow(`  Config is valid with ${wCount} warning${wCount !== 1 ? 's' : ''}`));
   } else {
     console.log(pc.green('  Config is valid ✓'));
   }

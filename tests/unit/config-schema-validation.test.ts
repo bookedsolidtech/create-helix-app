@@ -67,7 +67,9 @@ describe('validateHelixConfig — valid configs', () => {
 
   it('accepts all valid bundle values', () => {
     const config = {
-      defaults: { bundles: ['all', 'core', 'forms', 'navigation', 'data-display', 'feedback', 'layout'] },
+      defaults: {
+        bundles: ['all', 'core', 'forms', 'navigation', 'data-display', 'feedback', 'layout'],
+      },
     };
     const result = validateHelixConfig(JSON.stringify(config));
     expect(result.valid).toBe(true);
@@ -104,7 +106,9 @@ describe('validateHelixConfig — invalid field types', () => {
   });
 
   it('reports error when template is not a valid framework ID', () => {
-    const result = validateHelixConfig(JSON.stringify({ defaults: { template: 'not-a-framework' } }));
+    const result = validateHelixConfig(
+      JSON.stringify({ defaults: { template: 'not-a-framework' } }),
+    );
     expect(result.valid).toBe(false);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].key).toBe('defaults.template');
@@ -159,7 +163,9 @@ describe('validateHelixConfig — invalid field types', () => {
   });
 
   it('reports error when bundles contains an invalid value', () => {
-    const result = validateHelixConfig(JSON.stringify({ defaults: { bundles: ['core', 'invalid-bundle'] } }));
+    const result = validateHelixConfig(
+      JSON.stringify({ defaults: { bundles: ['core', 'invalid-bundle'] } }),
+    );
     expect(result.valid).toBe(false);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].key).toBe('defaults.bundles');
