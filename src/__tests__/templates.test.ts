@@ -25,10 +25,11 @@ describe('TEMPLATES', () => {
     'lit-vite',
     'preact-vite',
     'stencil',
+    'ember',
   ];
 
-  it('defines exactly 14 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(14);
+  it('defines exactly 15 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(15);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
@@ -109,7 +110,7 @@ describe('getTemplate', () => {
   });
 
   it('returns undefined for an unknown framework ID', () => {
-    expect(getTemplate('ember')).toBeUndefined();
+    expect(getTemplate('nonexistent-framework')).toBeUndefined();
   });
 
   it('returns undefined for an empty string', () => {
