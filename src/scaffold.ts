@@ -178,10 +178,7 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
 
   const template = getTemplate(options.framework);
   if (!template) {
-    throw new HelixError(
-      ErrorCode.UNKNOWN_FRAMEWORK,
-      `Unknown framework: ${options.framework}`,
-    );
+    throw new HelixError(ErrorCode.UNKNOWN_FRAMEWORK, `Unknown framework: ${options.framework}`);
   }
 
   logVerbose(`Template: ${template.id} (${template.name})`);

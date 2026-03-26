@@ -14,20 +14,15 @@ export enum ErrorCode {
 }
 
 const ERROR_SUGGESTIONS: Record<ErrorCode, string> = {
-  [ErrorCode.INVALID_TEMPLATE]:
-    'Run `create-helix list` to see available framework templates.',
+  [ErrorCode.INVALID_TEMPLATE]: 'Run `create-helix list` to see available framework templates.',
   [ErrorCode.PATH_TRAVERSAL]:
     'Use a simple project name without path separators or traversal sequences (../).',
   [ErrorCode.NETWORK_FAILURE]:
     'Check your internet connection and try again. Use --no-install to skip dependency installation.',
-  [ErrorCode.INVALID_PRESET]:
-    'Run `create-helix list` to see available Drupal presets.',
-  [ErrorCode.INVALID_BUNDLE]:
-    'Run `create-helix list` to see available component bundles.',
-  [ErrorCode.UNKNOWN_FRAMEWORK]:
-    'Run `create-helix list` to see available framework templates.',
-  [ErrorCode.DISK_ERROR]:
-    'Check disk space and file permissions, then try again.',
+  [ErrorCode.INVALID_PRESET]: 'Run `create-helix list` to see available Drupal presets.',
+  [ErrorCode.INVALID_BUNDLE]: 'Run `create-helix list` to see available component bundles.',
+  [ErrorCode.UNKNOWN_FRAMEWORK]: 'Run `create-helix list` to see available framework templates.',
+  [ErrorCode.DISK_ERROR]: 'Check disk space and file permissions, then try again.',
   [ErrorCode.INVALID_DIRECTORY]:
     'Provide a valid directory path without traversal sequences or invalid characters.',
 };
@@ -57,10 +52,7 @@ export class HelixError extends Error {
    * full stack trace, and cause chain.
    */
   formatVerbose(): string {
-    const lines: string[] = [
-      `[${this.code}] ${this.message}`,
-      `Suggestion: ${this.suggestion}`,
-    ];
+    const lines: string[] = [`[${this.code}] ${this.message}`, `Suggestion: ${this.suggestion}`];
 
     if (this.stack) {
       lines.push('', 'Stack trace:');
