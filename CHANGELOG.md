@@ -1,5 +1,19 @@
 # create-helix
 
+## 0.7.0
+
+### Minor Changes
+
+- 412da5e: Add --bundles flag for non-interactive component bundle selection
+- 0117dca: Add Stencil as a 14th framework target. Stencil is a compiler for building standards-based web components created by the Ionic team. It produces vanilla web components that work everywhere without a runtime dependency.
+
+  Scaffolds: stencil.config.ts, src/components/my-component/my-component.tsx, src/components/my-component/my-component.css, and src/index.ts.
+
+### Patch Changes
+
+- 222b518: Add Preact framework integration test
+- 6d14050: Expand Vue-Nuxt framework integration test coverage
+
 ## 0.6.0
 
 ### Minor Changes
