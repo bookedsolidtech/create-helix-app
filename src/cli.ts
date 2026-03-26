@@ -180,7 +180,7 @@ export async function runCLI(): Promise<void> {
     process.exit(1);
   }
 
-  if (isDrupal) {
+  if (isDrupal || presetArg !== null) {
     await runDrupalCLI(presetArg);
     return;
   }
