@@ -1,5 +1,18 @@
 # create-helix
 
+## 0.5.0
+
+### Minor Changes
+
+- 00de3a0: Add Lit + Vite as a framework template option. Lit is Google's lightweight library for building fast, reusable web components — a natural fit for HELiX's web component focus.
+- 5feae49: Add --preset flag for non-interactive Drupal preset selection
+
+### Patch Changes
+
+- f1253b9: Expand Angular framework integration test coverage
+- e9e2c96: Expand SvelteKit framework integration test coverage
+- b3c06cd: Raise test coverage thresholds
+
 ## 0.4.0
 
 ### Minor Changes
