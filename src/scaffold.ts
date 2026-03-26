@@ -3,11 +3,42 @@ import path from 'node:path';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions } from './types.js';
 
+/**
+ * SECURITY: Path traversal guard.
+ *
+ * Validates that `targetPath` does not contain directory traversal sequences
+ * (e.g. "../", "..\\", or percent-encoded variants that normalize to "..").
+ * Throws if any path segment is "..".
+ *
+ * The CLI already blocks traversal sequences through input validation
+ * (project names match /^[a-z0-9-_]+$/i), but this check guards the
+ * programmatic API against misuse where callers may not apply the same
+ * sanitization.
+ */
+function assertNoPathTraversal(targetPath: string): void {
+  // Normalize to OS path separators before splitting so that cross-platform
+  // variants (forward slash on Windows, etc.) are handled uniformly.
+  const normalized = path.normalize(targetPath);
+  const segments = normalized.split(path.sep);
+  if (segments.includes('..')) {
+    throw new Error(
+      `Security: path "${targetPath}" contains directory traversal sequences. ` +
+        `Aborting to prevent unauthorized file system access.`,
+    );
+  }
+}
+
 export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   const template = getTemplate(options.framework);
   if (!template) {
     throw new Error(`Unknown framework: ${options.framework}`);
   }
+
+  // SECURITY: Validate the output directory path before writing any files.
+  // Defense-in-depth: CLI validates project names via /^[a-z0-9-_]+$/i, making
+  // traversal sequences impossible through normal usage. This check protects
+  // programmatic API callers that may not apply the same sanitization.
+  assertNoPathTraversal(options.directory);
 
   await fs.ensureDir(options.directory);
 
@@ -1632,9 +1663,17 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
 
   <script>
     document.getElementById('greetBtn').addEventListener('hx-click', () => {
-      const name = document.getElementById('nameInput').value || 'World';
-      document.getElementById('output').innerHTML =
-        \`<hx-alert variant="success" open>Hello, \${name}!</hx-alert>\`;
+      // SECURITY: Use DOM methods instead of innerHTML to prevent XSS.
+      // Never interpolate unsanitized user input into innerHTML — an attacker
+      // could inject arbitrary HTML/script tags via the text input.
+      const nameInput = document.getElementById('nameInput').value || 'World';
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+      const alertEl = document.createElement('hx-alert');
+      alertEl.setAttribute('variant', 'success');
+      alertEl.setAttribute('open', '');
+      alertEl.textContent = 'Hello, ' + nameInput + '!';
+      output.appendChild(alertEl);
     });
   </script>
 </body>
