@@ -6,6 +6,33 @@ import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions } from './types.js';
 
 // ---------------------------------------------------------------------------
+// SECURITY: HTML sanitization
+// ---------------------------------------------------------------------------
+
+/**
+ * Encode characters that are meaningful in HTML to prevent XSS when
+ * interpolating user input (e.g. project name) into generated HTML files.
+ *
+ * Encodes: & < > " '
+ */
+export function sanitizeForHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Content Security Policy meta tag added to all generated HTML files.
+ * Restricts scripts and default sources to same-origin; allows inline styles
+ * because many component libraries (including HELiX) inject scoped styles.
+ */
+const CSP_META =
+  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'\">";
+
+// ---------------------------------------------------------------------------
 // Dry-run infrastructure
 // Module-level state is safe for a single-threaded CLI process.
 // ---------------------------------------------------------------------------
@@ -1059,7 +1086,7 @@ ${options.designTokens ? "import '../../helix-tokens.css';" : ''}
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '${options.name}',
+  title: '${sanitizeForHtml(options.name)}',
   description: 'Built with HELiX web components',
 };
 
@@ -1594,7 +1621,8 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="root"></div>
@@ -1847,7 +1875,7 @@ import { HxButton, HxCard, HxBadge } from '~/components/helix/wrappers';
 
 export const meta: MetaFunction = () => {
   return [
-    { title: '${options.name}' },
+    { title: '${sanitizeForHtml(options.name)}' },
     { name: 'description', content: 'Built with HELiX + Remix' },
   ];
 };
@@ -1909,7 +1937,8 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="app"></div>
@@ -2029,7 +2058,8 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${options.name}</title>
+  ${CSP_META}
+  <title>${sanitizeForHtml(options.name)}</title>
 
   <!-- HELiX via CDN — zero build step -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/@helixui/library@latest/dist/index.js"></script>
@@ -2131,7 +2161,8 @@ export default defineConfig({});
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -2215,7 +2246,7 @@ export default defineConfig({
 </script>
 
 <svelte:head>
-  <title>${options.name}</title>
+  <title>${sanitizeForHtml(options.name)}</title>
 </svelte:head>
 
 <div class="container">
@@ -2270,6 +2301,7 @@ export default defineConfig({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    ${CSP_META}
     %sveltekit.head%
   </head>
   <body>
@@ -2436,7 +2468,8 @@ async function scaffoldAngular(options: ProjectOptions): Promise<void> {
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>${options.name}</title>
+  ${CSP_META}
+  <title>${sanitizeForHtml(options.name)}</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
@@ -2590,7 +2623,8 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="app"></div>
@@ -2708,7 +2742,8 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="app"></div>
@@ -2731,7 +2766,8 @@ export default component$(() => {
     <QwikCityProvider>
       <head>
         <meta charset="UTF-8" />
-        <title>${options.name}</title>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+        <title>${sanitizeForHtml(options.name)}</title>
       </head>
       <body>
         <RouterOutlet />
@@ -2761,7 +2797,7 @@ export default component$(() => {
   return (
     <div class="container">
       <header>
-        <h1>${options.name}</h1>
+        <h1>${sanitizeForHtml(options.name)}</h1>
       </header>
       <main>
         <Slot />
@@ -2861,7 +2897,8 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <my-element></my-element>
@@ -3008,7 +3045,8 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="app"></div>

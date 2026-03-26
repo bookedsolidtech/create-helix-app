@@ -456,9 +456,11 @@ export async function runCLI(): Promise<void> {
   const { config: helixConfig, configFile } = loadConfig(noConfig);
   const cfgDefaults = helixConfig.defaults ?? {};
 
-  const templateArg = templateArgRaw ?? (cfgDefaults.template ?? null);
-  const bundlesFromFlag = bundlesFromFlagRaw ?? (cfgDefaults.bundles ?? null);
-  const typescriptFlag = explicitFlags.typescript ? typescriptFlagRaw : (cfgDefaults.typescript ?? true);
+  const templateArg = templateArgRaw ?? cfgDefaults.template ?? null;
+  const bundlesFromFlag = bundlesFromFlagRaw ?? cfgDefaults.bundles ?? null;
+  const typescriptFlag = explicitFlags.typescript
+    ? typescriptFlagRaw
+    : (cfgDefaults.typescript ?? true);
   const eslintFlag = explicitFlags.eslint ? eslintFlagRaw : (cfgDefaults.eslint ?? true);
   const darkModeFlag = explicitFlags.darkMode ? darkModeFlagRaw : (cfgDefaults.darkMode ?? true);
   const tokensFlag = explicitFlags.tokens ? tokensFlagRaw : (cfgDefaults.tokens ?? true);
