@@ -19,10 +19,10 @@ describe('list command', () => {
   });
 
   describe('normal (TUI) mode', () => {
-    it('outputs all 14 framework templates', () => {
+    it('outputs all 15 framework templates', () => {
       listAll(false);
       const output = logs.join('\n');
-      expect(TEMPLATES).toHaveLength(14);
+      expect(TEMPLATES).toHaveLength(15);
       for (const t of TEMPLATES) {
         expect(output).toContain(t.id);
       }

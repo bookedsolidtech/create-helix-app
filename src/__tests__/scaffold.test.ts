@@ -42,9 +42,9 @@ describe('scaffoldProject — core', () => {
   it('throws for unknown framework', async () => {
     const opts = makeOptions({
       name: 'bad-framework',
-      framework: 'ember' as ProjectOptions['framework'],
+      framework: 'nonexistent-framework' as ProjectOptions['framework'],
     });
-    await expect(scaffoldProject(opts)).rejects.toThrow('Unknown framework: ember');
+    await expect(scaffoldProject(opts)).rejects.toThrow('Unknown framework: nonexistent-framework');
   });
 
   it('generates package.json with correct name', async () => {
