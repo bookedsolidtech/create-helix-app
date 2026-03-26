@@ -140,14 +140,20 @@ export async function runCLI(): Promise<void> {
   create-helix v${HELIX_VERSION}
 
   Usage:
-    npx create-helix [options]
+    npx create-helix [project-name] [options]
 
   Options:
-    --drupal              Scaffold a Drupal theme instead of a web app
-    --preset <name>       Select a Drupal preset directly (standard, blog, healthcare, intranet)
-    --dry-run             Show files that would be created without writing them
-    --version, -v         Print version and exit
-    --help, -h            Show this help message and exit
+    --template <framework>  Select a framework directly (skips prompt)
+                            Valid values: ${TEMPLATES.map((t) => t.id).join(', ')}
+    --drupal                Scaffold a Drupal theme instead of a web app
+    --preset <name>         Select a Drupal preset directly (standard, blog, healthcare, intranet)
+    --dry-run               Show files that would be created without writing them
+    --version, -v           Print version and exit
+    --help, -h              Show this help message and exit
+
+  Examples:
+    npx create-helix my-app --template react-next
+    npx create-helix my-app --template vue-vite --no-install
 
   Docs / Repo:
     https://github.com/bookedsolidtech/create-helix-app
@@ -159,6 +165,17 @@ export async function runCLI(): Promise<void> {
   const isDrupal = args.includes('--drupal');
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
+
+  const templateArgIndex = args.indexOf('--template');
+  const templateArg = templateArgIndex !== -1 ? (args[templateArgIndex + 1] ?? null) : null;
+  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
+
+  if (templateArg !== null && !validFrameworks.includes(templateArg as Framework)) {
+    console.error(
+      `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
+    );
+    process.exit(1);
+  }
 
   if (isDrupal) {
     await runDrupalCLI(presetArg);
@@ -190,14 +207,16 @@ export async function runCLI(): Promise<void> {
         }),
 
       framework: () =>
-        p.select({
-          message: 'Which framework?',
-          options: TEMPLATES.map((t) => ({
-            value: t.id as Framework,
-            label: t.color(t.name),
-            hint: t.hint,
-          })),
-        }),
+        templateArg !== null
+          ? Promise.resolve(templateArg as Framework)
+          : p.select({
+              message: 'Which framework?',
+              options: TEMPLATES.map((t) => ({
+                value: t.id as Framework,
+                label: t.color(t.name),
+                hint: t.hint,
+              })),
+            }),
 
       componentBundles: () =>
         p.multiselect({
