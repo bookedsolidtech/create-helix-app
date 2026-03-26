@@ -1,5 +1,15 @@
 # create-helix
 
+## 0.11.0
+
+### Minor Changes
+
+- security: input validation hardening and new info/list commands
+  - Input validation: path traversal, null byte injection, type guards for framework/preset
+  - `create-helix info <template>` command with --json support
+  - `create-helix list` extracted to dedicated commands module
+  - Comprehensive test coverage: 1100+ tests across 51 files
+
 ## 0.10.0
 
 ### Minor Changes
