@@ -148,6 +148,8 @@ export async function runCLI(): Promise<void> {
                             Valid values: ${TEMPLATES.map((t) => t.id).join(', ')}
     --drupal                Scaffold a Drupal theme instead of a web app
     --preset <name>         Select a Drupal preset directly (standard, blog, healthcare, intranet)
+    --bundles <list>        Select component bundles (comma-separated, skips prompt)
+                            Valid values: all,core,forms,navigation,data-display,feedback,layout
     --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
@@ -157,6 +159,8 @@ export async function runCLI(): Promise<void> {
   Examples:
     npx create-helix my-app --template react-next
     npx create-helix my-app --template vue-vite --no-install
+    npx create-helix my-app --template react-next --bundles all
+    npx create-helix my-app --template vue-vite --bundles core,forms,navigation
 
   Docs / Repo:
     https://github.com/bookedsolidtech/create-helix-app
@@ -180,6 +184,23 @@ export async function runCLI(): Promise<void> {
       `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
     );
     process.exit(1);
+  }
+
+  const bundlesArgIndex = args.indexOf('--bundles');
+  const bundlesArg = bundlesArgIndex !== -1 ? (args[bundlesArgIndex + 1] ?? null) : null;
+  const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
+
+  let bundlesFromFlag: ComponentBundle[] | null = null;
+  if (bundlesArg !== null) {
+    const requested = bundlesArg.split(',').map((s) => s.trim()) as ComponentBundle[];
+    const invalid = requested.filter((b) => !validBundles.includes(b));
+    if (invalid.length > 0) {
+      console.error(
+        `Invalid bundle(s): ${invalid.map((b) => `"${b}"`).join(', ')}. Valid options: ${validBundles.join(', ')}`,
+      );
+      process.exit(1);
+    }
+    bundlesFromFlag = requested;
   }
 
   if (isDrupal || presetArg !== null) {
@@ -216,16 +237,18 @@ export async function runCLI(): Promise<void> {
             }),
 
       componentBundles: () =>
-        p.multiselect({
-          message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
-          options: COMPONENT_BUNDLES.map((b) => ({
-            value: b.id as ComponentBundle,
-            label: b.name,
-            hint: b.description,
-          })),
-          initialValues: ['core', 'forms'] as ComponentBundle[],
-          required: true,
-        }),
+        bundlesFromFlag !== null
+          ? Promise.resolve(bundlesFromFlag as ComponentBundle[])
+          : p.multiselect({
+              message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
+              options: COMPONENT_BUNDLES.map((b) => ({
+                value: b.id as ComponentBundle,
+                label: b.name,
+                hint: b.description,
+              })),
+              initialValues: ['core', 'forms'] as ComponentBundle[],
+              required: true,
+            }),
 
       features: () =>
         p.multiselect({
