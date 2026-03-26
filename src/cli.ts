@@ -145,6 +145,7 @@ export async function runCLI(): Promise<void> {
   Options:
     --drupal              Scaffold a Drupal theme instead of a web app
     --preset <name>       Select a Drupal preset directly (standard, blog, healthcare, intranet)
+    --dry-run             Show files that would be created without writing them
     --version, -v         Print version and exit
     --help, -h            Show this help message and exit
 
@@ -154,6 +155,7 @@ export async function runCLI(): Promise<void> {
     process.exit(0);
   }
 
+  const isDryRun = args.includes('--dry-run');
   const isDrupal = args.includes('--drupal');
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
@@ -247,11 +249,21 @@ export async function runCLI(): Promise<void> {
     designTokens: (project.features as string[]).includes('tokens'),
     darkMode: (project.features as string[]).includes('dark-mode'),
     installDeps: project.installDeps as boolean,
+    dryRun: isDryRun,
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);
 
   const s = p.spinner();
+
+  if (isDryRun) {
+    s.start('Collecting files (dry run)...');
+    await scaffoldProject(options);
+    s.stop(pc.cyan('Dry run complete'));
+
+    p.outro(pc.cyan('Dry run finished.') + ' ' + pc.dim('No files were written.'));
+    return;
+  }
 
   s.start('Scaffolding project...');
   await scaffoldProject(options);
