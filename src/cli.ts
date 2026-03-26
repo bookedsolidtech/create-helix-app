@@ -317,6 +317,7 @@ export async function runJsonScaffold(
     isDryRun: boolean;
     isForce: boolean;
     isNoInstall: boolean;
+    isVerbose: boolean;
     typescriptFlag: boolean;
     eslintFlag: boolean;
     darkModeFlag: boolean;
@@ -356,6 +357,7 @@ export async function runJsonScaffold(
     installDeps: !opts.isNoInstall,
     dryRun: opts.isDryRun,
     force: opts.isForce,
+    verbose: opts.isVerbose,
   };
 
   try {
@@ -440,6 +442,7 @@ export async function runCLI(): Promise<void> {
     json: isJson,
     isDrupal,
     noConfig,
+    verbose: isVerbose,
     template: templateArgRaw,
     preset: presetArg,
     bundles: bundlesFromFlagRaw,
@@ -504,6 +507,7 @@ export async function runCLI(): Promise<void> {
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
     --quiet, -q             Suppress banner, spinners, and decorative output (CI-friendly)
+    --verbose               Show detailed scaffolding output (files created, config used)
     --json                  Output scaffold result as JSON (suppresses all TUI output)
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
@@ -581,6 +585,7 @@ ${presetList}
       isDryRun,
       isForce,
       isNoInstall,
+      isVerbose,
       typescriptFlag,
       eslintFlag,
       darkModeFlag,
@@ -693,6 +698,7 @@ ${presetList}
     installDeps: project.installDeps as boolean,
     dryRun: isDryRun,
     force: isForce,
+    verbose: isVerbose,
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);
