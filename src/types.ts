@@ -74,3 +74,41 @@ export interface DrupalOptions {
   directory: string;
   preset: DrupalPreset;
 }
+
+// ---------------------------------------------------------------------------
+// Plugin Hook System Types
+// ---------------------------------------------------------------------------
+
+export type HookLifecycle = 'pre-scaffold' | 'post-scaffold' | 'pre-write' | 'post-write';
+
+export interface HookContext {
+  projectName: string;
+  template: string;
+  outputDir: string;
+  files: Record<string, string>;
+  options: ProjectOptions;
+}
+
+export type HookFn = (context: HookContext) => HookContext | void | Promise<HookContext | void>;
+
+export interface HookConfig {
+  lifecycle: HookLifecycle;
+  hook: HookFn;
+  pluginName?: string;
+}
+
+export interface HelixRcHooks {
+  'pre-scaffold'?: string;
+  'post-scaffold'?: string;
+  'pre-write'?: string;
+  'post-write'?: string;
+}
+
+export interface HelixRc {
+  hooks?: HelixRcHooks;
+}
+
+export interface PluginModule {
+  hooks?: Partial<Record<HookLifecycle, HookFn>>;
+  name?: string;
+}

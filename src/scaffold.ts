@@ -5,6 +5,9 @@ import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions } from './types.js';
 import { HelixError, ErrorCode } from './errors.js';
+import { HookManager, buildHookContext } from './plugins/hooks.js';
+import { loadHelixRcHooks } from './plugins/config-loader.js';
+import { discoverPlugins } from './plugins/plugin-discovery.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -212,6 +215,33 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   // Track whether the directory existed before scaffolding, for cleanup on failure.
   const dirExistedBefore = await fs.pathExists(options.directory);
 
+  // Set up plugin hook system
+  const hookManager = new HookManager();
+  const projectRoot = process.cwd();
+
+  // Load hooks from .helixrc.json (silent if not present)
+  try {
+    const rcHooks = await loadHelixRcHooks(projectRoot);
+    for (const { lifecycle, hook, source } of rcHooks) {
+      hookManager.register(lifecycle, hook, source);
+    }
+  } catch (err) {
+    // Re-throw config errors (invalid rc, missing hook files)
+    throw err;
+  }
+
+  // Auto-discover plugins from node_modules (warnings logged; never fatal)
+  const pluginHooks = await discoverPlugins(projectRoot);
+  for (const { name, lifecycle, hook } of pluginHooks) {
+    hookManager.register(lifecycle, hook, name);
+  }
+
+  // Build initial hook context
+  let hookCtx = buildHookContext(options.name, options.framework, options.directory, options);
+
+  // Fire pre-scaffold
+  hookCtx = await hookManager.run('pre-scaffold', hookCtx);
+
   try {
     await safeEnsureDir(options.directory);
 
@@ -246,6 +276,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     logVerbose(
       `Features: typescript=${String(options.typescript)}, eslint=${String(options.eslint)}, tokens=${String(options.designTokens)}, darkMode=${String(options.darkMode)}`,
     );
+
+    // Fire pre-write before generating files
+    hookCtx = await hookManager.run('pre-write', hookCtx);
 
     // Generate/overwrite core files based on options
     logVerbose(`Writing ${path.join(options.directory, 'package.json')}`);
@@ -335,6 +368,12 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     // Write .gitignore
     logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
     await writeGitignore(options);
+
+    // Fire post-write after all file writes complete
+    hookCtx = await hookManager.run('post-write', hookCtx);
+
+    // Fire post-scaffold after everything is done
+    hookCtx = await hookManager.run('post-scaffold', hookCtx);
   } catch (err) {
     _dryRunActive = false;
 
