@@ -17,6 +17,14 @@ interface _DryRunEntry {
 }
 let _dryRunEntries: _DryRunEntry[] = [];
 
+/**
+ * Returns the dry-run entries collected during the last dry-run scaffold.
+ * Used by --json mode to include the file list in JSON output.
+ */
+export function getDryRunEntries(): { path: string; size: number }[] {
+  return [..._dryRunEntries];
+}
+
 async function safeWriteFile(filePath: string, content: string): Promise<void> {
   if (_dryRunActive) {
     _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(content, 'utf8') });

@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
-import { scaffoldProject } from './scaffold.js';
+import { scaffoldProject, getDryRunEntries } from './scaffold.js';
 import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
@@ -283,6 +283,124 @@ export function runListCommand(isJson: boolean): void {
   console.log('');
 }
 
+interface ScaffoldJsonResult {
+  success: boolean;
+  project?: {
+    name: string;
+    directory: string;
+    framework: string;
+    typescript: boolean;
+    eslint: boolean;
+    darkMode: boolean;
+    designTokens: boolean;
+    bundles: string[];
+  };
+  files?: string[];
+  dryRun?: boolean;
+  error?: string;
+}
+
+export async function runJsonScaffold(
+  name: string,
+  templateArg: string,
+  opts: {
+    isDryRun: boolean;
+    isForce: boolean;
+    isNoInstall: boolean;
+    typescriptFlag: boolean;
+    eslintFlag: boolean;
+    darkModeFlag: boolean;
+    tokensFlag: boolean;
+    bundlesFromFlag: ComponentBundle[] | null;
+    outputDirArg: string | null;
+  },
+): Promise<void> {
+  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
+
+  if (!validFrameworks.includes(templateArg as Framework)) {
+    const result: ScaffoldJsonResult = {
+      success: false,
+      error: `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
+    };
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(1);
+  }
+
+  const directory =
+    opts.outputDirArg !== null
+      ? path.resolve(process.cwd(), opts.outputDirArg)
+      : path.resolve(process.cwd(), name);
+
+  const bundles: ComponentBundle[] =
+    opts.bundlesFromFlag ?? (['core', 'forms'] as ComponentBundle[]);
+
+  const options: import('./types.js').ProjectOptions = {
+    name,
+    directory,
+    framework: templateArg as Framework,
+    componentBundles: bundles,
+    typescript: opts.typescriptFlag,
+    eslint: opts.eslintFlag,
+    designTokens: opts.tokensFlag,
+    darkMode: opts.darkModeFlag,
+    installDeps: !opts.isNoInstall,
+    dryRun: opts.isDryRun,
+    force: opts.isForce,
+  };
+
+  try {
+    await scaffoldProject(options);
+
+    let files: string[];
+    if (opts.isDryRun) {
+      files = getDryRunEntries().map((e) => path.relative(directory, e.path));
+    } else {
+      files = await collectFiles(directory);
+    }
+
+    const result: ScaffoldJsonResult = {
+      success: true,
+      project: {
+        name,
+        directory,
+        framework: templateArg,
+        typescript: opts.typescriptFlag,
+        eslint: opts.eslintFlag,
+        darkMode: opts.darkModeFlag,
+        designTokens: opts.tokensFlag,
+        bundles: bundles,
+      },
+      files,
+      dryRun: opts.isDryRun,
+    };
+    console.log(JSON.stringify(result, null, 2));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const result: ScaffoldJsonResult = { success: false, error: message };
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(1);
+  }
+}
+
+async function collectFiles(dir: string): Promise<string[]> {
+  const results: string[] = [];
+  try {
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const sub = await collectFiles(full);
+        results.push(...sub.map((f) => path.join(entry.name, f)));
+      } else {
+        results.push(entry.name);
+      }
+    }
+  } catch {
+    // directory may not exist or be unreadable
+  }
+  return results.sort();
+}
+
 export async function runCLI(): Promise<void> {
   // Parse flags before prompting
   const args = process.argv.slice(2);
@@ -318,6 +436,7 @@ export async function runCLI(): Promise<void> {
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
     --quiet, -q             Suppress banner, spinners, and decorative output (CI-friendly)
+    --json                  Output scaffold result as JSON (suppresses all TUI output)
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
 
@@ -361,6 +480,7 @@ ${presetList}
   const isForce = args.includes('--force');
   const isNoInstall = args.includes('--no-install');
   const isQuiet = args.includes('--quiet') || args.includes('-q');
+  const isJson = args.includes('--json');
   const isDrupal = args.includes('--drupal');
   const typescriptFlag = args.includes('--no-typescript') ? false : true;
   const eslintFlag = args.includes('--no-eslint') ? false : true;
@@ -374,6 +494,19 @@ ${presetList}
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
 
   if (templateArg !== null && !validFrameworks.includes(templateArg as Framework)) {
+    if (isJson) {
+      console.log(
+        JSON.stringify(
+          {
+            success: false,
+            error: `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
+          },
+          null,
+          2,
+        ),
+      );
+      process.exit(1);
+    }
     console.error(
       `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
     );
@@ -414,6 +547,38 @@ ${presetList}
 
   if (isDrupal || presetArg !== null) {
     await runDrupalCLI(presetArg, isQuiet);
+    return;
+  }
+
+  if (isJson) {
+    const argName = process.argv[2];
+    if (!argName || argName.startsWith('--')) {
+      console.log(
+        JSON.stringify(
+          { success: false, error: 'Project name is required in --json mode' },
+          null,
+          2,
+        ),
+      );
+      process.exit(1);
+    }
+    if (templateArg === null) {
+      console.log(
+        JSON.stringify({ success: false, error: '--template is required in --json mode' }, null, 2),
+      );
+      process.exit(1);
+    }
+    await runJsonScaffold(argName, templateArg, {
+      isDryRun,
+      isForce,
+      isNoInstall,
+      typescriptFlag,
+      eslintFlag,
+      darkModeFlag,
+      tokensFlag,
+      bundlesFromFlag,
+      outputDirArg,
+    });
     return;
   }
 
