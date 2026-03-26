@@ -245,6 +245,23 @@ export const TEMPLATES: TemplateConfig[] = [
     },
     features: ['hot-reload', 'react-compatible-api', 'hooks', 'native-wc-support'],
   },
+  {
+    id: 'stencil',
+    name: 'Stencil',
+    description:
+      'Compiler for building standards-based web components with lazy-loading and zero-dependency output',
+    hint: 'compiled web components, standards-based',
+    color: pc.cyan,
+    dependencies: {
+      '@stencil/core': '^4.22.0',
+      '@helixui/library': '^1.0.0',
+      '@helixui/tokens': '^0.3.0',
+    },
+    devDependencies: {
+      typescript: '^5.7.0',
+    },
+    features: ['web-components', 'shadow-dom', 'lazy-loading', 'decorators'],
+  },
 ];
 
 export const COMPONENT_BUNDLES: ComponentBundleConfig[] = [

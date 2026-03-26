@@ -24,10 +24,11 @@ describe('TEMPLATES', () => {
     'vanilla',
     'lit-vite',
     'preact-vite',
+    'stencil',
   ];
 
-  it('defines exactly 13 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(13);
+  it('defines exactly 14 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(14);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
@@ -84,6 +85,16 @@ describe('TEMPLATES', () => {
     expect(preact!.devDependencies['@preact/preset-vite']).toBeDefined();
     expect(preact!.devDependencies['vite']).toBeDefined();
     expect(preact!.dependencies['@helixui/library']).toBeDefined();
+  });
+
+  it('stencil template has correct metadata', () => {
+    const stencil = TEMPLATES.find((t) => t.id === 'stencil');
+    expect(stencil).toBeDefined();
+    expect(stencil!.name).toBe('Stencil');
+    expect(stencil!.hint).toBe('compiled web components, standards-based');
+    expect(stencil!.dependencies['@stencil/core']).toBeDefined();
+    expect(stencil!.dependencies['@helixui/library']).toBeDefined();
+    expect(stencil!.devDependencies['typescript']).toBeDefined();
   });
 });
 
