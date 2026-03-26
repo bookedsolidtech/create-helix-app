@@ -1767,6 +1767,16 @@ export default {
 `,
   );
 
+  // app/routes.ts (required by React Router v7)
+  await safeWriteFile(
+    path.join(appDir, 'routes.ts'),
+    `import type { RouteConfig } from '@react-router/dev/routes';
+import { flatRoutes } from '@react-router/fs-routes';
+
+export default flatRoutes() satisfies RouteConfig;
+`,
+  );
+
   // tsconfig.json for Remix
   await safeWriteJson(
     path.join(options.directory, 'tsconfig.json'),
@@ -1807,7 +1817,7 @@ export default {
  * or guard with typeof window !== 'undefined' checks.
  *
  * Usage:
- *   import { HxButton, HxCard } from '~/components/helix/wrappers';
+ *   import { HxButton, HxCard } from '../components/helix/wrappers';
  *   <HxButton variant="primary" onHxClick={handleClick}>Save</HxButton>
  */
 import { createComponent } from '@lit/react';
@@ -1894,7 +1904,7 @@ body {
     path.join(appDir, 'root.tsx'),
     `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import type { LinksFunction } from 'react-router';
-import globalsStyles from '~/styles/globals.css?url';
+import globalsStyles from './styles/globals.css?url';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: globalsStyles },
@@ -1925,7 +1935,7 @@ export default function App() {
     path.join(routesDir, '_index.tsx'),
     `import type { MetaFunction } from 'react-router';
 import { useState } from 'react';
-import { HxButton, HxCard, HxBadge } from '~/components/helix/wrappers';
+import { HxButton, HxCard, HxBadge } from '../components/helix/wrappers';
 
 export const meta: MetaFunction = () => {
   return [

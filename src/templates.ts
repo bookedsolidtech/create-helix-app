@@ -54,6 +54,8 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.blue,
     dependencies: {
       'react-router': '^7.5.0',
+      '@react-router/node': '^7.5.0',
+      isbot: '^5.1.0',
       react: '^19.1.0',
       'react-dom': '^19.1.0',
       '@helixui/library': '^1.0.0',
@@ -62,6 +64,7 @@ export const TEMPLATES: TemplateConfig[] = [
     },
     devDependencies: {
       '@react-router/dev': '^7.5.0',
+      '@react-router/fs-routes': '^7.5.0',
       '@react-router/serve': '^7.5.0',
       '@types/react': '^19.1.0',
       '@types/react-dom': '^19.1.0',
