@@ -456,7 +456,7 @@ export async function runCLI(): Promise<void> {
   } = parsed;
 
   // Load config file (built-in defaults → config file → CLI flags)
-  const { config: helixConfig, configFile } = loadConfig(noConfig);
+  const { config: helixConfig } = loadConfig(noConfig);
   const cfgDefaults = helixConfig.defaults ?? {};
 
   const templateArg = templateArgRaw ?? cfgDefaults.template ?? null;
@@ -474,7 +474,8 @@ export async function runCLI(): Promise<void> {
   }
 
   if (subcommand === 'list') {
-    runListCommand(isJson, configFile);
+    const { listAll } = await import('./commands/list.js');
+    listAll(isJson);
     process.exit(0);
   }
 
