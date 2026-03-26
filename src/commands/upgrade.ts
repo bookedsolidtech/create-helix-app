@@ -7,26 +7,76 @@ import { validateDirectory } from '../validation.js';
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
 
+/** Shape of the npm registry response for the "latest" dist-tag. */
+interface NpmRegistryResponse {
+  version: string;
+}
+
+/** Session-level cache for npm registry lookups. */
+const versionCache = new Map<string, string>();
+
 /**
- * Placeholder "latest" versions keyed by package name.
- * In a future iteration this will query the npm registry.
+ * Fetch the latest published version of an npm package from the registry.
+ * Results are cached for the lifetime of the process. On network errors or
+ * 404s the function returns `null` so callers can fall back gracefully.
  */
-const LATEST_VERSIONS: Record<string, string> = {
-  '@helix/core': '1.0.0',
-  '@helix/tokens': '1.0.0',
-  '@helix/components': '1.0.0',
-  '@helix/icons': '1.0.0',
-  '@helix/utils': '1.0.0',
-  '@helixui/react': '1.0.0',
-  '@helixui/vue': '1.0.0',
-  '@helixui/angular': '1.0.0',
-  '@helixui/svelte': '1.0.0',
-  '@helixui/lit': '1.0.0',
-  '@helixui/solid': '1.0.0',
-  '@helixui/qwik': '1.0.0',
-  '@helixui/preact': '1.0.0',
-  '@helixui/stencil': '1.0.0',
-};
+export async function fetchLatestVersion(packageName: string): Promise<string | null> {
+  const cached = versionCache.get(packageName);
+  if (cached !== undefined) return cached;
+
+  try {
+    const url = `https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`;
+    const response = await fetch(url);
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as NpmRegistryResponse;
+    if (typeof data.version === 'string' && data.version.length > 0) {
+      versionCache.set(packageName, data.version);
+      return data.version;
+    }
+
+    return null;
+  } catch {
+    // Network error (offline, DNS failure, timeout, etc.)
+    return null;
+  }
+}
+
+/**
+ * Query latest versions for a list of package names in parallel.
+ * Returns a map of package name -> latest version string.
+ * Packages that could not be resolved are omitted from the result.
+ */
+export async function fetchLatestVersions(packageNames: string[]): Promise<Map<string, string>> {
+  const results = new Map<string, string>();
+  const entries = await Promise.all(
+    packageNames.map(async (name) => {
+      const version = await fetchLatestVersion(name);
+      return [name, version] as const;
+    }),
+  );
+
+  for (const [name, version] of entries) {
+    if (version !== null) {
+      results.set(name, version);
+    }
+  }
+  return results;
+}
+
+/**
+ * Clear the version cache. Useful for testing.
+ */
+export function clearVersionCache(): void {
+  versionCache.clear();
+}
 
 interface PackageJson {
   name?: string;
@@ -94,27 +144,41 @@ export interface UpgradePlan {
 }
 
 /**
- * Build an upgrade plan without performing any I/O beyond the initial read.
+ * Build an upgrade plan by querying the npm registry for latest versions.
+ * Falls back to the current version (no upgrade) when the registry is
+ * unreachable or the package is not published.
  */
-export function buildUpgradePlan(installed: Record<string, string>): UpgradePlan[] {
-  return Object.entries(installed).map(([name, current]) => {
-    const knownLatest = LATEST_VERSIONS[name];
+export async function buildUpgradePlan(installed: Record<string, string>): Promise<UpgradePlan[]> {
+  const packageNames = Object.keys(installed);
+  const latestVersions = await fetchLatestVersions(packageNames);
+
+  const plan: UpgradePlan[] = [];
+  for (const [name, current] of Object.entries(installed)) {
     const normalizedCurrent = current.replace(/^[\^~]/, '');
-    const latest = knownLatest ?? normalizedCurrent;
-    return {
+    const registryLatest = latestVersions.get(name);
+
+    // If we could not reach the registry, fall back to current (no upgrade)
+    if (registryLatest === undefined) {
+      p.log.warn(pc.yellow(`Could not fetch latest version for ${name} — skipping upgrade check`));
+      plan.push({ name, current, latest: normalizedCurrent, changed: false });
+      continue;
+    }
+
+    plan.push({
       name,
       current,
-      latest,
-      changed: normalizedCurrent !== latest,
-    };
-  });
+      latest: registryLatest,
+      changed: normalizedCurrent !== registryLatest,
+    });
+  }
+  return plan;
 }
 
 /**
  * Main upgrade entry point. Detects HELiX deps, shows current vs latest,
  * and (unless `--dry-run`) writes updated versions back to package.json.
  */
-export function runUpgrade(dir: string, options: UpgradeOptions = {}): void {
+export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Promise<void> {
   const { dryRun = false } = options;
 
   // SECURITY: Validate the directory path before reading any files.
@@ -136,7 +200,7 @@ export function runUpgrade(dir: string, options: UpgradeOptions = {}): void {
   }
 
   const installed = getInstalledVersions(dir);
-  const plan = buildUpgradePlan(installed);
+  const plan = await buildUpgradePlan(installed);
 
   // Header
   p.intro(pc.bgCyan(pc.black(' create-helix upgrade ')));
