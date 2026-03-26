@@ -1,5 +1,17 @@
 # create-helix
 
+## 0.4.0
+
+### Minor Changes
+
+- 3c84683: Add --template flag for non-interactive framework selection
+
+### Patch Changes
+
+- 7b7368d: Add input validation for project names
+- d2ea4f0: Add --no-install flag to skip dependency installation
+- 8e0f5b0: Add CI coverage reporting and README badges
+
 ## 0.3.0
 
 ### Minor Changes
