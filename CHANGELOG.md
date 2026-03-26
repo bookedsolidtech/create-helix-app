@@ -1,5 +1,11 @@
 # create-helix
 
+## 0.2.1
+
+### Patch Changes
+
+- 98d03d0: Add `--dry-run` flag that shows files that would be created without writing them
+
 ## 0.2.0
 
 ### Minor Changes
