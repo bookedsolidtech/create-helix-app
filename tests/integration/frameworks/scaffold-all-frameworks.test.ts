@@ -65,6 +65,7 @@ const FRAMEWORKS_WITHOUT_INDEX_HTML: Framework[] = [
   'svelte-kit',
   'astro',
   'stencil',
+  'ember',
 ];
 
 const ALL_FRAMEWORKS: Framework[] = TEMPLATES.map((t) => t.id);
@@ -85,6 +86,7 @@ const FRAMEWORK_KEY_DEP: Record<Framework, string> = {
   'lit-vite': 'lit',
   'preact-vite': 'preact',
   stencil: '@stencil/core',
+  ember: 'ember-source',
 };
 
 // ---------------------------------------------------------------------------

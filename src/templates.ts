@@ -264,6 +264,24 @@ export const TEMPLATES: TemplateConfig[] = [
     },
     features: ['web-components', 'shadow-dom', 'lazy-loading', 'decorators'],
   },
+  {
+    id: 'ember',
+    name: 'Ember.js',
+    description: 'Convention-driven full-stack framework with native web component support',
+    hint: 'convention over configuration',
+    color: pc.red,
+    dependencies: {
+      'ember-source': '^6.0.0',
+      '@helixui/library': '^1.0.0',
+      '@helixui/tokens': '^0.3.0',
+    },
+    devDependencies: {
+      'ember-cli': '^6.0.0',
+      '@ember/test-helpers': '^4.0.0',
+      typescript: '^5.7.0',
+    },
+    features: ['classic-routing', 'conventions', 'native-wc-support', 'octane'],
+  },
 ];
 
 export const COMPONENT_BUNDLES: ComponentBundleConfig[] = [

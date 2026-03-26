@@ -317,6 +317,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       case 'stencil':
         await scaffoldStencil(options);
         break;
+      case 'ember':
+        await scaffoldEmber(options);
+        break;
       default:
         // For templates without generators yet, write a minimal starter
         await scaffoldMinimal(options);
@@ -444,6 +447,12 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         build: 'stencil build',
         test: 'stencil test --spec',
         generate: 'stencil generate',
+      };
+    case 'ember':
+      return {
+        dev: 'ember serve',
+        build: 'ember build',
+        test: 'ember test',
       };
     case 'vanilla':
       return {
@@ -3511,6 +3520,169 @@ async function scaffoldMinimal(options: ProjectOptions): Promise<void> {
 ${options.designTokens ? "import '../helix-tokens.css';" : ''}
 
 console.log('HELiX components loaded');
+`,
+  );
+}
+
+async function scaffoldEmber(options: ProjectOptions): Promise<void> {
+  const appDir = path.join(options.directory, 'app');
+  const configDir = path.join(options.directory, 'config');
+  const publicDir = path.join(options.directory, 'public');
+  const testsDir = path.join(options.directory, 'tests');
+
+  await safeEnsureDir(appDir);
+  await safeEnsureDir(configDir);
+  await safeEnsureDir(publicDir);
+  await safeEnsureDir(testsDir);
+
+  // ember-cli-build.js
+  await safeWriteFile(
+    path.join(options.directory, 'ember-cli-build.js'),
+    `'use strict';
+
+const EmberApp = require('ember-cli/lib/broccoli/ember-app');
+
+module.exports = function (defaults) {
+  const app = new EmberApp(defaults, {
+    // Add options here
+  });
+
+  return app.toTree();
+};
+`,
+  );
+
+  // config/environment.js
+  await safeWriteFile(
+    path.join(configDir, 'environment.js'),
+    `'use strict';
+
+module.exports = function (environment) {
+  const ENV = {
+    modulePrefix: '${options.name}',
+    environment,
+    rootURL: '/',
+    locationType: 'history',
+
+    EmberENV: {
+      EXTEND_PROTOTYPES: false,
+      FEATURES: {},
+    },
+
+    APP: {},
+  };
+
+  if (environment === 'development') {
+    ENV.APP.LOG_RESOLVER = false;
+    ENV.APP.LOG_ACTIVE_GENERATION = false;
+    ENV.APP.LOG_TRANSITIONS = false;
+    ENV.APP.LOG_TRANSITIONS_INTERNAL = false;
+    ENV.APP.LOG_VIEW_LOOKUPS = false;
+  }
+
+  if (environment === 'test') {
+    ENV.locationType = 'none';
+    ENV.APP.LOG_ACTIVE_GENERATION = false;
+    ENV.APP.LOG_VIEW_LOOKUPS = false;
+    ENV.APP.rootElement = '#ember-testing';
+    ENV.APP.autoboot = false;
+  }
+
+  return ENV;
+};
+`,
+  );
+
+  // app/app.ts — main application entry
+  await safeWriteFile(
+    path.join(appDir, 'app.ts'),
+    `import Application from '@ember/application';
+import Resolver from 'ember-resolver';
+import loadInitializers from 'ember-load-initializers';
+import config from '${options.name}/config/environment';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+
+export default class App extends Application {
+  modulePrefix = config.modulePrefix;
+  podModulePrefix = \`\${config.modulePrefix}/pods\`;
+  Resolver = Resolver;
+}
+
+loadInitializers(App, config.modulePrefix);
+`,
+  );
+
+  // app/router.ts
+  await safeWriteFile(
+    path.join(appDir, 'router.ts'),
+    `import EmberRouter from '@ember/routing/router';
+import config from '${options.name}/config/environment';
+
+export default class Router extends EmberRouter {
+  location = config.locationType;
+  rootURL = config.rootURL;
+}
+
+Router.map(function () {
+  // Define your routes here
+});
+`,
+  );
+
+  // app/index.html
+  await safeWriteFile(
+    path.join(appDir, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${sanitizeForHtml(options.name)}</title>
+    {{content-for "head"}}
+    <link rel="stylesheet" href="{{rootURL}}assets/vendor.css" />
+    <link rel="stylesheet" href="{{rootURL}}assets/${sanitizeForHtml(options.name)}.css" />
+    {{content-for "head-footer"}}
+  </head>
+  <body>
+    {{content-for "body"}}
+    <script src="{{rootURL}}assets/vendor.js"></script>
+    <script src="{{rootURL}}assets/${sanitizeForHtml(options.name)}.js"></script>
+    {{content-for "body-footer"}}
+  </body>
+</html>
+`,
+  );
+
+  // app/templates/application.hbs — root template
+  const templatesDir = path.join(appDir, 'templates');
+  await safeEnsureDir(templatesDir);
+  await safeWriteFile(
+    path.join(templatesDir, 'application.hbs'),
+    `<hx-card>
+  <div slot="header"><h1>Welcome to {{this.name}}</h1></div>
+  <p>Built with HELiX web components and Ember.js.</p>
+  <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+    <hx-button variant="primary">Get Started</hx-button>
+    <hx-button variant="secondary">Learn More</hx-button>
+  </div>
+</hx-card>
+
+<RouterOutlet />
+`,
+  );
+
+  // tests/test-helper.ts
+  await safeWriteFile(
+    path.join(testsDir, 'test-helper.ts'),
+    `import Application from '${options.name}/app';
+import config from '${options.name}/config/environment';
+import { setApplication } from '@ember/test-helpers';
+import { start } from 'ember-qunit';
+
+setApplication(Application.create(config.APP));
+
+start();
 `,
   );
 }

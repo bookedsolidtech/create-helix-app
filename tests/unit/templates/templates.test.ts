@@ -17,6 +17,7 @@ const FRAMEWORK_IDS: Framework[] = [
   'lit-vite',
   'preact-vite',
   'stencil',
+  'ember',
 ];
 
 describe('TEMPLATES — structure', () => {
