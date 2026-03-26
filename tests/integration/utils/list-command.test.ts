@@ -50,7 +50,7 @@ describe('list command', () => {
     expect(Array.isArray(parsed.templates)).toBe(true);
     expect(Array.isArray(parsed.presets)).toBe(true);
     expect(parsed.templates).toHaveLength(14);
-    expect(parsed.presets).toHaveLength(4);
+    expect(parsed.presets).toHaveLength(5);
   });
 
   it('JSON output contains correct template ids', () => {
@@ -76,6 +76,6 @@ describe('list command', () => {
     };
 
     const presetIds = parsed.presets.map((pr) => pr.id);
-    expect(presetIds).toEqual(['standard', 'blog', 'healthcare', 'intranet']);
+    expect(presetIds).toEqual(['standard', 'blog', 'healthcare', 'intranet', 'ecommerce']);
   });
 });
