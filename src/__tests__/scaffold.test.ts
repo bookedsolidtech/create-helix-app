@@ -474,6 +474,109 @@ describe('scaffoldProject — vue-nuxt', () => {
   });
 });
 
+// ─── Remix ───────────────────────────────────────────────────────────────────
+
+describe('scaffoldProject — remix', () => {
+  it('generates expected file structure', async () => {
+    const opts = makeOptions({ name: 'remix-app', framework: 'remix' });
+    await scaffoldProject(opts);
+
+    const expectedFiles = [
+      'package.json',
+      'vite.config.ts',
+      'tsconfig.json',
+      'app/root.tsx',
+      'app/routes/_index.tsx',
+      'app/styles/globals.css',
+      'app/components/helix/wrappers.tsx',
+    ];
+
+    for (const file of expectedFiles) {
+      expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
+    }
+  });
+
+  it('package.json has remix scripts', async () => {
+    const opts = makeOptions({ name: 'remix-scripts', framework: 'remix' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.scripts.dev).toBe('remix vite:dev');
+    expect(pkg.scripts.build).toBe('remix vite:build');
+    expect(pkg.scripts.start).toBe('remix-serve ./build/server/index.js');
+  });
+
+  it('package.json includes remix and react dependencies', async () => {
+    const opts = makeOptions({ name: 'remix-deps', framework: 'remix' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.dependencies['@remix-run/node']).toBeDefined();
+    expect(pkg.dependencies['@remix-run/react']).toBeDefined();
+    expect(pkg.dependencies['@remix-run/serve']).toBeDefined();
+    expect(pkg.dependencies['react']).toBeDefined();
+    expect(pkg.dependencies['react-dom']).toBeDefined();
+    expect(pkg.dependencies['@helixui/library']).toBeDefined();
+    expect(pkg.dependencies['@lit/react']).toBeDefined();
+  });
+
+  it('package.json has @remix-run/dev in devDependencies', async () => {
+    const opts = makeOptions({ name: 'remix-devdeps', framework: 'remix' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.devDependencies['@remix-run/dev']).toBeDefined();
+    expect(pkg.devDependencies['vite']).toBeDefined();
+    expect(pkg.devDependencies['typescript']).toBeDefined();
+  });
+
+  it('vite.config.ts uses @remix-run/dev plugin', async () => {
+    const opts = makeOptions({ name: 'remix-vite', framework: 'remix' });
+    await scaffoldProject(opts);
+    const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
+    expect(viteConfig).toContain('@remix-run/dev');
+    expect(viteConfig).toContain('remix()');
+  });
+
+  it('app/root.tsx contains Outlet and HELiX styles', async () => {
+    const opts = makeOptions({ name: 'remix-root', framework: 'remix' });
+    await scaffoldProject(opts);
+    const root = await fs.readFile(path.join(opts.directory, 'app', 'root.tsx'), 'utf-8');
+    expect(root).toContain('Outlet');
+    expect(root).toContain('@remix-run/react');
+    expect(root).toContain('globals.css');
+  });
+
+  it('app/routes/_index.tsx imports HELiX React wrappers', async () => {
+    const opts = makeOptions({ name: 'remix-index', framework: 'remix' });
+    await scaffoldProject(opts);
+    const index = await fs.readFile(
+      path.join(opts.directory, 'app', 'routes', '_index.tsx'),
+      'utf-8',
+    );
+    expect(index).toContain('helix/wrappers');
+    expect(index).toContain('HxButton');
+    expect(index).toContain('HxCard');
+  });
+
+  it('wrappers.tsx imports @helixui/library components', async () => {
+    const opts = makeOptions({ name: 'remix-wrappers', framework: 'remix' });
+    await scaffoldProject(opts);
+    const wrappers = await fs.readFile(
+      path.join(opts.directory, 'app', 'components', 'helix', 'wrappers.tsx'),
+      'utf-8',
+    );
+    expect(wrappers).toContain('@helixui/library');
+    expect(wrappers).toContain('@lit/react');
+    expect(wrappers).toContain('createComponent');
+  });
+
+  it('tsconfig.json has jsx: react-jsx', async () => {
+    const opts = makeOptions({ name: 'remix-tsconfig', framework: 'remix' });
+    await scaffoldProject(opts);
+    const tsconfig = await fs.readJson(path.join(opts.directory, 'tsconfig.json'));
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
+    expect(tsconfig.compilerOptions.strict).toBe(true);
+  });
+});
+
 // ─── Package.json correctness across frameworks ──────────────────────────────
 
 describe('scaffoldProject — package.json structure', () => {

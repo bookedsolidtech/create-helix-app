@@ -13,6 +13,7 @@ describe('TEMPLATES', () => {
   const expectedFrameworks: Framework[] = [
     'react-next',
     'react-vite',
+    'remix',
     'vue-nuxt',
     'vue-vite',
     'svelte-kit',
@@ -21,8 +22,8 @@ describe('TEMPLATES', () => {
     'vanilla',
   ];
 
-  it('defines exactly 8 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(8);
+  it('defines exactly 9 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(9);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
