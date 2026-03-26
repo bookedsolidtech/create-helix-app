@@ -220,14 +220,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   const projectRoot = process.cwd();
 
   // Load hooks from .helixrc.json (silent if not present)
-  try {
-    const rcHooks = await loadHelixRcHooks(projectRoot);
-    for (const { lifecycle, hook, source } of rcHooks) {
-      hookManager.register(lifecycle, hook, source);
-    }
-  } catch (err) {
-    // Re-throw config errors (invalid rc, missing hook files)
-    throw err;
+  const rcHooks = await loadHelixRcHooks(projectRoot);
+  for (const { lifecycle, hook, source } of rcHooks) {
+    hookManager.register(lifecycle, hook, source);
   }
 
   // Auto-discover plugins from node_modules (warnings logged; never fatal)
@@ -373,7 +368,7 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     hookCtx = await hookManager.run('post-write', hookCtx);
 
     // Fire post-scaffold after everything is done
-    hookCtx = await hookManager.run('post-scaffold', hookCtx);
+    await hookManager.run('post-scaffold', hookCtx);
   } catch (err) {
     _dryRunActive = false;
 

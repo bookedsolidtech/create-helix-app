@@ -89,7 +89,9 @@ export interface HookContext {
   options: ProjectOptions;
 }
 
-export type HookFn = (context: HookContext) => HookContext | void | Promise<HookContext | void>;
+export type HookFn = (
+  context: HookContext,
+) => HookContext | undefined | Promise<HookContext | undefined>;
 
 export interface HookConfig {
   lifecycle: HookLifecycle;
