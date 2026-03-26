@@ -1,7 +1,138 @@
 import fs from 'fs-extra';
 import path from 'node:path';
+import pc from 'picocolors';
+import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions } from './types.js';
+import { HelixError, ErrorCode } from './errors.js';
+
+// ---------------------------------------------------------------------------
+// SECURITY: HTML sanitization
+// ---------------------------------------------------------------------------
+
+/**
+ * Encode characters that are meaningful in HTML to prevent XSS when
+ * interpolating user input (e.g. project name) into generated HTML files.
+ *
+ * Encodes: & < > " '
+ */
+export function sanitizeForHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Content Security Policy meta tag added to all generated HTML files.
+ * Restricts scripts and default sources to same-origin; allows inline styles
+ * because many component libraries (including HELiX) inject scoped styles.
+ */
+const CSP_META =
+  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'\">";
+
+// ---------------------------------------------------------------------------
+// Dry-run infrastructure
+// Module-level state is safe for a single-threaded CLI process.
+// ---------------------------------------------------------------------------
+
+let _dryRunActive = false;
+interface _DryRunEntry {
+  path: string;
+  size: number;
+}
+let _dryRunEntries: _DryRunEntry[] = [];
+
+/**
+ * Returns the dry-run entries collected during the last dry-run scaffold.
+ * Used by --json mode to include the file list in JSON output.
+ */
+export function getDryRunEntries(): { path: string; size: number }[] {
+  return [..._dryRunEntries];
+}
+
+async function safeWriteFile(filePath: string, content: string): Promise<void> {
+  if (_dryRunActive) {
+    _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(content, 'utf8') });
+    return;
+  }
+  await fs.writeFile(filePath, content);
+}
+
+async function safeWriteJson(
+  filePath: string,
+  data: unknown,
+  opts?: { spaces: number },
+): Promise<void> {
+  if (_dryRunActive) {
+    const json = JSON.stringify(data, null, opts?.spaces ?? 2);
+    _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(json, 'utf8') });
+    return;
+  }
+  await fs.writeJson(filePath, data, opts ?? { spaces: 2 });
+}
+
+async function safeEnsureDir(dirPath: string): Promise<void> {
+  if (_dryRunActive) return;
+  await fs.ensureDir(dirPath);
+}
+
+async function walkDirRecursive(dir: string): Promise<string[]> {
+  const results: string[] = [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...(await walkDirRecursive(full)));
+    } else {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+function printDryRunTree(baseDir: string, entries: _DryRunEntry[]): void {
+  // Build relative paths and sort
+  const files = entries
+    .map((e) => ({
+      rel: path.relative(baseDir, e.path),
+      size: e.size,
+    }))
+    .sort((a, b) => a.rel.localeCompare(b.rel));
+
+  // Compute totals
+  const totalFiles = files.length;
+  const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+  const formattedSize =
+    totalBytes < 1024
+      ? `${totalBytes} B`
+      : totalBytes < 1024 * 1024
+        ? `${(totalBytes / 1024).toFixed(1)} KB`
+        : `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+  console.log();
+  console.log(pc.bold(pc.cyan('  Dry run — files that would be created:')));
+  console.log(pc.dim(`  ${path.basename(baseDir)}/`));
+
+  // Simple tree rendering: group by first directory segment
+  for (const { rel, size } of files) {
+    const parts = rel.split(path.sep);
+    const indent = '  ' + '  '.repeat(parts.length - 1);
+    const name = parts[parts.length - 1];
+    const sizeLabel = size < 1024 ? `${size}B` : `${(size / 1024).toFixed(1)}KB`;
+    console.log(`${indent}${pc.dim('├─')} ${pc.white(name)} ${pc.dim(`(${sizeLabel})`)}`);
+  }
+
+  console.log();
+  console.log(
+    pc.bold(`  ${pc.green(String(totalFiles))} files`) + pc.dim(`, estimated ${formattedSize}`),
+  );
+  console.log();
+  console.log(pc.dim('  No files were written. Remove --dry-run to scaffold.'));
+  console.log();
+}
 
 /**
  * SECURITY: Path traversal guard.
@@ -21,18 +152,37 @@ function assertNoPathTraversal(targetPath: string): void {
   const normalized = path.normalize(targetPath);
   const segments = normalized.split(path.sep);
   if (segments.includes('..')) {
-    throw new Error(
+    throw new HelixError(
+      ErrorCode.PATH_TRAVERSAL,
       `Security: path "${targetPath}" contains directory traversal sequences. ` +
         `Aborting to prevent unauthorized file system access.`,
     );
   }
 }
 
+function getScaffoldErrorMessage(err: unknown): string | null {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EACCES') return 'Cannot write to directory. Check permissions.';
+    if (code === 'ENOSPC') return 'Disk full. Free some space and try again.';
+    if (code === 'EEXIST')
+      return 'Directory already exists and is not empty. Choose a different name or use --force.';
+  }
+  return null;
+}
+
 export async function scaffoldProject(options: ProjectOptions): Promise<void> {
+  const logVerbose = (msg: string): void => {
+    if (options.verbose) console.log(pc.dim(`  [verbose] ${msg}`));
+  };
+
   const template = getTemplate(options.framework);
   if (!template) {
-    throw new Error(`Unknown framework: ${options.framework}`);
+    throw new HelixError(ErrorCode.UNKNOWN_FRAMEWORK, `Unknown framework: ${options.framework}`);
   }
+
+  logVerbose(`Template: ${template.id} (${template.name})`);
+  logVerbose(`Directory: ${options.directory}`);
 
   // SECURITY: Validate the output directory path before writing any files.
   // Defense-in-depth: CLI validates project names via /^[a-z0-9-_]+$/i, making
@@ -40,82 +190,172 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   // programmatic API callers that may not apply the same sanitization.
   assertNoPathTraversal(options.directory);
 
-  await fs.ensureDir(options.directory);
-
-  // Check if template directory exists (bundled with package)
-  const templateDir = path.join(
-    new URL('.', import.meta.url).pathname,
-    '..',
-    'templates',
-    options.framework,
-  );
-  const hasTemplate = await fs.pathExists(templateDir);
-
-  if (hasTemplate) {
-    // Copy the full template
-    await fs.copy(templateDir, options.directory, { overwrite: true });
+  // Check if directory exists and is non-empty
+  const dirExists = await fs.pathExists(options.directory);
+  if (dirExists) {
+    const entries = await fs.readdir(options.directory);
+    if (entries.length > 0) {
+      if (!options.force) {
+        console.error(`Error: Directory exists and is not empty: ${options.directory}`);
+        process.exit(1);
+      }
+      console.warn(pc.yellow(`Warning: overwriting existing files in ${options.directory}`));
+    }
   }
 
-  // Generate/overwrite core files based on options
-  await writePackageJson(options, template);
-  await writeReadme(options);
-
-  if (options.designTokens) {
-    await writeTokensConfig(options);
+  // Activate dry-run collection if requested
+  if (options.dryRun) {
+    _dryRunActive = true;
+    _dryRunEntries = [];
   }
 
-  if (options.eslint) {
-    await writeEslintConfig(options);
+  // Track whether the directory existed before scaffolding, for cleanup on failure.
+  const dirExistedBefore = await fs.pathExists(options.directory);
+
+  try {
+    await safeEnsureDir(options.directory);
+
+    // Check if template directory exists (bundled with package)
+    const templateDir = path.join(
+      new URL('.', import.meta.url).pathname,
+      '..',
+      'templates',
+      options.framework,
+    );
+    const hasTemplate = await fs.pathExists(templateDir);
+
+    if (hasTemplate) {
+      if (_dryRunActive) {
+        // Walk the template directory and collect file paths + sizes
+        const templateFiles = await walkDirRecursive(templateDir);
+        for (const f of templateFiles) {
+          const rel = path.relative(templateDir, f);
+          const stat = await fs.stat(f);
+          _dryRunEntries.push({
+            path: path.join(options.directory, rel),
+            size: stat.size,
+          });
+        }
+      } else {
+        // Copy the full template
+        await fs.copy(templateDir, options.directory, { overwrite: true });
+      }
+    }
+
+    logVerbose(`Component bundles: ${options.componentBundles.join(', ')}`);
+    logVerbose(
+      `Features: typescript=${String(options.typescript)}, eslint=${String(options.eslint)}, tokens=${String(options.designTokens)}, darkMode=${String(options.darkMode)}`,
+    );
+
+    // Generate/overwrite core files based on options
+    logVerbose(`Writing ${path.join(options.directory, 'package.json')}`);
+    await writePackageJson(options, template);
+    logVerbose(`Writing ${path.join(options.directory, 'README.md')}`);
+    await writeReadme(options);
+
+    if (options.designTokens) {
+      logVerbose(`Writing ${path.join(options.directory, 'helix.tokens.json')}`);
+      await writeTokensConfig(options);
+    }
+
+    if (options.eslint) {
+      logVerbose(`Writing ${path.join(options.directory, 'eslint.config.js')}`);
+      await writeEslintConfig(options);
+    }
+
+    // .prettierrc and .editorconfig are always written regardless of eslint option
+    logVerbose(`Writing ${path.join(options.directory, '.prettierrc')}`);
     await writePrettierConfig(options);
+    logVerbose(`Writing ${path.join(options.directory, '.editorconfig')}`);
+    await writeEditorConfig(options);
+
+    if (options.typescript) {
+      logVerbose(`Writing ${path.join(options.directory, 'tsconfig.json')}`);
+      await writeTsConfig(options);
+    }
+
+    // Framework-specific generation (always runs, fills gaps if no template dir)
+    logVerbose(`Running ${options.framework} scaffold generator`);
+    switch (options.framework) {
+      case 'react-next':
+        await scaffoldReactNext(options);
+        break;
+      case 'react-vite':
+        await scaffoldReactVite(options);
+        break;
+      case 'remix':
+        await scaffoldRemix(options);
+        break;
+      case 'vue-vite':
+        await scaffoldVueVite(options);
+        break;
+      case 'solid-vite':
+        await scaffoldSolidVite(options);
+        break;
+      case 'qwik-vite':
+        await scaffoldQwikVite(options);
+        break;
+      case 'vanilla':
+        await scaffoldVanilla(options);
+        break;
+      case 'astro':
+        await scaffoldAstro(options);
+        break;
+      case 'svelte-kit':
+        await scaffoldSvelteKit(options);
+        break;
+      case 'vue-nuxt':
+        await scaffoldVueNuxt(options);
+        break;
+      case 'angular':
+        await scaffoldAngular(options);
+        break;
+      case 'lit-vite':
+        await scaffoldLitVite(options);
+        break;
+      case 'preact-vite':
+        await scaffoldPreactVite(options);
+        break;
+      case 'stencil':
+        await scaffoldStencil(options);
+        break;
+      case 'ember':
+        await scaffoldEmber(options);
+        break;
+      default:
+        // For templates without generators yet, write a minimal starter
+        await scaffoldMinimal(options);
+        break;
+    }
+
+    // Write the HELiX integration helper
+    logVerbose(`Writing ${path.join(options.directory, 'src', 'helix-setup.ts')}`);
+    await writeHelixSetup(options);
+
+    // Write .gitignore
+    logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
+    await writeGitignore(options);
+  } catch (err) {
+    _dryRunActive = false;
+
+    // Clean up any partially created files if the directory was created by this scaffold run.
+    if (!dirExistedBefore && (await fs.pathExists(options.directory))) {
+      await fs.remove(options.directory);
+    }
+
+    const friendlyMessage = getScaffoldErrorMessage(err);
+    if (friendlyMessage) {
+      p.log.error(friendlyMessage);
+      throw new HelixError(ErrorCode.DISK_ERROR, friendlyMessage, err);
+    }
+    throw err;
+  } finally {
+    _dryRunActive = false;
   }
 
-  if (options.typescript) {
-    await writeTsConfig(options);
+  if (options.dryRun) {
+    printDryRunTree(options.directory, _dryRunEntries);
   }
-
-  // Framework-specific generation (always runs, fills gaps if no template dir)
-  switch (options.framework) {
-    case 'react-next':
-      await scaffoldReactNext(options);
-      break;
-    case 'react-vite':
-      await scaffoldReactVite(options);
-      break;
-    case 'remix':
-      await scaffoldRemix(options);
-      break;
-    case 'vue-vite':
-      await scaffoldVueVite(options);
-      break;
-    case 'solid-vite':
-      await scaffoldSolidVite(options);
-      break;
-    case 'vanilla':
-      await scaffoldVanilla(options);
-      break;
-    case 'astro':
-      await scaffoldAstro(options);
-      break;
-    case 'svelte-kit':
-      await scaffoldSvelteKit(options);
-      break;
-    case 'vue-nuxt':
-      await scaffoldVueNuxt(options);
-      break;
-    case 'angular':
-      await scaffoldAngular(options);
-      break;
-    default:
-      // For templates without generators yet, write a minimal starter
-      await scaffoldMinimal(options);
-      break;
-  }
-
-  // Write the HELiX integration helper
-  await writeHelixSetup(options);
-
-  // Write .gitignore
-  await writeGitignore(options);
 }
 
 async function writePackageJson(
@@ -137,7 +377,7 @@ async function writePackageJson(
     },
   };
 
-  await fs.writeJson(path.join(options.directory, 'package.json'), pkg, {
+  await safeWriteJson(path.join(options.directory, 'package.json'), pkg, {
     spaces: 2,
   });
 }
@@ -159,17 +399,26 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       };
     case 'remix':
       return {
-        dev: 'remix vite:dev',
-        build: 'remix vite:build',
-        start: 'remix-serve ./build/server/index.js',
-        typecheck: 'tsc',
+        dev: 'react-router dev',
+        build: 'react-router build',
+        start: 'react-router-serve ./build/server/index.js',
+        typecheck: 'react-router typegen && tsc',
       };
     case 'vue-vite':
     case 'solid-vite':
+    case 'lit-vite':
+    case 'preact-vite':
       return {
         dev: 'vite',
         build: 'vite build',
         preview: 'vite preview',
+      };
+    case 'qwik-vite':
+      return {
+        dev: 'vite',
+        build: 'vite build',
+        preview: 'vite preview',
+        typecheck: 'tsc --noEmit',
       };
     case 'svelte-kit':
       return {
@@ -193,6 +442,19 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       return {
         dev: 'ng serve',
         build: 'ng build',
+      };
+    case 'stencil':
+      return {
+        start: 'stencil build --dev --watch --serve',
+        build: 'stencil build',
+        test: 'stencil test --spec',
+        generate: 'stencil generate',
+      };
+    case 'ember':
+      return {
+        dev: 'ember serve',
+        build: 'ember build',
+        test: 'ember test',
       };
     case 'vanilla':
       return {
@@ -274,7 +536,7 @@ import '@helixui/library';
 - [Component Storybook](https://helix-storybook.example.com)
 - [API Reference (Custom Elements Manifest)](https://github.com/bookedsolidtech/helix)
 `;
-  await fs.writeFile(path.join(options.directory, 'README.md'), content);
+  await safeWriteFile(path.join(options.directory, 'README.md'), content);
 }
 
 async function writeTokensConfig(options: ProjectOptions): Promise<void> {
@@ -334,7 +596,7 @@ ${
     : ''
 }
 `;
-  await fs.writeFile(path.join(options.directory, 'helix-tokens.css'), content);
+  await safeWriteFile(path.join(options.directory, 'helix-tokens.css'), content);
 }
 
 async function writeEslintConfig(options: ProjectOptions): Promise<void> {
@@ -351,7 +613,7 @@ export default [
   },
 ];
 `;
-  await fs.writeFile(path.join(options.directory, 'eslint.config.js'), content);
+  await safeWriteFile(path.join(options.directory, 'eslint.config.js'), content);
 }
 
 async function writePrettierConfig(options: ProjectOptions): Promise<void> {
@@ -362,7 +624,7 @@ async function writePrettierConfig(options: ProjectOptions): Promise<void> {
     trailingComma: 'all',
     printWidth: 100,
   };
-  await fs.writeJson(path.join(options.directory, '.prettierrc'), config, {
+  await safeWriteJson(path.join(options.directory, '.prettierrc'), config, {
     spaces: 2,
   });
 }
@@ -390,7 +652,7 @@ async function writeTsConfig(options: ProjectOptions): Promise<void> {
     exclude: ['node_modules'],
   };
 
-  await fs.writeJson(path.join(options.directory, 'tsconfig.json'), config, {
+  await safeWriteJson(path.join(options.directory, 'tsconfig.json'), config, {
     spaces: 2,
   });
 }
@@ -401,7 +663,7 @@ async function writeHelixSetup(options: ProjectOptions): Promise<void> {
 
   const ext = options.typescript ? 'ts' : 'js';
   const srcDir = path.join(options.directory, 'src');
-  await fs.ensureDir(srcDir);
+  await safeEnsureDir(srcDir);
 
   let content: string;
 
@@ -433,7 +695,7 @@ export {};
 `;
   }
 
-  await fs.writeFile(path.join(srcDir, `helix-setup.${ext}`), content);
+  await safeWriteFile(path.join(srcDir, `helix-setup.${ext}`), content);
 }
 
 async function writeGitignore(options: ProjectOptions): Promise<void> {
@@ -448,7 +710,21 @@ dist/
 *.log
 .DS_Store
 `;
-  await fs.writeFile(path.join(options.directory, '.gitignore'), content);
+  await safeWriteFile(path.join(options.directory, '.gitignore'), content);
+}
+
+async function writeEditorConfig(options: ProjectOptions): Promise<void> {
+  const content = `root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+`;
+  await safeWriteFile(path.join(options.directory, '.editorconfig'), content);
 }
 
 // ─── Framework-specific scaffolding ───────────────────────────────────────────
@@ -456,10 +732,10 @@ dist/
 async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const appDir = path.join(srcDir, 'app');
-  await fs.ensureDir(appDir);
+  await safeEnsureDir(appDir);
 
   // next.config.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'next.config.ts'),
     `import type { NextConfig } from 'next';
 
@@ -474,7 +750,7 @@ export default nextConfig;
   );
 
   // tsconfig.json for Next.js
-  await fs.writeJson(
+  await safeWriteJson(
     path.join(options.directory, 'tsconfig.json'),
     {
       compilerOptions: {
@@ -501,8 +777,8 @@ export default nextConfig;
   );
 
   // React wrappers for HELiX components
-  await fs.ensureDir(path.join(srcDir, 'components', 'helix'));
-  await fs.writeFile(
+  await safeEnsureDir(path.join(srcDir, 'components', 'helix'));
+  await safeWriteFile(
     path.join(srcDir, 'components', 'helix', 'wrappers.tsx'),
     `'use client';
 
@@ -719,7 +995,7 @@ export const HxDataTable = createComponent({
   );
 
   // Client-side HELiX provider component
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'components', 'helix', 'provider.tsx'),
     `'use client';
 
@@ -767,7 +1043,7 @@ export function HelixProvider({ children, theme }: HelixProviderProps) {
   );
 
   // JSX type declarations for custom elements
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'helix.d.ts'),
     `/**
  * JSX type declarations for HELiX web components.
@@ -852,7 +1128,7 @@ export {};
   );
 
   // Layout with provider
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(appDir, 'layout.tsx'),
     `import type { Metadata } from 'next';
 import { HelixProvider } from '@/components/helix/provider';
@@ -860,7 +1136,7 @@ ${options.designTokens ? "import '../../helix-tokens.css';" : ''}
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '${options.name}',
+  title: '${sanitizeForHtml(options.name)}',
   description: 'Built with HELiX web components',
 };
 
@@ -883,7 +1159,7 @@ export default function RootLayout({
   );
 
   // Global styles
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(appDir, 'globals.css'),
     `@import '@helixui/tokens/tokens.css';
 
@@ -912,7 +1188,7 @@ body {
   );
 
   // Main page — interactive demo using custom elements directly
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(appDir, 'page.tsx'),
     `'use client';
 
@@ -1096,9 +1372,9 @@ hx-button::part(button) {
   // Forms example page — demonstrates form participation with web components
   const examplesDir = path.join(appDir, 'examples');
   const formsDir = path.join(examplesDir, 'forms');
-  await fs.ensureDir(formsDir);
+  await safeEnsureDir(formsDir);
 
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(formsDir, 'page.tsx'),
     `'use client';
 
@@ -1208,9 +1484,9 @@ export default function FormsExample() {
 
   // Dashboard example page
   const dashboardDir = path.join(examplesDir, 'dashboard');
-  await fs.ensureDir(dashboardDir);
+  await safeEnsureDir(dashboardDir);
 
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(dashboardDir, 'page.tsx'),
     `'use client';
 
@@ -1340,7 +1616,7 @@ hx-button::part(button) {
   );
 
   // Examples layout with navigation
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(examplesDir, 'layout.tsx'),
     `'use client';
 
@@ -1369,14 +1645,16 @@ export default function ExamplesLayout({
 }
 `,
   );
+
+  await writeReactErrorBoundary(options);
 }
 
 async function scaffoldReactVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
-  await fs.ensureDir(srcDir);
+  await safeEnsureDir(srcDir);
 
   // vite.config.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
     `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -1388,14 +1666,15 @@ export default defineConfig({
   );
 
   // index.html
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'index.html'),
     `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="root"></div>
@@ -1406,7 +1685,7 @@ export default defineConfig({
   );
 
   // main.tsx
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'main.tsx'),
     `import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -1423,7 +1702,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   );
 
   // App.tsx
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'App.tsx'),
     `import { useState } from 'react';
 
@@ -1447,7 +1726,7 @@ export default function App() {
   );
 
   // index.css
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'index.css'),
     `@import '@helixui/tokens/tokens.css';
 
@@ -1463,6 +1742,8 @@ body {
 }
 `,
   );
+
+  await writeReactErrorBoundary(options);
 }
 
 async function scaffoldRemix(options: ProjectOptions): Promise<void> {
@@ -1470,24 +1751,45 @@ async function scaffoldRemix(options: ProjectOptions): Promise<void> {
   const routesDir = path.join(appDir, 'routes');
   const stylesDir = path.join(appDir, 'styles');
   const componentsDir = path.join(appDir, 'components', 'helix');
-  await fs.ensureDir(routesDir);
-  await fs.ensureDir(stylesDir);
-  await fs.ensureDir(componentsDir);
+  await safeEnsureDir(routesDir);
+  await safeEnsureDir(stylesDir);
+  await safeEnsureDir(componentsDir);
 
   // vite.config.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
-    `import { vitePlugin as remix } from '@remix-run/dev';
+    `import { reactRouter } from '@react-router/dev/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [remix()],
+  plugins: [reactRouter()],
 });
 `,
   );
 
+  // react-router.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'react-router.config.ts'),
+    `import type { Config } from '@react-router/dev/config';
+
+export default {
+  ssr: true,
+} satisfies Config;
+`,
+  );
+
+  // app/routes.ts (required by React Router v7)
+  await safeWriteFile(
+    path.join(appDir, 'routes.ts'),
+    `import type { RouteConfig } from '@react-router/dev/routes';
+import { flatRoutes } from '@react-router/fs-routes';
+
+export default flatRoutes() satisfies RouteConfig;
+`,
+  );
+
   // tsconfig.json for Remix
-  await fs.writeJson(
+  await safeWriteJson(
     path.join(options.directory, 'tsconfig.json'),
     {
       compilerOptions: {
@@ -1511,7 +1813,7 @@ export default defineConfig({
   );
 
   // React wrappers for HELiX components (no 'use client' — not a Next.js convention)
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(componentsDir, 'wrappers.tsx'),
     `/**
  * React wrappers for HELiX web components.
@@ -1522,11 +1824,11 @@ export default defineConfig({
  * - Refs
  *
  * Note: HELiX web components rely on browser APIs (customElements).
- * In Remix SSR routes, import this file only in client-side code
+ * In React Router SSR routes, import this file only in client-side code
  * or guard with typeof window !== 'undefined' checks.
  *
  * Usage:
- *   import { HxButton, HxCard } from '~/components/helix/wrappers';
+ *   import { HxButton, HxCard } from '../components/helix/wrappers';
  *   <HxButton variant="primary" onHxClick={handleClick}>Save</HxButton>
  */
 import { createComponent } from '@lit/react';
@@ -1590,7 +1892,7 @@ export const HxAlert = createComponent({
   );
 
   // app/styles/globals.css
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(stylesDir, 'globals.css'),
     `@import '@helixui/tokens/tokens.css';
 
@@ -1609,11 +1911,11 @@ body {
   );
 
   // app/root.tsx
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(appDir, 'root.tsx'),
-    `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
-import type { LinksFunction } from '@remix-run/node';
-import globalsStyles from '~/styles/globals.css?url';
+    `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
+import type { LinksFunction } from 'react-router';
+import globalsStyles from './styles/globals.css?url';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: globalsStyles },
@@ -1640,16 +1942,16 @@ export default function App() {
   );
 
   // app/routes/_index.tsx
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(routesDir, '_index.tsx'),
-    `import type { MetaFunction } from '@remix-run/node';
+    `import type { MetaFunction } from 'react-router';
 import { useState } from 'react';
-import { HxButton, HxCard, HxBadge } from '~/components/helix/wrappers';
+import { HxButton, HxCard, HxBadge } from '../components/helix/wrappers';
 
 export const meta: MetaFunction = () => {
   return [
-    { title: '${options.name}' },
-    { name: 'description', content: 'Built with HELiX + Remix' },
+    { title: '${sanitizeForHtml(options.name)}' },
+    { name: 'description', content: 'Built with HELiX + React Router' },
   ];
 };
 
@@ -1659,7 +1961,7 @@ export default function Index() {
   return (
     <div className="container">
       <h1>
-        HELiX + Remix <HxBadge variant="info">SSR Ready</HxBadge>
+        HELiX + React Router <HxBadge variant="info">SSR Ready</HxBadge>
       </h1>
       <HxCard>
         <div slot="header">
@@ -1675,14 +1977,16 @@ export default function Index() {
 }
 `,
   );
+
+  await writeReactErrorBoundary(options);
 }
 
 async function scaffoldVueVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
-  await fs.ensureDir(srcDir);
+  await safeEnsureDir(srcDir);
 
   // vite.config.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
     `import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
@@ -1703,14 +2007,15 @@ export default defineConfig({
   );
 
   // index.html
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'index.html'),
     `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="app"></div>
@@ -1721,7 +2026,7 @@ export default defineConfig({
   );
 
   // main.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'main.ts'),
     `import { createApp } from 'vue';
 import App from './App.vue';
@@ -1736,7 +2041,7 @@ app.mount('#app');
   );
 
   // App.vue
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'App.vue'),
     `<script setup lang="ts">
 import { ref } from 'vue';
@@ -1809,7 +2114,7 @@ function handleSubmit() {
   );
 
   // style.css
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'style.css'),
     `@import '@helixui/tokens/tokens.css';
 
@@ -1820,17 +2125,20 @@ body {
 }
 `,
   );
+
+  await writeVueErrorBoundary(options);
 }
 
 async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'index.html'),
     `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${options.name}</title>
+  ${CSP_META}
+  <title>${sanitizeForHtml(options.name)}</title>
 
   <!-- HELiX via CDN — zero build step -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/@helixui/library@latest/dist/index.js"></script>
@@ -1911,10 +2219,10 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
 async function scaffoldAstro(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const pagesDir = path.join(srcDir, 'pages');
-  await fs.ensureDir(pagesDir);
+  await safeEnsureDir(pagesDir);
 
   // astro.config.mjs
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'astro.config.mjs'),
     `import { defineConfig } from 'astro/config';
 
@@ -1923,7 +2231,7 @@ export default defineConfig({});
   );
 
   // Main page
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(pagesDir, 'index.astro'),
     `---
 // HELiX components load client-side
@@ -1932,7 +2240,8 @@ export default defineConfig({});
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -1966,10 +2275,10 @@ export default defineConfig({});
 async function scaffoldSvelteKit(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const routesDir = path.join(srcDir, 'routes');
-  await fs.ensureDir(routesDir);
+  await safeEnsureDir(routesDir);
 
   // svelte.config.js
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'svelte.config.js'),
     `import adapter from '@sveltejs/adapter-auto';
 
@@ -1985,7 +2294,7 @@ export default config;
   );
 
   // vite.config.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
     `import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
@@ -1997,7 +2306,7 @@ export default defineConfig({
   );
 
   // +page.svelte
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(routesDir, '+page.svelte'),
     `<script lang="ts">
   import { onMount } from 'svelte';
@@ -2016,7 +2325,7 @@ export default defineConfig({
 </script>
 
 <svelte:head>
-  <title>${options.name}</title>
+  <title>${sanitizeForHtml(options.name)}</title>
 </svelte:head>
 
 <div class="container">
@@ -2053,7 +2362,7 @@ export default defineConfig({
   );
 
   // +layout.svelte
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(routesDir, '+layout.svelte'),
     `<script>
   import '@helixui/tokens/tokens.css';
@@ -2064,13 +2373,14 @@ export default defineConfig({
   );
 
   // app.html
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'app.html'),
     `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    ${CSP_META}
     %sveltekit.head%
   </head>
   <body>
@@ -2085,11 +2395,11 @@ async function scaffoldVueNuxt(options: ProjectOptions): Promise<void> {
   const appDir = path.join(options.directory, 'app');
   const pagesDir = path.join(appDir, 'pages');
   const pluginsDir = path.join(options.directory, 'plugins');
-  await fs.ensureDir(pagesDir);
-  await fs.ensureDir(pluginsDir);
+  await safeEnsureDir(pagesDir);
+  await safeEnsureDir(pluginsDir);
 
   // nuxt.config.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'nuxt.config.ts'),
     `export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
@@ -2106,7 +2416,7 @@ ${options.designTokens ? `  css: ['~/helix-tokens.css'],` : ''}
   );
 
   // HELiX plugin (client-only)
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(pluginsDir, 'helix.client.ts'),
     `export default defineNuxtPlugin(async () => {
   await import('@helixui/library');
@@ -2115,7 +2425,7 @@ ${options.designTokens ? `  css: ['~/helix-tokens.css'],` : ''}
   );
 
   // app.vue
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(appDir, 'app.vue'),
     `<template>
   <NuxtPage />
@@ -2124,7 +2434,7 @@ ${options.designTokens ? `  css: ['~/helix-tokens.css'],` : ''}
   );
 
   // index page
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(pagesDir, 'index.vue'),
     `<script setup lang="ts">
 import { ref } from 'vue';
@@ -2186,15 +2496,17 @@ function handleInput(e: Event) {
 </style>
 `,
   );
+
+  await writeVueErrorBoundary(options);
 }
 
 async function scaffoldAngular(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const appDir = path.join(srcDir, 'app');
-  await fs.ensureDir(appDir);
+  await safeEnsureDir(appDir);
 
   // angular.json (minimal)
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'angular.json'),
     JSON.stringify(
       {
@@ -2231,13 +2543,14 @@ async function scaffoldAngular(options: ProjectOptions): Promise<void> {
   );
 
   // index.html
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'index.html'),
     `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>${options.name}</title>
+  ${CSP_META}
+  <title>${sanitizeForHtml(options.name)}</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
@@ -2249,7 +2562,7 @@ async function scaffoldAngular(options: ProjectOptions): Promise<void> {
   );
 
   // main.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'main.ts'),
     `import { bootstrapApplication } from '@angular/platform-browser';
 import { AppComponent } from './app/app.component';
@@ -2262,7 +2575,7 @@ bootstrapApplication(AppComponent).catch((err) => console.error(err));
   );
 
   // styles.css
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'styles.css'),
     `body {
   font-family: var(--hx-font-family, system-ui, sans-serif);
@@ -2273,7 +2586,7 @@ bootstrapApplication(AppComponent).catch((err) => console.error(err));
   );
 
   // app.component.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(appDir, 'app.component.ts'),
     `import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
@@ -2343,12 +2656,12 @@ export class AppComponent {
 
 async function scaffoldSolidVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
-  await fs.ensureDir(srcDir);
+  await safeEnsureDir(srcDir);
 
   // Override tsconfig for Solid.js — needs jsx: 'preserve' so vite-plugin-solid
   // can handle the JSX transformation, plus jsxImportSource for type checking.
   if (options.typescript) {
-    await fs.writeJson(
+    await safeWriteJson(
       path.join(options.directory, 'tsconfig.json'),
       {
         compilerOptions: {
@@ -2372,7 +2685,7 @@ async function scaffoldSolidVite(options: ProjectOptions): Promise<void> {
   }
 
   // vite.config.ts
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
     `import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
@@ -2384,14 +2697,15 @@ export default defineConfig({
   );
 
   // index.html
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(options.directory, 'index.html'),
     `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${options.name}</title>
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
   </head>
   <body>
     <div id="app"></div>
@@ -2402,7 +2716,7 @@ export default defineConfig({
   );
 
   // main.tsx
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'main.tsx'),
     `import { render } from 'solid-js/web';
 import App from './App';
@@ -2414,7 +2728,7 @@ render(() => <App />, document.getElementById('app')!);
   );
 
   // App.tsx
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'App.tsx'),
     `import { createSignal, createEffect } from 'solid-js';
 
@@ -2464,7 +2778,7 @@ export default function App() {
   );
 
   // index.css
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'index.css'),
     `@import '@helixui/tokens/tokens.css';
 
@@ -2483,16 +2797,894 @@ body {
   );
 }
 
+async function scaffoldQwikVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  const routesDir = path.join(srcDir, 'routes');
+  await safeEnsureDir(srcDir);
+  await safeEnsureDir(routesDir);
+
+  // vite.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+import { qwikVite } from '@builder.io/qwik/optimizer';
+
+export default defineConfig({
+  plugins: [qwikVite()],
+});
+`,
+  );
+
+  // index.html
+  await safeWriteFile(
+    path.join(options.directory, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/entry.dev.tsx"></script>
+  </body>
+</html>
+`,
+  );
+
+  // src/root.tsx — resumable root component
+  await safeWriteFile(
+    path.join(srcDir, 'root.tsx'),
+    `import { component$ } from '@builder.io/qwik';
+import { QwikCityProvider, RouterOutlet } from '@builder.io/qwik-city';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+import './index.css';
+
+export default component$(() => {
+  return (
+    <QwikCityProvider>
+      <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+        <title>${sanitizeForHtml(options.name)}</title>
+      </head>
+      <body>
+        <RouterOutlet />
+      </body>
+    </QwikCityProvider>
+  );
+});
+`,
+  );
+
+  // src/entry.dev.tsx
+  await safeWriteFile(
+    path.join(srcDir, 'entry.dev.tsx'),
+    `import { render } from '@builder.io/qwik';
+import Root from './root';
+
+render(document.getElementById('app')!, <Root />);
+`,
+  );
+
+  // src/routes/layout.tsx
+  await safeWriteFile(
+    path.join(routesDir, 'layout.tsx'),
+    `import { component$, Slot } from '@builder.io/qwik';
+
+export default component$(() => {
+  return (
+    <div class="container">
+      <header>
+        <h1>${sanitizeForHtml(options.name)}</h1>
+      </header>
+      <main>
+        <Slot />
+      </main>
+    </div>
+  );
+});
+`,
+  );
+
+  // src/routes/index.tsx
+  await safeWriteFile(
+    path.join(routesDir, 'index.tsx'),
+    `import { component$, useSignal } from '@builder.io/qwik';
+
+export default component$(() => {
+  const count = useSignal(0);
+
+  return (
+    <div>
+      <hx-card>
+        <div slot="header"><h2>Counter Demo</h2></div>
+        <p>Count: {count.value}</p>
+        <hx-button variant="primary" onClick$={() => count.value++}>
+          Increment
+        </hx-button>
+        <hx-button
+          variant="secondary"
+          style="margin-left: 0.5rem"
+          onClick$={() => (count.value = 0)}
+        >
+          Reset
+        </hx-button>
+      </hx-card>
+
+      <hx-card style="margin-top: 1.5rem">
+        <div slot="header">
+          <h2>Qwik + Web Components</h2>
+          <hx-badge variant="info">Resumable</hx-badge>
+        </div>
+        <p>Qwik uses resumability — no hydration cost. Web components bind natively
+        and load lazily with zero JavaScript overhead by default.</p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+        </div>
+      </hx-card>
+    </div>
+  );
+});
+`,
+  );
+
+  // src/index.css
+  await safeWriteFile(
+    path.join(srcDir, 'index.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 2rem;
+  color: var(--hx-color-text, #1a1a1a);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+`,
+  );
+}
+
+async function scaffoldLitVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  await safeEnsureDir(srcDir);
+
+  // vite.config.ts — Lit needs no special plugin, Vite handles it natively
+  await safeWriteFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+
+export default defineConfig({
+  build: {
+    target: 'es2022',
+  },
+});
+`,
+  );
+
+  // index.html
+  await safeWriteFile(
+    path.join(options.directory, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
+  </head>
+  <body>
+    <my-element></my-element>
+    <script type="module" src="/src/my-element.ts"></script>
+  </body>
+</html>
+`,
+  );
+
+  // src/my-element.ts — Lit component with TypeScript decorators
+  await safeWriteFile(
+    path.join(srcDir, 'my-element.ts'),
+    `import { LitElement, html, css } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+
+@customElement('my-element')
+export class MyElement extends LitElement {
+  static styles = css\`
+    :host {
+      display: block;
+      padding: 2rem;
+      font-family: var(--hx-font-family, system-ui, sans-serif);
+      color: var(--hx-color-text, #1a1a1a);
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+  \`;
+
+  @property({ type: Number })
+  count = 0;
+
+  render() {
+    return html\`
+      <div class="container">
+        <h1>HELiX + Lit + Vite</h1>
+        <hx-card>
+          <div slot="header"><h2>Counter Demo</h2></div>
+          <p>Count: \${this.count}</p>
+          <hx-button variant="primary" @click=\${() => this.count++}>
+            Increment
+          </hx-button>
+          <hx-button
+            variant="secondary"
+            style="margin-left: 0.5rem"
+            @click=\${() => (this.count = 0)}
+          >
+            Reset
+          </hx-button>
+        </hx-card>
+
+        <hx-card style="margin-top: 1.5rem">
+          <div slot="header">
+            <h2>Lit + Web Components</h2>
+            <hx-badge variant="info">Native Support</hx-badge>
+          </div>
+          <p>Lit builds on the Web Components standards — Custom Elements,
+          Shadow DOM, and HTML Templates — making it ideal for composing
+          HELiX components with minimal overhead.</p>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <hx-button variant="primary" size="sm">Primary</hx-button>
+            <hx-button variant="secondary" size="sm">Secondary</hx-button>
+            <hx-button variant="danger" size="sm">Danger</hx-button>
+          </div>
+        </hx-card>
+      </div>
+    \`;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'my-element': MyElement;
+  }
+}
+`,
+  );
+
+  // index.css
+  await safeWriteFile(
+    path.join(srcDir, 'index.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 2rem;
+  color: var(--hx-color-text, #1a1a1a);
+}
+`,
+  );
+}
+
+async function scaffoldPreactVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  await safeEnsureDir(srcDir);
+
+  // Override tsconfig for Preact — needs jsx: 'react-jsx' with jsxImportSource
+  // pointing at preact so the JSX transform resolves to preact/jsx-runtime.
+  if (options.typescript) {
+    await safeWriteJson(
+      path.join(options.directory, 'tsconfig.json'),
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: true,
+          esModuleInterop: true,
+          skipLibCheck: true,
+          forceConsistentCasingInFileNames: true,
+          resolveJsonModule: true,
+          isolatedModules: true,
+          jsx: 'react-jsx',
+          jsxImportSource: 'preact',
+        },
+        include: ['src'],
+        exclude: ['node_modules'],
+      },
+      { spaces: 2 },
+    );
+  }
+
+  // vite.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+import preact from '@preact/preset-vite';
+
+export default defineConfig({
+  plugins: [preact()],
+});
+`,
+  );
+
+  // index.html
+  await safeWriteFile(
+    path.join(options.directory, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    ${CSP_META}
+    <title>${sanitizeForHtml(options.name)}</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
+</html>
+`,
+  );
+
+  // src/index.tsx — render mount
+  await safeWriteFile(
+    path.join(srcDir, 'index.tsx'),
+    `import { render } from 'preact';
+import { App } from './app';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+import './index.css';
+
+render(<App />, document.getElementById('app')!);
+`,
+  );
+
+  // src/app.tsx — Preact component
+  await safeWriteFile(
+    path.join(srcDir, 'app.tsx'),
+    `import { useState } from 'preact/hooks';
+
+export function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div class="container">
+      <h1>HELiX + Preact + Vite</h1>
+      <hx-card>
+        <div slot="header"><h2>Counter Demo</h2></div>
+        <p>Count: {count}</p>
+        <hx-button variant="primary" onClick={() => setCount((c) => c + 1)}>
+          Increment
+        </hx-button>
+        <hx-button
+          variant="secondary"
+          style="margin-left: 0.5rem"
+          onClick={() => setCount(0)}
+        >
+          Reset
+        </hx-button>
+      </hx-card>
+
+      <hx-card style="margin-top: 1.5rem">
+        <div slot="header">
+          <h2>Preact + Web Components</h2>
+          <hx-badge variant="info">3kB Runtime</hx-badge>
+        </div>
+        <p>Preact is a fast 3kB alternative to React with the same modern API.
+        It renders directly to the DOM with minimal overhead, making it ideal
+        for lightweight web component integration.</p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+        </div>
+      </hx-card>
+    </div>
+  );
+}
+`,
+  );
+
+  // index.css
+  await safeWriteFile(
+    path.join(srcDir, 'index.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 2rem;
+  color: var(--hx-color-text, #1a1a1a);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+`,
+  );
+
+  await writeReactErrorBoundary(options);
+}
+
+async function scaffoldStencil(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  const myComponentDir = path.join(srcDir, 'components', 'my-component');
+  await safeEnsureDir(myComponentDir);
+
+  // Override tsconfig for Stencil — needs experimentalDecorators for @Component,
+  // @Prop etc., plus jsx: 'react' with h as factory so IDE tooling works correctly.
+  if (options.typescript) {
+    await safeWriteJson(
+      path.join(options.directory, 'tsconfig.json'),
+      {
+        compilerOptions: {
+          allowSyntheticDefaultImports: true,
+          declaration: true,
+          experimentalDecorators: true,
+          lib: ['dom', 'dom.iterable', 'esnext'],
+          moduleResolution: 'node',
+          module: 'esnext',
+          target: 'ES2017',
+          strict: true,
+          skipLibCheck: true,
+          jsx: 'react',
+          jsxFactory: 'h',
+          jsxFragmentFactory: 'Fragment',
+        },
+        include: ['src'],
+        exclude: ['node_modules'],
+      },
+      { spaces: 2 },
+    );
+  }
+
+  // stencil.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'stencil.config.ts'),
+    `import { Config } from '@stencil/core';
+
+export const config: Config = {
+  namespace: '${options.name}',
+  outputTargets: [
+    {
+      type: 'dist',
+      esmLoaderPath: '../loader',
+    },
+    {
+      type: 'dist-custom-elements',
+    },
+    {
+      type: 'docs-readme',
+    },
+    {
+      type: 'www',
+      serviceWorker: null,
+    },
+  ],
+  testing: {
+    browserHeadless: 'shell',
+  },
+};
+`,
+  );
+
+  // src/components/my-component/my-component.tsx
+  await safeWriteFile(
+    path.join(myComponentDir, 'my-component.tsx'),
+    `import { Component, Prop, h } from '@stencil/core';
+
+@Component({
+  tag: 'my-component',
+  styleUrl: 'my-component.css',
+  shadow: true,
+})
+export class MyComponent {
+  @Prop() name: string = 'World';
+
+  render() {
+    return (
+      <div class="my-component">
+        <h2>Hello, {this.name}!</h2>
+        <p>Built with HELiX + Stencil web components.</p>
+        <slot></slot>
+      </div>
+    );
+  }
+}
+`,
+  );
+
+  // src/components/my-component/my-component.css
+  await safeWriteFile(
+    path.join(myComponentDir, 'my-component.css'),
+    `:host {
+  display: block;
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+}
+
+.my-component {
+  padding: var(--hx-spacing-md, 1rem);
+  color: var(--hx-color-text, #1a1a1a);
+}
+`,
+  );
+
+  // src/index.ts
+  await safeWriteFile(
+    path.join(srcDir, 'index.ts'),
+    `export * from './components/my-component/my-component';
+${options.designTokens ? "import '../helix-tokens.css';" : "import '@helixui/library';"}
+`,
+  );
+}
+
+// ─── Error boundary components ────────────────────────────────────────────────
+
+async function writeReactErrorBoundary(options: ProjectOptions): Promise<void> {
+  const componentsDir = path.join(options.directory, 'src', 'components');
+  await safeEnsureDir(componentsDir);
+
+  await safeWriteFile(
+    path.join(componentsDir, 'ErrorBoundary.tsx'),
+    `import { Component, type ReactNode } from 'react';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+/**
+ * ErrorBoundary — catches rendering errors in child component trees.
+ *
+ * Wrap any subtree to prevent an unhandled render error from crashing
+ * the entire application. Shows a fallback UI with error details and
+ * a retry button when an error is caught.
+ *
+ * Usage:
+ *   <ErrorBoundary>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ *
+ *   // Custom fallback:
+ *   <ErrorBoundary fallback={<p>Something went wrong.</p>}>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ */
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack: string }): void {
+    console.error('[ErrorBoundary] Caught error:', error, info.componentStack);
+  }
+
+  private handleReset = (): void => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div
+          role="alert"
+          style={{
+            padding: '2rem',
+            border: '1px solid var(--hx-color-danger, #dc3545)',
+            borderRadius: 'var(--hx-radius-md, 0.5rem)',
+            background: 'var(--hx-color-danger-surface, #fff5f5)',
+            color: 'var(--hx-color-danger, #dc3545)',
+          }}
+        >
+          <h2 style={{ marginBottom: '0.5rem' }}>Something went wrong</h2>
+          {this.state.error && (
+            <pre
+              style={{
+                fontSize: '0.85rem',
+                overflowX: 'auto',
+                marginBottom: '1rem',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {this.state.error.message}
+            </pre>
+          )}
+          <button
+            onClick={this.handleReset}
+            style={{
+              padding: '0.5rem 1rem',
+              cursor: 'pointer',
+              borderRadius: 'var(--hx-radius-md, 0.5rem)',
+              border: '1px solid var(--hx-color-danger, #dc3545)',
+              background: 'transparent',
+              color: 'var(--hx-color-danger, #dc3545)',
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+`,
+  );
+}
+
+async function writeVueErrorBoundary(options: ProjectOptions): Promise<void> {
+  const componentsDir = path.join(options.directory, 'src', 'components');
+  await safeEnsureDir(componentsDir);
+
+  await safeWriteFile(
+    path.join(componentsDir, 'ErrorBoundary.vue'),
+    `<script setup lang="ts">
+import { ref, onErrorCaptured } from 'vue';
+
+/**
+ * ErrorBoundary — catches errors thrown in descendant components.
+ *
+ * Uses Vue's onErrorCaptured lifecycle hook to intercept errors bubbling
+ * up through the component tree. Renders a fallback UI with error details
+ * and a retry button, or falls back to the default slot when no error is active.
+ *
+ * Usage:
+ *   <ErrorBoundary>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ */
+
+const error = ref<Error | null>(null);
+
+onErrorCaptured((err: Error): boolean => {
+  error.value = err;
+  console.error('[ErrorBoundary] Caught error:', err);
+  // Return false to stop propagation up the component tree
+  return false;
+});
+
+function reset(): void {
+  error.value = null;
+}
+</script>
+
+<template>
+  <div v-if="error" role="alert" class="hx-error-boundary">
+    <h2>Something went wrong</h2>
+    <pre class="hx-error-boundary__message">{{ error.message }}</pre>
+    <button class="hx-error-boundary__retry" @click="reset">Try again</button>
+  </div>
+  <slot v-else />
+</template>
+
+<style scoped>
+.hx-error-boundary {
+  padding: 2rem;
+  border: 1px solid var(--hx-color-danger, #dc3545);
+  border-radius: var(--hx-radius-md, 0.5rem);
+  background: var(--hx-color-danger-surface, #fff5f5);
+  color: var(--hx-color-danger, #dc3545);
+}
+
+.hx-error-boundary__message {
+  font-size: 0.85rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+}
+
+.hx-error-boundary__retry {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-radius: var(--hx-radius-md, 0.5rem);
+  border: 1px solid var(--hx-color-danger, #dc3545);
+  background: transparent;
+  color: var(--hx-color-danger, #dc3545);
+}
+</style>
+`,
+  );
+}
+
 async function scaffoldMinimal(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
-  await fs.ensureDir(srcDir);
+  await safeEnsureDir(srcDir);
 
-  await fs.writeFile(
+  await safeWriteFile(
     path.join(srcDir, 'main.ts'),
     `import '@helixui/library';
 ${options.designTokens ? "import '../helix-tokens.css';" : ''}
 
 console.log('HELiX components loaded');
+`,
+  );
+}
+
+async function scaffoldEmber(options: ProjectOptions): Promise<void> {
+  const appDir = path.join(options.directory, 'app');
+  const configDir = path.join(options.directory, 'config');
+  const publicDir = path.join(options.directory, 'public');
+  const testsDir = path.join(options.directory, 'tests');
+
+  await safeEnsureDir(appDir);
+  await safeEnsureDir(configDir);
+  await safeEnsureDir(publicDir);
+  await safeEnsureDir(testsDir);
+
+  // ember-cli-build.js
+  await safeWriteFile(
+    path.join(options.directory, 'ember-cli-build.js'),
+    `'use strict';
+
+const EmberApp = require('ember-cli/lib/broccoli/ember-app');
+
+module.exports = function (defaults) {
+  const app = new EmberApp(defaults, {
+    // Add options here
+  });
+
+  return app.toTree();
+};
+`,
+  );
+
+  // config/environment.js
+  await safeWriteFile(
+    path.join(configDir, 'environment.js'),
+    `'use strict';
+
+module.exports = function (environment) {
+  const ENV = {
+    modulePrefix: '${options.name}',
+    environment,
+    rootURL: '/',
+    locationType: 'history',
+
+    EmberENV: {
+      EXTEND_PROTOTYPES: false,
+      FEATURES: {},
+    },
+
+    APP: {},
+  };
+
+  if (environment === 'development') {
+    ENV.APP.LOG_RESOLVER = false;
+    ENV.APP.LOG_ACTIVE_GENERATION = false;
+    ENV.APP.LOG_TRANSITIONS = false;
+    ENV.APP.LOG_TRANSITIONS_INTERNAL = false;
+    ENV.APP.LOG_VIEW_LOOKUPS = false;
+  }
+
+  if (environment === 'test') {
+    ENV.locationType = 'none';
+    ENV.APP.LOG_ACTIVE_GENERATION = false;
+    ENV.APP.LOG_VIEW_LOOKUPS = false;
+    ENV.APP.rootElement = '#ember-testing';
+    ENV.APP.autoboot = false;
+  }
+
+  return ENV;
+};
+`,
+  );
+
+  // app/app.ts — main application entry
+  await safeWriteFile(
+    path.join(appDir, 'app.ts'),
+    `import Application from '@ember/application';
+import Resolver from 'ember-resolver';
+import loadInitializers from 'ember-load-initializers';
+import config from '${options.name}/config/environment';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+
+export default class App extends Application {
+  modulePrefix = config.modulePrefix;
+  podModulePrefix = \`\${config.modulePrefix}/pods\`;
+  Resolver = Resolver;
+}
+
+loadInitializers(App, config.modulePrefix);
+`,
+  );
+
+  // app/router.ts
+  await safeWriteFile(
+    path.join(appDir, 'router.ts'),
+    `import EmberRouter from '@ember/routing/router';
+import config from '${options.name}/config/environment';
+
+export default class Router extends EmberRouter {
+  location = config.locationType;
+  rootURL = config.rootURL;
+}
+
+Router.map(function () {
+  // Define your routes here
+});
+`,
+  );
+
+  // app/index.html
+  await safeWriteFile(
+    path.join(appDir, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${sanitizeForHtml(options.name)}</title>
+    {{content-for "head"}}
+    <link rel="stylesheet" href="{{rootURL}}assets/vendor.css" />
+    <link rel="stylesheet" href="{{rootURL}}assets/${sanitizeForHtml(options.name)}.css" />
+    {{content-for "head-footer"}}
+  </head>
+  <body>
+    {{content-for "body"}}
+    <script src="{{rootURL}}assets/vendor.js"></script>
+    <script src="{{rootURL}}assets/${sanitizeForHtml(options.name)}.js"></script>
+    {{content-for "body-footer"}}
+  </body>
+</html>
+`,
+  );
+
+  // app/templates/application.hbs — root template
+  const templatesDir = path.join(appDir, 'templates');
+  await safeEnsureDir(templatesDir);
+  await safeWriteFile(
+    path.join(templatesDir, 'application.hbs'),
+    `<hx-card>
+  <div slot="header"><h1>Welcome to {{this.name}}</h1></div>
+  <p>Built with HELiX web components and Ember.js.</p>
+  <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+    <hx-button variant="primary">Get Started</hx-button>
+    <hx-button variant="secondary">Learn More</hx-button>
+  </div>
+</hx-card>
+
+<RouterOutlet />
+`,
+  );
+
+  // tests/test-helper.ts
+  await safeWriteFile(
+    path.join(testsDir, 'test-helper.ts'),
+    `import Application from '${options.name}/app';
+import config from '${options.name}/config/environment';
+import { setApplication } from '@ember/test-helpers';
+import { start } from 'ember-qunit';
+
+setApplication(Application.create(config.APP));
+
+start();
 `,
   );
 }

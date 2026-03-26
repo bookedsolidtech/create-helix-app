@@ -86,23 +86,66 @@ jobs:
       - run: pnpm run type-check
 
   test:
-    name: Test
+    name: Test (Node ${{ matrix.node-version }})
     needs: [secret-scan]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      matrix:
+        node-version: [20, 22]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test -- --coverage
+      - name: Generate coverage badge JSON
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            PCT=$(node -e "const s=require('./coverage/coverage-summary.json');console.log(Math.floor(s.total.lines.pct))")
+            if [ "$PCT" -ge 80 ]; then COLOR="brightgreen"
+            elif [ "$PCT" -ge 60 ]; then COLOR="yellow"
+            else COLOR="red"
+            fi
+            echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${PCT}%\",\"color\":\"${COLOR}\"}" > coverage/coverage-badge.json
+            echo "Coverage: ${PCT}%"
+            cat coverage/coverage-badge.json
+          fi
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-node${{ matrix.node-version }}
+          path: coverage/
+          retention-days: 30
 
   build:
-    name: Build
+    name: Build (Node ${{ matrix.node-version }})
     needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Validate package (dry-run publish)
+        run: pnpm publish --dry-run --no-git-checks
+
+  smoke-test:
+    name: Smoke Test
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -114,8 +157,14 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      - name: Validate package (dry-run publish)
-        run: pnpm publish --dry-run --no-git-checks
+      - name: Smoke test - version flag
+        run: node dist/index.js --version
+      - name: Smoke test - help flag
+        run: node dist/index.js --help
+      - name: Smoke test - dry-run with template
+        run: |
+          node dist/index.js test-app --template react-next --dry-run --no-install
+          # Verify it exits cleanly (exit code 0)
 
   audit:
     name: Security Audit
@@ -136,7 +185,7 @@ jobs:
     name: Quality Gates
     runs-on: ubuntu-latest
     timeout-minutes: 1
-    needs: [secret-scan, lint, format, type-check, test, build, audit]
+    needs: [secret-scan, lint, format, type-check, test, build, audit, smoke-test]
     if: always()
     steps:
       - name: Check all gates
@@ -148,9 +197,10 @@ jobs:
           echo "Test:        ${{ needs.test.result }}"
           echo "Build:       ${{ needs.build.result }}"
           echo "Audit:       ${{ needs.audit.result }}"
+          echo "Smoke Test:  ${{ needs.smoke-test.result }}"
 
           FAIL=0
-          for gate in secret-scan lint format type-check test build audit; do
+          for gate in secret-scan lint format type-check test build audit smoke-test; do
             result="skipped"
             case "$gate" in
               secret-scan) result="${{ needs.secret-scan.result }}" ;;
@@ -160,6 +210,7 @@ jobs:
               test)        result="${{ needs.test.result }}" ;;
               build)       result="${{ needs.build.result }}" ;;
               audit)       result="${{ needs.audit.result }}" ;;
+              smoke-test)  result="${{ needs.smoke-test.result }}" ;;
             esac
             if [[ "$result" != "success" ]]; then
               echo "::error::Gate '$gate' did not succeed: $result"

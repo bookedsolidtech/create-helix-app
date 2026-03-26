@@ -32,6 +32,7 @@ describe('angular integration', () => {
     await assertFilesExist(o.directory, [
       'package.json',
       'angular.json',
+      'tsconfig.json',
       'src/index.html',
       'src/main.ts',
       'src/styles.css',
@@ -67,16 +68,28 @@ describe('angular integration', () => {
     expect(component).toContain('CUSTOM_ELEMENTS_SCHEMA');
   });
 
+  it('tsconfig.json has strict mode enabled', async () => {
+    const o = opts('ng-tsconfig');
+    await scaffoldProject(o);
+    const tsconfig = await readJson<{ compilerOptions: { strict: boolean } }>(
+      o.directory,
+      'tsconfig.json',
+    );
+    expect(tsconfig.compilerOptions.strict).toBe(true);
+  });
+
   it('package.json has correct angular dependencies', async () => {
     const o = opts('ng-deps');
     await scaffoldProject(o);
-    const pkg = await readJson<{ dependencies: Record<string, string> }>(
-      o.directory,
-      'package.json',
-    );
+    const pkg = await readJson<{
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    }>(o.directory, 'package.json');
     expect(pkg.dependencies['@angular/core']).toBeDefined();
     expect(pkg.dependencies['@angular/platform-browser']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
+    expect(pkg.devDependencies['@angular/cli']).toBeDefined();
+    expect(pkg.devDependencies['@angular/build']).toBeDefined();
   });
 
   it('package.json has angular scripts', async () => {
@@ -85,5 +98,33 @@ describe('angular integration', () => {
     const pkg = await readJson<{ scripts: Record<string, string> }>(o.directory, 'package.json');
     expect(pkg.scripts['dev']).toBe('ng serve');
     expect(pkg.scripts['build']).toBe('ng build');
+  });
+
+  it('generates eslint.config.js and .prettierrc when eslint is true', async () => {
+    const o = opts('ng-eslint', { eslint: true });
+    await scaffoldProject(o);
+    await assertFilesExist(o.directory, ['eslint.config.js', '.prettierrc']);
+  });
+
+  it('generates helix-tokens.css with design token overrides', async () => {
+    const o = opts('ng-tokens');
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('@import');
+    expect(css).toContain('--hx-color-primary');
+  });
+
+  it('helix-tokens.css includes dark mode block when darkMode is true', async () => {
+    const o = opts('ng-darkmode', { darkMode: true });
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('prefers-color-scheme: dark');
+  });
+
+  it('dry-run mode produces no files', async () => {
+    const o = opts('ng-dry', { dryRun: true });
+    await scaffoldProject(o);
+    const fs = await import('node:fs/promises');
+    await expect(fs.access(path.join(o.directory, 'package.json'))).rejects.toThrow();
   });
 });

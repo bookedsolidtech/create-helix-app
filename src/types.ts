@@ -5,10 +5,15 @@ export type Framework =
   | 'vue-nuxt'
   | 'vue-vite'
   | 'solid-vite'
+  | 'qwik-vite'
   | 'svelte-kit'
   | 'angular'
   | 'astro'
-  | 'vanilla';
+  | 'vanilla'
+  | 'lit-vite'
+  | 'preact-vite'
+  | 'stencil'
+  | 'ember';
 
 export type ComponentBundle =
   | 'all'
@@ -40,6 +45,9 @@ export interface ProjectOptions {
   designTokens: boolean;
   darkMode: boolean;
   installDeps: boolean;
+  dryRun?: boolean;
+  force?: boolean;
+  verbose?: boolean;
 }
 
 export interface ComponentBundleConfig {
@@ -49,7 +57,7 @@ export interface ComponentBundleConfig {
   components: string[];
 }
 
-export type DrupalPreset = 'standard' | 'blog' | 'healthcare' | 'intranet';
+export type DrupalPreset = 'standard' | 'blog' | 'healthcare' | 'intranet' | 'ecommerce';
 
 export interface PresetConfig {
   id: DrupalPreset;

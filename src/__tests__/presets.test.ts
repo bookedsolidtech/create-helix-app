@@ -2,16 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { PRESETS, getPreset, isValidPreset, VALID_PRESETS } from '../presets/loader.js';
 
 describe('preset loader', () => {
-  it('has 4 presets', () => {
-    expect(PRESETS).toHaveLength(4);
+  it('has 5 presets', () => {
+    expect(PRESETS).toHaveLength(5);
   });
 
-  it('VALID_PRESETS contains all 4 preset ids', () => {
-    expect(VALID_PRESETS).toHaveLength(4);
+  it('VALID_PRESETS contains all 5 preset ids', () => {
+    expect(VALID_PRESETS).toHaveLength(5);
     expect(VALID_PRESETS).toContain('standard');
     expect(VALID_PRESETS).toContain('blog');
     expect(VALID_PRESETS).toContain('healthcare');
     expect(VALID_PRESETS).toContain('intranet');
+    expect(VALID_PRESETS).toContain('ecommerce');
   });
 
   it('validates preset names', () => {
@@ -19,6 +20,7 @@ describe('preset loader', () => {
     expect(isValidPreset('blog')).toBe(true);
     expect(isValidPreset('healthcare')).toBe(true);
     expect(isValidPreset('intranet')).toBe(true);
+    expect(isValidPreset('ecommerce')).toBe(true);
     expect(isValidPreset('invalid')).toBe(false);
     expect(isValidPreset('')).toBe(false);
   });
@@ -87,6 +89,24 @@ describe('preset loader', () => {
     for (const preset of PRESETS) {
       expect(preset.dependencies).toHaveProperty('@helixui/tokens');
     }
+  });
+
+  it('ecommerce preset includes standard + ecommerce-specific SDCs', () => {
+    const ecommerce = getPreset('ecommerce');
+    expect(ecommerce.sdcList).toContain('node-teaser');
+    expect(ecommerce.sdcList).toContain('product-card');
+    expect(ecommerce.sdcList).toContain('product-grid');
+    expect(ecommerce.sdcList).toContain('price-display');
+    expect(ecommerce.sdcList).toContain('cart-summary');
+    expect(ecommerce.sdcList).toContain('checkout-form');
+    expect(ecommerce.sdcList).toContain('category-nav');
+    expect(ecommerce.sdcList).toContain('search-filters');
+    expect(ecommerce.sdcList).toContain('review-stars');
+  });
+
+  it('ecommerce preset has @helixui/commerce dependency', () => {
+    const ecommerce = getPreset('ecommerce');
+    expect(ecommerce.dependencies).toHaveProperty('@helixui/commerce');
   });
 
   it('throws for unknown preset id', () => {

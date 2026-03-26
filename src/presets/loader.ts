@@ -1,6 +1,13 @@
 import type { PresetConfig, DrupalPreset } from '../types.js';
+import { HelixError, ErrorCode } from '../errors.js';
 
-export const VALID_PRESETS: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet'];
+export const VALID_PRESETS: DrupalPreset[] = [
+  'standard',
+  'blog',
+  'healthcare',
+  'intranet',
+  'ecommerce',
+];
 
 export function isValidPreset(preset: string): preset is DrupalPreset {
   return VALID_PRESETS.includes(preset as DrupalPreset);
@@ -39,6 +46,18 @@ const INTRANET_SDCS: string[] = [
   'notification-banner',
   'data-table-view',
   'user-profile',
+];
+
+const ECOMMERCE_SDCS: string[] = [
+  ...STANDARD_SDCS,
+  'product-card',
+  'product-grid',
+  'price-display',
+  'cart-summary',
+  'checkout-form',
+  'category-nav',
+  'search-filters',
+  'review-stars',
 ];
 
 const SHARED_DEPENDENCIES: Record<string, string> = {
@@ -87,12 +106,31 @@ export const PRESETS: PresetConfig[] = [
     architectureNotes:
       'Extends standard with dashboard widgets, notifications, data tables, and user profile patterns for internal applications.',
   },
+  {
+    id: 'ecommerce',
+    name: 'E-Commerce',
+    description: 'Product catalog, cart, and checkout components.',
+    sdcList: ECOMMERCE_SDCS,
+    dependencies: {
+      ...SHARED_DEPENDENCIES,
+      '@helixui/commerce': '^0.1.0',
+    },
+    templateVars: {
+      commerceProvider: 'drupal_commerce',
+      currencyFormat: 'USD',
+    },
+    architectureNotes:
+      'Integrates with Drupal Commerce for product management. Includes product display, cart, checkout, and catalog navigation patterns.',
+  },
 ];
 
 export function getPreset(id: DrupalPreset): PresetConfig {
   const preset = PRESETS.find((p) => p.id === id);
   if (!preset) {
-    throw new Error(`Unknown preset: "${id}". Valid presets: ${VALID_PRESETS.join(', ')}`);
+    throw new HelixError(
+      ErrorCode.INVALID_PRESET,
+      `Unknown preset: "${id}". Valid presets: ${VALID_PRESETS.join(', ')}`,
+    );
   }
   return preset;
 }

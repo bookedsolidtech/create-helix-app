@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { scaffoldProject } from '../scaffold.js';
@@ -42,9 +42,9 @@ describe('scaffoldProject — core', () => {
   it('throws for unknown framework', async () => {
     const opts = makeOptions({
       name: 'bad-framework',
-      framework: 'ember' as ProjectOptions['framework'],
+      framework: 'nonexistent-framework' as ProjectOptions['framework'],
     });
-    await expect(scaffoldProject(opts)).rejects.toThrow('Unknown framework: ember');
+    await expect(scaffoldProject(opts)).rejects.toThrow('Unknown framework: nonexistent-framework');
   });
 
   it('generates package.json with correct name', async () => {
@@ -484,7 +484,9 @@ describe('scaffoldProject — remix', () => {
     const expectedFiles = [
       'package.json',
       'vite.config.ts',
+      'react-router.config.ts',
       'tsconfig.json',
+      'app/routes.ts',
       'app/root.tsx',
       'app/routes/_index.tsx',
       'app/styles/globals.css',
@@ -496,43 +498,59 @@ describe('scaffoldProject — remix', () => {
     }
   });
 
-  it('package.json has remix scripts', async () => {
+  it('package.json has react-router scripts', async () => {
     const opts = makeOptions({ name: 'remix-scripts', framework: 'remix' });
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
-    expect(pkg.scripts.dev).toBe('remix vite:dev');
-    expect(pkg.scripts.build).toBe('remix vite:build');
-    expect(pkg.scripts.start).toBe('remix-serve ./build/server/index.js');
+    expect(pkg.scripts.dev).toBe('react-router dev');
+    expect(pkg.scripts.build).toBe('react-router build');
+    expect(pkg.scripts.start).toBe('react-router-serve ./build/server/index.js');
   });
 
-  it('package.json includes remix and react dependencies', async () => {
+  it('package.json includes react-router and react dependencies', async () => {
     const opts = makeOptions({ name: 'remix-deps', framework: 'remix' });
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
-    expect(pkg.dependencies['@remix-run/node']).toBeDefined();
-    expect(pkg.dependencies['@remix-run/react']).toBeDefined();
-    expect(pkg.dependencies['@remix-run/serve']).toBeDefined();
+    expect(pkg.dependencies['react-router']).toBeDefined();
+    expect(pkg.dependencies['@react-router/node']).toBeDefined();
     expect(pkg.dependencies['react']).toBeDefined();
     expect(pkg.dependencies['react-dom']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
     expect(pkg.dependencies['@lit/react']).toBeDefined();
   });
 
-  it('package.json has @remix-run/dev in devDependencies', async () => {
+  it('package.json has @react-router/dev in devDependencies', async () => {
     const opts = makeOptions({ name: 'remix-devdeps', framework: 'remix' });
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
-    expect(pkg.devDependencies['@remix-run/dev']).toBeDefined();
+    expect(pkg.devDependencies['@react-router/dev']).toBeDefined();
+    expect(pkg.devDependencies['@react-router/serve']).toBeDefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
     expect(pkg.devDependencies['typescript']).toBeDefined();
   });
 
-  it('vite.config.ts uses @remix-run/dev plugin', async () => {
+  it('vite.config.ts uses @react-router/dev/vite plugin', async () => {
     const opts = makeOptions({ name: 'remix-vite', framework: 'remix' });
     await scaffoldProject(opts);
     const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
-    expect(viteConfig).toContain('@remix-run/dev');
-    expect(viteConfig).toContain('remix()');
+    expect(viteConfig).toContain('@react-router/dev/vite');
+    expect(viteConfig).toContain('reactRouter()');
+  });
+
+  it('app/routes.ts uses @react-router/fs-routes for file-based routing', async () => {
+    const opts = makeOptions({ name: 'remix-routes', framework: 'remix' });
+    await scaffoldProject(opts);
+    const routes = await fs.readFile(path.join(opts.directory, 'app', 'routes.ts'), 'utf-8');
+    expect(routes).toContain('@react-router/fs-routes');
+    expect(routes).toContain('flatRoutes()');
+    expect(routes).toContain('RouteConfig');
+  });
+
+  it('package.json has @react-router/fs-routes in devDependencies', async () => {
+    const opts = makeOptions({ name: 'remix-fsroutes', framework: 'remix' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.devDependencies['@react-router/fs-routes']).toBeDefined();
   });
 
   it('app/root.tsx contains Outlet and HELiX styles', async () => {
@@ -540,7 +558,7 @@ describe('scaffoldProject — remix', () => {
     await scaffoldProject(opts);
     const root = await fs.readFile(path.join(opts.directory, 'app', 'root.tsx'), 'utf-8');
     expect(root).toContain('Outlet');
-    expect(root).toContain('@remix-run/react');
+    expect(root).toContain("from 'react-router'");
     expect(root).toContain('globals.css');
   });
 
@@ -648,6 +666,86 @@ describe('scaffoldProject — solid-vite', () => {
   });
 });
 
+// ─── Preact + Vite ───────────────────────────────────────────────────────────
+
+describe('scaffoldProject — preact-vite', () => {
+  it('generates expected file structure', async () => {
+    const opts = makeOptions({ name: 'preact-vite-app', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+
+    const expectedFiles = [
+      'package.json',
+      'vite.config.ts',
+      'index.html',
+      'src/index.tsx',
+      'src/app.tsx',
+      'src/index.css',
+    ];
+
+    for (const file of expectedFiles) {
+      expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
+    }
+  });
+
+  it('package.json has vite scripts', async () => {
+    const opts = makeOptions({ name: 'preact-scripts', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.scripts.dev).toBe('vite');
+    expect(pkg.scripts.build).toBe('vite build');
+    expect(pkg.scripts.preview).toBe('vite preview');
+  });
+
+  it('vite.config.ts uses @preact/preset-vite plugin', async () => {
+    const opts = makeOptions({ name: 'preact-vite-config', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
+    expect(viteConfig).toContain('@preact/preset-vite');
+    expect(viteConfig).toContain('preact()');
+  });
+
+  it('src/app.tsx uses preact/hooks useState', async () => {
+    const opts = makeOptions({ name: 'preact-app-tsx', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const appContent = await fs.readFile(path.join(opts.directory, 'src', 'app.tsx'), 'utf-8');
+    expect(appContent).toContain('useState');
+    expect(appContent).toContain('preact/hooks');
+  });
+
+  it('src/index.tsx renders with preact render()', async () => {
+    const opts = makeOptions({ name: 'preact-index-tsx', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const indexContent = await fs.readFile(path.join(opts.directory, 'src', 'index.tsx'), 'utf-8');
+    expect(indexContent).toContain("from 'preact'");
+    expect(indexContent).toContain('render(');
+  });
+
+  it('index.html mounts to #app', async () => {
+    const opts = makeOptions({ name: 'preact-html', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const html = await fs.readFile(path.join(opts.directory, 'index.html'), 'utf-8');
+    expect(html).toContain('<div id="app">');
+    expect(html).toContain('src/index.tsx');
+  });
+
+  it('tsconfig.json has jsx: react-jsx and jsxImportSource: preact when typescript is true', async () => {
+    const opts = makeOptions({ name: 'preact-tsconfig', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const tsconfig = await fs.readJson(path.join(opts.directory, 'tsconfig.json'));
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('preact');
+  });
+
+  it('package.json includes preact dependency and @preact/preset-vite devDependency', async () => {
+    const opts = makeOptions({ name: 'preact-deps', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.dependencies['preact']).toBeDefined();
+    expect(pkg.devDependencies['@preact/preset-vite']).toBeDefined();
+    expect(pkg.devDependencies['vite']).toBeDefined();
+  });
+});
+
 // ─── Security: path traversal prevention ─────────────────────────────────────
 
 describe('scaffoldProject — path traversal security', () => {
@@ -711,5 +809,125 @@ describe('scaffoldProject — package.json structure', () => {
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
     expect(pkg.dependencies['@helixui/tokens']).toBeDefined();
+  });
+});
+
+// ─── scaffoldProject — qwik-vite ─────────────────────────────────────────────
+
+describe('scaffoldProject — qwik-vite', () => {
+  it('generates expected file structure', async () => {
+    const opts = makeOptions({ name: 'qwik-vite-app', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+
+    const expectedFiles = [
+      'package.json',
+      'vite.config.ts',
+      'index.html',
+      'src/root.tsx',
+      'src/entry.dev.tsx',
+      'src/routes/layout.tsx',
+      'src/routes/index.tsx',
+      'src/index.css',
+    ];
+
+    for (const file of expectedFiles) {
+      expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
+    }
+  });
+
+  it('package.json has vite scripts', async () => {
+    const opts = makeOptions({ name: 'qwik-scripts', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.scripts.dev).toBe('vite');
+    expect(pkg.scripts.build).toBe('vite build');
+    expect(pkg.scripts.preview).toBe('vite preview');
+    expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
+  });
+
+  it('vite.config.ts uses qwikVite plugin', async () => {
+    const opts = makeOptions({ name: 'qwik-vite-config', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
+    expect(viteConfig).toContain('@builder.io/qwik/optimizer');
+    expect(viteConfig).toContain('qwikVite');
+  });
+
+  it('root.tsx imports QwikCityProvider and RouterOutlet', async () => {
+    const opts = makeOptions({ name: 'qwik-root', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const root = await fs.readFile(path.join(opts.directory, 'src', 'root.tsx'), 'utf-8');
+    expect(root).toContain('QwikCityProvider');
+    expect(root).toContain('RouterOutlet');
+  });
+
+  it('routes/layout.tsx contains Slot', async () => {
+    const opts = makeOptions({ name: 'qwik-layout', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const layout = await fs.readFile(
+      path.join(opts.directory, 'src', 'routes', 'layout.tsx'),
+      'utf-8',
+    );
+    expect(layout).toContain('Slot');
+  });
+
+  it('routes/index.tsx uses useSignal', async () => {
+    const opts = makeOptions({ name: 'qwik-index', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const index = await fs.readFile(
+      path.join(opts.directory, 'src', 'routes', 'index.tsx'),
+      'utf-8',
+    );
+    expect(index).toContain('useSignal');
+  });
+
+  it('package.json includes @builder.io/qwik dependency', async () => {
+    const opts = makeOptions({ name: 'qwik-deps', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.dependencies['@builder.io/qwik']).toBeDefined();
+    expect(pkg.dependencies['@builder.io/qwik-city']).toBeDefined();
+    expect(pkg.devDependencies['vite']).toBeDefined();
+  });
+
+  it('dryRun does not write files', async () => {
+    const opts = makeOptions({ name: 'qwik-dry-run', framework: 'qwik-vite', dryRun: true });
+    await scaffoldProject(opts);
+    expect(await fs.pathExists(opts.directory)).toBe(false);
+  });
+});
+
+// ─── --force flag behavior ────────────────────────────────────────────────────
+
+describe('scaffoldProject — force flag', () => {
+  it('exits with error when directory is non-empty and force is not set', async () => {
+    const opts = makeOptions({ name: 'force-no-flag' });
+    await fs.ensureDir(opts.directory);
+    await fs.writeFile(path.join(opts.directory, 'existing.txt'), 'hello');
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((_code?: number) => {
+      throw new Error('process.exit called');
+    });
+
+    await expect(scaffoldProject(opts)).rejects.toThrow('process.exit called');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+  });
+
+  it('proceeds when directory is non-empty and force is true', async () => {
+    const opts = makeOptions({ name: 'force-with-flag', force: true });
+    await fs.ensureDir(opts.directory);
+    await fs.writeFile(path.join(opts.directory, 'existing.txt'), 'hello');
+
+    await expect(scaffoldProject(opts)).resolves.not.toThrow();
+    expect(await fs.pathExists(path.join(opts.directory, 'package.json'))).toBe(true);
+  });
+
+  it('succeeds without force when directory is empty', async () => {
+    const opts = makeOptions({ name: 'force-empty-dir' });
+    await fs.ensureDir(opts.directory);
+
+    await expect(scaffoldProject(opts)).resolves.not.toThrow();
+    expect(await fs.pathExists(path.join(opts.directory, 'package.json'))).toBe(true);
   });
 });

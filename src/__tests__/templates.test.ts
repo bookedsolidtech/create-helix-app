@@ -17,14 +17,19 @@ describe('TEMPLATES', () => {
     'vue-nuxt',
     'vue-vite',
     'solid-vite',
+    'qwik-vite',
     'svelte-kit',
     'angular',
     'astro',
     'vanilla',
+    'lit-vite',
+    'preact-vite',
+    'stencil',
+    'ember',
   ];
 
-  it('defines exactly 10 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(10);
+  it('defines exactly 15 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(15);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
@@ -71,6 +76,27 @@ describe('TEMPLATES', () => {
       expect(template.devDependencies['typescript']).toBeDefined();
     }
   });
+
+  it('preact-vite template has correct metadata', () => {
+    const preact = TEMPLATES.find((t) => t.id === 'preact-vite');
+    expect(preact).toBeDefined();
+    expect(preact!.name).toBe('Preact + Vite');
+    expect(preact!.hint).toBe('fast 3kB React alternative');
+    expect(preact!.dependencies['preact']).toBeDefined();
+    expect(preact!.devDependencies['@preact/preset-vite']).toBeDefined();
+    expect(preact!.devDependencies['vite']).toBeDefined();
+    expect(preact!.dependencies['@helixui/library']).toBeDefined();
+  });
+
+  it('stencil template has correct metadata', () => {
+    const stencil = TEMPLATES.find((t) => t.id === 'stencil');
+    expect(stencil).toBeDefined();
+    expect(stencil!.name).toBe('Stencil');
+    expect(stencil!.hint).toBe('compiled web components, standards-based');
+    expect(stencil!.dependencies['@stencil/core']).toBeDefined();
+    expect(stencil!.dependencies['@helixui/library']).toBeDefined();
+    expect(stencil!.devDependencies['typescript']).toBeDefined();
+  });
 });
 
 // ─── getTemplate ─────────────────────────────────────────────────────────────
@@ -84,7 +110,7 @@ describe('getTemplate', () => {
   });
 
   it('returns undefined for an unknown framework ID', () => {
-    expect(getTemplate('ember')).toBeUndefined();
+    expect(getTemplate('nonexistent-framework')).toBeUndefined();
   });
 
   it('returns undefined for an empty string', () => {
