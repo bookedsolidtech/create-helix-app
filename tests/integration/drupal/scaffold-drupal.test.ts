@@ -15,7 +15,7 @@ afterAll(async () => {
 /*  Cross-preset scaffold tests                                               */
 /* -------------------------------------------------------------------------- */
 
-const ALL_PRESETS: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet'];
+const ALL_PRESETS: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet', 'ecommerce'];
 
 describe('drupal theme scaffolding — all presets', () => {
   describe.each(ALL_PRESETS)('preset: %s', (presetId) => {
@@ -207,8 +207,8 @@ describe('drupal scaffolding edge cases', () => {
     }
   });
 
-  it('PRESETS array contains exactly 4 entries', () => {
-    expect(PRESETS).toHaveLength(4);
+  it('PRESETS array contains exactly 5 entries', () => {
+    expect(PRESETS).toHaveLength(5);
   });
 
   it('theme name with underscores scaffolds correctly', async () => {
