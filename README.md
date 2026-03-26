@@ -1,5 +1,7 @@
 # create-helix
 
+[![Coverage](https://img.shields.io/badge/coverage-70%25-brightgreen)](https://github.com/bookedsolidtech/create-helix-app/actions)
+
 Scaffold a new project with [HELiX](https://github.com/bookedsolidtech/helix) enterprise web components. TUI-powered CLI with support for 8 framework targets and 4 Drupal presets.
 
 ## Quick Start
