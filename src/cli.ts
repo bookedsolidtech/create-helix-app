@@ -148,6 +148,7 @@ export async function runCLI(): Promise<void> {
                             Valid values: ${TEMPLATES.map((t) => t.id).join(', ')}
     --drupal                Scaffold a Drupal theme instead of a web app
     --preset <name>         Select a Drupal preset directly (standard, blog, healthcare, intranet)
+    --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
     --version, -v           Print version and exit
@@ -164,6 +165,7 @@ export async function runCLI(): Promise<void> {
   }
 
   const isDryRun = args.includes('--dry-run');
+  const isForce = args.includes('--force');
   const isNoInstall = args.includes('--no-install');
   const isDrupal = args.includes('--drupal');
   const presetArgIndex = args.indexOf('--preset');
@@ -266,6 +268,7 @@ export async function runCLI(): Promise<void> {
     darkMode: (project.features as string[]).includes('dark-mode'),
     installDeps: project.installDeps as boolean,
     dryRun: isDryRun,
+    force: isForce,
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { scaffoldProject } from '../scaffold.js';
@@ -796,5 +796,40 @@ describe('scaffoldProject — qwik-vite', () => {
     const opts = makeOptions({ name: 'qwik-dry-run', framework: 'qwik-vite', dryRun: true });
     await scaffoldProject(opts);
     expect(await fs.pathExists(opts.directory)).toBe(false);
+  });
+});
+
+// ─── --force flag behavior ────────────────────────────────────────────────────
+
+describe('scaffoldProject — force flag', () => {
+  it('exits with error when directory is non-empty and force is not set', async () => {
+    const opts = makeOptions({ name: 'force-no-flag' });
+    await fs.ensureDir(opts.directory);
+    await fs.writeFile(path.join(opts.directory, 'existing.txt'), 'hello');
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((_code?: number) => {
+      throw new Error('process.exit called');
+    });
+
+    await expect(scaffoldProject(opts)).rejects.toThrow('process.exit called');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+  });
+
+  it('proceeds when directory is non-empty and force is true', async () => {
+    const opts = makeOptions({ name: 'force-with-flag', force: true });
+    await fs.ensureDir(opts.directory);
+    await fs.writeFile(path.join(opts.directory, 'existing.txt'), 'hello');
+
+    await expect(scaffoldProject(opts)).resolves.not.toThrow();
+    expect(await fs.pathExists(path.join(opts.directory, 'package.json'))).toBe(true);
+  });
+
+  it('succeeds without force when directory is empty', async () => {
+    const opts = makeOptions({ name: 'force-empty-dir' });
+    await fs.ensureDir(opts.directory);
+
+    await expect(scaffoldProject(opts)).resolves.not.toThrow();
+    expect(await fs.pathExists(path.join(opts.directory, 'package.json'))).toBe(true);
   });
 });

@@ -84,7 +84,7 @@ describe('edge cases — existing directories', () => {
   });
 
   it('scaffolds into a directory that already has files (overwrite)', async () => {
-    const opts = makeOptions({ name: 'with-existing-files' });
+    const opts = makeOptions({ name: 'with-existing-files', force: true });
     await fs.ensureDir(opts.directory);
     await fs.writeFile(path.join(opts.directory, 'existing-file.txt'), 'content');
 
@@ -97,7 +97,7 @@ describe('edge cases — existing directories', () => {
   });
 
   it('does not delete existing non-conflicting files when scaffolding', async () => {
-    const opts = makeOptions({ name: 'preserve-files' });
+    const opts = makeOptions({ name: 'preserve-files', force: true });
     await fs.ensureDir(opts.directory);
     await fs.writeFile(path.join(opts.directory, 'notes.txt'), 'keep me');
 
