@@ -137,6 +137,8 @@ export async function runCLI(): Promise<void> {
   }
 
   if (args.includes('--help') || args.includes('-h')) {
+    const frameworkList = TEMPLATES.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
+    const presetList = PRESETS.map((pr) => `    ${pr.id.padEnd(16)} ${pr.description}`).join('\n');
     console.log(`
   create-helix v${HELIX_VERSION}
 
@@ -144,30 +146,38 @@ export async function runCLI(): Promise<void> {
     npx create-helix [project-name] [options]
 
   Options:
-    --template <framework>  Select a framework directly (skips prompt)
-                            Valid values: ${TEMPLATES.map((t) => t.id).join(', ')}
-    --drupal                Scaffold a Drupal theme instead of a web app
-    --preset <name>         Select a Drupal preset directly (standard, blog, healthcare, intranet)
-    --bundles <list>        Select component bundles (comma-separated, skips prompt)
-                            Valid values: all,core,forms,navigation,data-display,feedback,layout
-    --typescript            Use TypeScript (default: true)
-    --no-typescript         Disable TypeScript
-    --dark-mode             Enable dark mode support (default: true)
-    --no-dark-mode          Disable dark mode support
     --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
 
-  Examples:
-    npx create-helix my-app --template react-next
-    npx create-helix my-app --template vue-vite --no-install
-    npx create-helix my-app --template react-next --bundles all
-    npx create-helix my-app --template vue-vite --bundles core,forms,navigation
+  Framework Selection:
+    --template <name>       Select a framework directly (skips prompt)
 
-  Docs / Repo:
-    https://github.com/bookedsolidtech/create-helix-app
+  Available frameworks:
+${frameworkList}
+
+  Drupal Options:
+    --drupal                Scaffold a Drupal theme instead of a web app
+    --preset <name>         Select a Drupal preset directly (skips prompt)
+
+  Available presets:
+${presetList}
+
+  Output Control:
+    --bundles <list>        Select component bundles (comma-separated, skips prompt)
+                            Values: all, core, forms, navigation, data-display, feedback, layout
+    --typescript            Use TypeScript (default: true)
+    --no-typescript         Disable TypeScript
+    --dark-mode             Enable dark mode support (default: true)
+    --no-dark-mode          Disable dark mode support
+
+  Examples:
+    create-helix my-app                          # Interactive mode
+    create-helix my-app --template react-next    # Skip framework prompt
+    create-helix my-app --dry-run                # Preview without writing
+    create-helix my-theme --drupal --preset blog # Drupal blog theme
 `);
     process.exit(0);
   }
