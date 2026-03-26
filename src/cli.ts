@@ -397,6 +397,19 @@ export async function runCLI(): Promise<void> {
     process.exit(0);
   }
 
+  if (subcommand === 'config') {
+    if (subcommandArg === 'validate') {
+      const { runConfigValidate } = await import('./commands/config-validate.js');
+      runConfigValidate({ json: isJson });
+    } else {
+      console.error(
+        `Unknown config subcommand: "${subcommandArg ?? ''}". Usage: create-helix config validate`,
+      );
+      process.exit(1);
+    }
+    process.exit(0);
+  }
+
   if (showHelp) {
     const frameworkList = TEMPLATES.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
     const presetList = PRESETS.map((pr) => `    ${pr.id.padEnd(16)} ${pr.description}`).join('\n');
