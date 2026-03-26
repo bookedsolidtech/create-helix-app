@@ -1,1 +1,10 @@
+# Run gitleaks secret scan on staged files (graceful degradation if not installed)
+if command -v gitleaks &>/dev/null; then
+  gitleaks protect --staged --config .gitleaks.toml --redact --exit-code 1
+else
+  echo "⚠️  gitleaks not installed — skipping local secret scan."
+  echo "   Install it to enable pre-commit secret scanning:"
+  echo "   https://github.com/gitleaks/gitleaks#installing"
+fi
+
 pnpm exec lint-staged

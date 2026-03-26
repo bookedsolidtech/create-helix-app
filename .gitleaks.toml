@@ -19,9 +19,17 @@ tags = ["discord", "token"]
 description = "Paths and patterns that are safe to ignore"
 paths = [
     '''node_modules''',
+    '''dist''',
+    '''coverage''',
     '''pnpm-lock\.yaml''',
     '''CHANGELOG\.md''',
+    '''\.changeset''',
+    '''src/tests?/.*fixtures?''',
+    '''src/tests?/.*example''',
 ]
 regexes = [
     '''\$\{\{\s*secrets\.[A-Z0-9_]+\s*\}\}''',
+    '''EXAMPLE_[A-Z0-9_]+=.*''',
+    '''your[-_].*[-_]here''',
+    '''<your[-_].*>''',
 ]

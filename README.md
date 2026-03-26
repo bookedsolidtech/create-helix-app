@@ -117,6 +117,26 @@ npm run build
 4. Run `npm test` to ensure all tests pass
 5. Open a pull request against `dev`
 
+### Secret Scanning
+
+This repo uses [gitleaks](https://github.com/gitleaks/gitleaks) to prevent secrets from being committed. Install it locally to enable pre-commit scanning:
+
+```bash
+# macOS
+brew install gitleaks
+
+# Linux
+GITLEAKS_VERSION="8.21.2"
+curl -sSfL \
+  "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+  | tar -xz -C ~/.local/bin gitleaks
+
+# Windows (via scoop)
+scoop install gitleaks
+```
+
+If gitleaks is not installed, the pre-commit hook will warn but will not block your commit. CI always runs the full scan. Configuration is in `.gitleaks.toml`.
+
 ## License
 
 [MIT](./LICENSE) -- Copyright 2026 BookedSolid Tech
