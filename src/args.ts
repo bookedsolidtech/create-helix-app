@@ -19,6 +19,7 @@ export interface ParsedArgs {
   isDrupal: boolean;
   noConfig: boolean;
   verbose: boolean;
+  skipAudit: boolean;
   profile: string | null;
 
   // Template options
@@ -78,6 +79,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const isDrupal = argv.includes('--drupal');
   const noConfig = argv.includes('--no-config');
   const verbose = argv.includes('--verbose');
+  const skipAudit = argv.includes('--skip-audit');
 
   // --profile
   const profileArgIndex = argv.indexOf('--profile');
@@ -154,6 +156,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     isDrupal,
     noConfig,
     verbose,
+    skipAudit,
     profile,
     template,
     preset,

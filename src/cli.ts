@@ -19,6 +19,7 @@ import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
+import { auditDependencies } from './security/dep-audit.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -328,6 +329,7 @@ export async function runCLI(): Promise<void> {
     isDrupal,
     noConfig,
     verbose: isVerboseFromArgs,
+    skipAudit: isSkipAudit,
     template: templateArgRaw,
     preset: presetArgFromCli,
     bundles: bundlesFromFlagRaw,
@@ -438,6 +440,7 @@ export async function runCLI(): Promise<void> {
     --quiet, -q             Suppress banner, spinners, and decorative output (CI-friendly)
     --verbose               Show detailed scaffolding output (files created, config used)
     --json                  Output scaffold result as JSON (suppresses all TUI output)
+    --skip-audit            Skip dependency vulnerability and license audit
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
 
@@ -659,6 +662,30 @@ ${presetList}
   const template = TEMPLATES.find((t) => t.id === options.framework);
 
   const s = p.spinner();
+
+  // ── Dependency audit (before writing package.json) ────────────────────────
+  if (!isSkipAudit && !isDryRun && template !== undefined) {
+    if (!isQuiet) s.start('Auditing dependencies...');
+    const auditResult = await auditDependencies(template.dependencies);
+    if (!isQuiet) {
+      if (auditResult.networkError) {
+        s.stop(pc.yellow('Dependency audit skipped (network unavailable)'));
+      } else {
+        s.stop(pc.green('Dependencies audited'));
+      }
+    }
+
+    if (!auditResult.networkError) {
+      for (const vuln of auditResult.vulnerabilities) {
+        const msg = `${vuln.package}@${vuln.version} has ${String(vuln.count)} ${vuln.severity} ${vuln.count === 1 ? 'vulnerability' : 'vulnerabilities'}`;
+        if (!isQuiet) p.log.warn(`⚠ ${msg}`);
+      }
+      for (const lic of auditResult.licenseIssues) {
+        const msg = `${lic.package}@${lic.version} uses non-standard license: ${lic.license}`;
+        if (!isQuiet) p.log.warn(`⚠ ${msg}`);
+      }
+    }
+  }
 
   if (isDryRun) {
     if (!isQuiet) s.start('Collecting files (dry run)...');
