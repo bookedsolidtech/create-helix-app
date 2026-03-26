@@ -248,7 +248,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 1
     needs:
-      [secret-scan, lint, format, type-check, test, coverage-enforcement, build, audit, license-check, smoke-test]
+      [
+        secret-scan,
+        lint,
+        format,
+        type-check,
+        test,
+        coverage-enforcement,
+        build,
+        audit,
+        license-check,
+        smoke-test,
+      ]
     if: always()
     steps:
       - name: Check all gates
