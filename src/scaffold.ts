@@ -253,6 +253,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       case 'lit-vite':
         await scaffoldLitVite(options);
         break;
+      case 'preact-vite':
+        await scaffoldPreactVite(options);
+        break;
       default:
         // For templates without generators yet, write a minimal starter
         await scaffoldMinimal(options);
@@ -336,6 +339,7 @@ function getScripts(options: ProjectOptions): Record<string, string> {
     case 'vue-vite':
     case 'solid-vite':
     case 'lit-vite':
+    case 'preact-vite':
       return {
         dev: 'vite',
         build: 'vite build',
@@ -2931,6 +2935,144 @@ body {
   margin: 0;
   padding: 2rem;
   color: var(--hx-color-text, #1a1a1a);
+}
+`,
+  );
+}
+
+async function scaffoldPreactVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  await safeEnsureDir(srcDir);
+
+  // Override tsconfig for Preact — needs jsx: 'react-jsx' with jsxImportSource
+  // pointing at preact so the JSX transform resolves to preact/jsx-runtime.
+  if (options.typescript) {
+    await safeWriteJson(
+      path.join(options.directory, 'tsconfig.json'),
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: true,
+          esModuleInterop: true,
+          skipLibCheck: true,
+          forceConsistentCasingInFileNames: true,
+          resolveJsonModule: true,
+          isolatedModules: true,
+          jsx: 'react-jsx',
+          jsxImportSource: 'preact',
+        },
+        include: ['src'],
+        exclude: ['node_modules'],
+      },
+      { spaces: 2 },
+    );
+  }
+
+  // vite.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+import preact from '@preact/preset-vite';
+
+export default defineConfig({
+  plugins: [preact()],
+});
+`,
+  );
+
+  // index.html
+  await safeWriteFile(
+    path.join(options.directory, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${options.name}</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
+</html>
+`,
+  );
+
+  // src/index.tsx — render mount
+  await safeWriteFile(
+    path.join(srcDir, 'index.tsx'),
+    `import { render } from 'preact';
+import { App } from './app';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+import './index.css';
+
+render(<App />, document.getElementById('app')!);
+`,
+  );
+
+  // src/app.tsx — Preact component
+  await safeWriteFile(
+    path.join(srcDir, 'app.tsx'),
+    `import { useState } from 'preact/hooks';
+
+export function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div class="container">
+      <h1>HELiX + Preact + Vite</h1>
+      <hx-card>
+        <div slot="header"><h2>Counter Demo</h2></div>
+        <p>Count: {count}</p>
+        <hx-button variant="primary" onClick={() => setCount((c) => c + 1)}>
+          Increment
+        </hx-button>
+        <hx-button
+          variant="secondary"
+          style="margin-left: 0.5rem"
+          onClick={() => setCount(0)}
+        >
+          Reset
+        </hx-button>
+      </hx-card>
+
+      <hx-card style="margin-top: 1.5rem">
+        <div slot="header">
+          <h2>Preact + Web Components</h2>
+          <hx-badge variant="info">3kB Runtime</hx-badge>
+        </div>
+        <p>Preact is a fast 3kB alternative to React with the same modern API.
+        It renders directly to the DOM with minimal overhead, making it ideal
+        for lightweight web component integration.</p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+        </div>
+      </hx-card>
+    </div>
+  );
+}
+`,
+  );
+
+  // index.css
+  await safeWriteFile(
+    path.join(srcDir, 'index.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 2rem;
+  color: var(--hx-color-text, #1a1a1a);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
 }
 `,
   );

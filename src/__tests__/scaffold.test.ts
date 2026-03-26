@@ -648,6 +648,86 @@ describe('scaffoldProject — solid-vite', () => {
   });
 });
 
+// ─── Preact + Vite ───────────────────────────────────────────────────────────
+
+describe('scaffoldProject — preact-vite', () => {
+  it('generates expected file structure', async () => {
+    const opts = makeOptions({ name: 'preact-vite-app', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+
+    const expectedFiles = [
+      'package.json',
+      'vite.config.ts',
+      'index.html',
+      'src/index.tsx',
+      'src/app.tsx',
+      'src/index.css',
+    ];
+
+    for (const file of expectedFiles) {
+      expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
+    }
+  });
+
+  it('package.json has vite scripts', async () => {
+    const opts = makeOptions({ name: 'preact-scripts', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.scripts.dev).toBe('vite');
+    expect(pkg.scripts.build).toBe('vite build');
+    expect(pkg.scripts.preview).toBe('vite preview');
+  });
+
+  it('vite.config.ts uses @preact/preset-vite plugin', async () => {
+    const opts = makeOptions({ name: 'preact-vite-config', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
+    expect(viteConfig).toContain('@preact/preset-vite');
+    expect(viteConfig).toContain('preact()');
+  });
+
+  it('src/app.tsx uses preact/hooks useState', async () => {
+    const opts = makeOptions({ name: 'preact-app-tsx', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const appContent = await fs.readFile(path.join(opts.directory, 'src', 'app.tsx'), 'utf-8');
+    expect(appContent).toContain('useState');
+    expect(appContent).toContain('preact/hooks');
+  });
+
+  it('src/index.tsx renders with preact render()', async () => {
+    const opts = makeOptions({ name: 'preact-index-tsx', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const indexContent = await fs.readFile(path.join(opts.directory, 'src', 'index.tsx'), 'utf-8');
+    expect(indexContent).toContain("from 'preact'");
+    expect(indexContent).toContain('render(');
+  });
+
+  it('index.html mounts to #app', async () => {
+    const opts = makeOptions({ name: 'preact-html', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const html = await fs.readFile(path.join(opts.directory, 'index.html'), 'utf-8');
+    expect(html).toContain('<div id="app">');
+    expect(html).toContain('src/index.tsx');
+  });
+
+  it('tsconfig.json has jsx: react-jsx and jsxImportSource: preact when typescript is true', async () => {
+    const opts = makeOptions({ name: 'preact-tsconfig', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const tsconfig = await fs.readJson(path.join(opts.directory, 'tsconfig.json'));
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('preact');
+  });
+
+  it('package.json includes preact dependency and @preact/preset-vite devDependency', async () => {
+    const opts = makeOptions({ name: 'preact-deps', framework: 'preact-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.dependencies['preact']).toBeDefined();
+    expect(pkg.devDependencies['@preact/preset-vite']).toBeDefined();
+    expect(pkg.devDependencies['vite']).toBeDefined();
+  });
+});
+
 // ─── Security: path traversal prevention ─────────────────────────────────────
 
 describe('scaffoldProject — path traversal security', () => {

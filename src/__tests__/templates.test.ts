@@ -23,10 +23,11 @@ describe('TEMPLATES', () => {
     'astro',
     'vanilla',
     'lit-vite',
+    'preact-vite',
   ];
 
-  it('defines exactly 12 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(12);
+  it('defines exactly 13 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(13);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
@@ -72,6 +73,17 @@ describe('TEMPLATES', () => {
     for (const template of nonVanilla) {
       expect(template.devDependencies['typescript']).toBeDefined();
     }
+  });
+
+  it('preact-vite template has correct metadata', () => {
+    const preact = TEMPLATES.find((t) => t.id === 'preact-vite');
+    expect(preact).toBeDefined();
+    expect(preact!.name).toBe('Preact + Vite');
+    expect(preact!.hint).toBe('fast 3kB React alternative');
+    expect(preact!.dependencies['preact']).toBeDefined();
+    expect(preact!.devDependencies['@preact/preset-vite']).toBeDefined();
+    expect(preact!.devDependencies['vite']).toBeDefined();
+    expect(preact!.dependencies['@helixui/library']).toBeDefined();
   });
 });
 

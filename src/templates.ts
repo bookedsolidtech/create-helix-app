@@ -226,6 +226,25 @@ export const TEMPLATES: TemplateConfig[] = [
     },
     features: ['web-components', 'reactive-properties', 'decorators', 'shadow-dom'],
   },
+  {
+    id: 'preact-vite',
+    name: 'Preact + Vite',
+    description:
+      'Fast 3kB React alternative with the same modern API and native web component support',
+    hint: 'fast 3kB React alternative',
+    color: pc.magenta,
+    dependencies: {
+      preact: '^10.26.0',
+      '@helixui/library': '^1.0.0',
+      '@helixui/tokens': '^0.3.0',
+    },
+    devDependencies: {
+      '@preact/preset-vite': '^2.9.0',
+      vite: '^6.4.0',
+      typescript: '^5.7.0',
+    },
+    features: ['hot-reload', 'react-compatible-api', 'hooks', 'native-wc-support'],
+  },
 ];
 
 export const COMPONENT_BUNDLES: ComponentBundleConfig[] = [

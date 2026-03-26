@@ -10,7 +10,8 @@ export type Framework =
   | 'angular'
   | 'astro'
   | 'vanilla'
-  | 'lit-vite';
+  | 'lit-vite'
+  | 'preact-vite';
 
 export type ComponentBundle =
   | 'all'
