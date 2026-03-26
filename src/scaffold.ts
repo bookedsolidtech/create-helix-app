@@ -3,7 +3,7 @@ import path from 'node:path';
 import pc from 'picocolors';
 import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
-import type { ProjectOptions } from './types.js';
+import type { ProjectOptions, AnyTemplateConfig } from './types.js';
 import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
@@ -177,7 +177,10 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     }
   };
 
-  const template = getTemplate(options.framework);
+  // Check custom templates first (they take precedence over built-ins with the same ID)
+  const template: AnyTemplateConfig | undefined =
+    options.customTemplates?.find((t) => t.id === options.framework) ??
+    getTemplate(options.framework);
   if (!template) {
     throw new Error(`Unknown framework: ${options.framework}`);
   }
@@ -361,7 +364,7 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
 
 async function writePackageJson(
   options: ProjectOptions,
-  template: ReturnType<typeof getTemplate> & object,
+  template: AnyTemplateConfig,
 ): Promise<void> {
   const pkg = {
     name: options.name,
