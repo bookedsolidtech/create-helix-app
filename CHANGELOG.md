@@ -1,5 +1,18 @@
 # create-helix
 
+## 0.6.0
+
+### Minor Changes
+
+- 427fad5: Add --force flag to overwrite existing directories
+- 5598d18: Add Preact + Vite as a 13th framework template option for lightweight React-compatible projects
+
+### Patch Changes
+
+- 444bc78: Add graceful error handling for scaffold failures
+- 5a77fa6: Add Lit web components integration test
+- ad2339e: Add Qwik framework integration test
+
 ## 0.5.1
 
 ### Patch Changes
