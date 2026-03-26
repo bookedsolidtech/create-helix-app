@@ -1,5 +1,15 @@
 # create-helix
 
+## 0.7.4
+
+### Patch Changes
+
+- 12ecb2a: Add unit tests for Drupal preset configuration validation
+- 2b0ddfc: Add --output-dir flag to specify custom output directory
+- 8cc2cf3: Add unit tests for template configuration validation
+- 7933f85: Add post-scaffold success summary with next steps
+- b51ec43: Raise test coverage thresholds to 80%
+
 ## 0.7.3
 
 ### Patch Changes
