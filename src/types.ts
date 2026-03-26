@@ -56,7 +56,7 @@ export interface ComponentBundleConfig {
   components: string[];
 }
 
-export type DrupalPreset = 'standard' | 'blog' | 'healthcare' | 'intranet';
+export type DrupalPreset = 'standard' | 'blog' | 'healthcare' | 'intranet' | 'ecommerce';
 
 export interface PresetConfig {
   id: DrupalPreset;

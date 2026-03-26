@@ -4,7 +4,7 @@ import type { DrupalPreset } from '../../src/types.js';
 
 describe('drupal preset configs — shape', () => {
   it.each(PRESETS)('$id preset has a valid id matching DrupalPreset type', (preset) => {
-    const validIds: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet'];
+    const validIds: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet', 'ecommerce'];
     expect(validIds).toContain(preset.id);
   });
 
@@ -43,7 +43,7 @@ describe('drupal preset configs — shape', () => {
 
 describe('drupal preset configs — completeness', () => {
   it('all DrupalPreset union members have a corresponding preset config', () => {
-    const validIds: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet'];
+    const validIds: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet', 'ecommerce'];
     const configIds = PRESETS.map((p) => p.id);
     for (const id of validIds) {
       expect(configIds).toContain(id);
