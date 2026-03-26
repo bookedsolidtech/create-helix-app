@@ -73,7 +73,7 @@ const ALL_FRAMEWORKS: Framework[] = TEMPLATES.map((t) => t.id);
 const FRAMEWORK_KEY_DEP: Record<Framework, string> = {
   'react-next': 'next',
   'react-vite': 'react',
-  remix: '@remix-run/react',
+  remix: 'react-router',
   'vue-nuxt': 'nuxt',
   'vue-vite': 'vue',
   'solid-vite': 'solid-js',

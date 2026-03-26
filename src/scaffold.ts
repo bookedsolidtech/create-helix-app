@@ -394,10 +394,10 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       };
     case 'remix':
       return {
-        dev: 'vite',
-        build: 'vite build',
-        start: 'remix-serve ./build/server/index.js',
-        typecheck: 'tsc',
+        dev: 'react-router dev',
+        build: 'react-router build',
+        start: 'react-router-serve ./build/server/index.js',
+        typecheck: 'react-router typegen && tsc',
       };
     case 'vue-vite':
     case 'solid-vite':
@@ -1747,12 +1747,23 @@ async function scaffoldRemix(options: ProjectOptions): Promise<void> {
   // vite.config.ts
   await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
-    `import { vitePlugin as remix } from '@remix-run/dev';
+    `import { reactRouter } from '@react-router/dev/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [remix()],
+  plugins: [reactRouter()],
 });
+`,
+  );
+
+  // react-router.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'react-router.config.ts'),
+    `import type { Config } from '@react-router/dev/config';
+
+export default {
+  ssr: true,
+} satisfies Config;
 `,
   );
 
@@ -1792,7 +1803,7 @@ export default defineConfig({
  * - Refs
  *
  * Note: HELiX web components rely on browser APIs (customElements).
- * In Remix SSR routes, import this file only in client-side code
+ * In React Router SSR routes, import this file only in client-side code
  * or guard with typeof window !== 'undefined' checks.
  *
  * Usage:
@@ -1881,8 +1892,8 @@ body {
   // app/root.tsx
   await safeWriteFile(
     path.join(appDir, 'root.tsx'),
-    `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
-import type { LinksFunction } from '@remix-run/node';
+    `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
+import type { LinksFunction } from 'react-router';
 import globalsStyles from '~/styles/globals.css?url';
 
 export const links: LinksFunction = () => [
@@ -1912,14 +1923,14 @@ export default function App() {
   // app/routes/_index.tsx
   await safeWriteFile(
     path.join(routesDir, '_index.tsx'),
-    `import type { MetaFunction } from '@remix-run/node';
+    `import type { MetaFunction } from 'react-router';
 import { useState } from 'react';
 import { HxButton, HxCard, HxBadge } from '~/components/helix/wrappers';
 
 export const meta: MetaFunction = () => {
   return [
     { title: '${sanitizeForHtml(options.name)}' },
-    { name: 'description', content: 'Built with HELiX + Remix' },
+    { name: 'description', content: 'Built with HELiX + React Router' },
   ];
 };
 
@@ -1929,7 +1940,7 @@ export default function Index() {
   return (
     <div className="container">
       <h1>
-        HELiX + Remix <HxBadge variant="info">SSR Ready</HxBadge>
+        HELiX + React Router <HxBadge variant="info">SSR Ready</HxBadge>
       </h1>
       <HxCard>
         <div slot="header">
