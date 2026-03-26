@@ -21,6 +21,7 @@ import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
 import { auditDependencies } from './security/dep-audit.js';
 import { checkForUpdate } from './version-check.js';
+import { logger } from './logger.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -783,7 +784,7 @@ ${presetList}
 
   const updateWarning = await updateCheckPromise;
   if (updateWarning !== null && !isQuiet) {
-    console.log(pc.yellow(`  ${updateWarning}`));
+    logger.warn(updateWarning);
   }
 
   if (!isQuiet) p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX.'));
