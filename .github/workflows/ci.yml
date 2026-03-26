@@ -98,7 +98,7 @@ jobs:
           node-version: 20
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run test
+      - run: pnpm run test -- --coverage
 
   build:
     name: Build
