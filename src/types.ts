@@ -4,6 +4,7 @@ export type Framework =
   | 'remix'
   | 'vue-nuxt'
   | 'vue-vite'
+  | 'solid-vite'
   | 'svelte-kit'
   | 'angular'
   | 'astro'

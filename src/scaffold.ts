@@ -87,6 +87,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     case 'vue-vite':
       await scaffoldVueVite(options);
       break;
+    case 'solid-vite':
+      await scaffoldSolidVite(options);
+      break;
     case 'vanilla':
       await scaffoldVanilla(options);
       break;
@@ -162,6 +165,7 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         typecheck: 'tsc',
       };
     case 'vue-vite':
+    case 'solid-vite':
       return {
         dev: 'vite',
         build: 'vite build',
@@ -2332,6 +2336,148 @@ export class AppComponent {
     this.submitted = true;
     setTimeout(() => { this.submitted = false; }, 3000);
   }
+}
+`,
+  );
+}
+
+async function scaffoldSolidVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  await fs.ensureDir(srcDir);
+
+  // Override tsconfig for Solid.js — needs jsx: 'preserve' so vite-plugin-solid
+  // can handle the JSX transformation, plus jsxImportSource for type checking.
+  if (options.typescript) {
+    await fs.writeJson(
+      path.join(options.directory, 'tsconfig.json'),
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: true,
+          esModuleInterop: true,
+          skipLibCheck: true,
+          forceConsistentCasingInFileNames: true,
+          resolveJsonModule: true,
+          isolatedModules: true,
+          jsx: 'preserve',
+          jsxImportSource: 'solid-js',
+        },
+        include: ['src'],
+        exclude: ['node_modules'],
+      },
+      { spaces: 2 },
+    );
+  }
+
+  // vite.config.ts
+  await fs.writeFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+import solidPlugin from 'vite-plugin-solid';
+
+export default defineConfig({
+  plugins: [solidPlugin()],
+});
+`,
+  );
+
+  // index.html
+  await fs.writeFile(
+    path.join(options.directory, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${options.name}</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+`,
+  );
+
+  // main.tsx
+  await fs.writeFile(
+    path.join(srcDir, 'main.tsx'),
+    `import { render } from 'solid-js/web';
+import App from './App';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+import './index.css';
+
+render(() => <App />, document.getElementById('app')!);
+`,
+  );
+
+  // App.tsx
+  await fs.writeFile(
+    path.join(srcDir, 'App.tsx'),
+    `import { createSignal, createEffect } from 'solid-js';
+
+export default function App() {
+  const [count, setCount] = createSignal(0);
+
+  createEffect(() => {
+    // Runs whenever count() changes — fine-grained reactivity
+    console.log('count changed:', count());
+  });
+
+  return (
+    <div class="container">
+      <h1>HELiX + Solid.js + Vite</h1>
+      <hx-card>
+        <div slot="header"><h2>Counter Demo</h2></div>
+        <p>Count: {count()}</p>
+        <hx-button variant="primary" onClick={() => setCount((c) => c + 1)}>
+          Increment
+        </hx-button>
+        <hx-button
+          variant="secondary"
+          style="margin-left: 0.5rem"
+          onClick={() => setCount(0)}
+        >
+          Reset
+        </hx-button>
+      </hx-card>
+
+      <hx-card style="margin-top: 1.5rem">
+        <div slot="header">
+          <h2>Solid.js + Web Components</h2>
+          <hx-badge variant="info">Native Support</hx-badge>
+        </div>
+        <p>Solid.js renders directly to the DOM — no virtual DOM — making it
+        ideal for web components. Properties and events bind natively.</p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+        </div>
+      </hx-card>
+    </div>
+  );
+}
+`,
+  );
+
+  // index.css
+  await fs.writeFile(
+    path.join(srcDir, 'index.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 2rem;
+  color: var(--hx-color-text, #1a1a1a);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
 }
 `,
   );

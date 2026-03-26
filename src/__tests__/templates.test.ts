@@ -16,14 +16,15 @@ describe('TEMPLATES', () => {
     'remix',
     'vue-nuxt',
     'vue-vite',
+    'solid-vite',
     'svelte-kit',
     'angular',
     'astro',
     'vanilla',
   ];
 
-  it('defines exactly 9 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(9);
+  it('defines exactly 10 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(10);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
