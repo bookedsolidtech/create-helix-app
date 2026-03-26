@@ -18,6 +18,7 @@ export interface ParsedArgs {
   json: boolean;
   isDrupal: boolean;
   noConfig: boolean;
+  verbose: boolean;
 
   // Template options
   template: Framework | null;
@@ -71,6 +72,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const json = argv.includes('--json');
   const isDrupal = argv.includes('--drupal');
   const noConfig = argv.includes('--no-config');
+  const verbose = argv.includes('--verbose');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -142,6 +144,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     json,
     isDrupal,
     noConfig,
+    verbose,
     template,
     preset,
     bundles,

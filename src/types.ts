@@ -46,6 +46,7 @@ export interface ProjectOptions {
   installDeps: boolean;
   dryRun?: boolean;
   force?: boolean;
+  verbose?: boolean;
 }
 
 export interface ComponentBundleConfig {

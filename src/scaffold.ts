@@ -170,10 +170,17 @@ function getScaffoldErrorMessage(err: unknown): string | null {
 }
 
 export async function scaffoldProject(options: ProjectOptions): Promise<void> {
+  const logVerbose = (msg: string): void => {
+    if (options.verbose) console.log(pc.dim(`  [verbose] ${msg}`));
+  };
+
   const template = getTemplate(options.framework);
   if (!template) {
     throw new Error(`Unknown framework: ${options.framework}`);
   }
+
+  logVerbose(`Template: ${template.id} (${template.name})`);
+  logVerbose(`Directory: ${options.directory}`);
 
   // SECURITY: Validate the output directory path before writing any files.
   // Defense-in-depth: CLI validates project names via /^[a-z0-9-_]+$/i, making
@@ -233,24 +240,36 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       }
     }
 
+    logVerbose(`Component bundles: ${options.componentBundles.join(', ')}`);
+    logVerbose(
+      `Features: typescript=${String(options.typescript)}, eslint=${String(options.eslint)}, tokens=${String(options.designTokens)}, darkMode=${String(options.darkMode)}`,
+    );
+
     // Generate/overwrite core files based on options
+    logVerbose(`Writing ${path.join(options.directory, 'package.json')}`);
     await writePackageJson(options, template);
+    logVerbose(`Writing ${path.join(options.directory, 'README.md')}`);
     await writeReadme(options);
 
     if (options.designTokens) {
+      logVerbose(`Writing ${path.join(options.directory, 'helix.tokens.json')}`);
       await writeTokensConfig(options);
     }
 
     if (options.eslint) {
+      logVerbose(`Writing ${path.join(options.directory, 'eslint.config.js')}`);
       await writeEslintConfig(options);
+      logVerbose(`Writing ${path.join(options.directory, '.prettierrc')}`);
       await writePrettierConfig(options);
     }
 
     if (options.typescript) {
+      logVerbose(`Writing ${path.join(options.directory, 'tsconfig.json')}`);
       await writeTsConfig(options);
     }
 
     // Framework-specific generation (always runs, fills gaps if no template dir)
+    logVerbose(`Running ${options.framework} scaffold generator`);
     switch (options.framework) {
       case 'react-next':
         await scaffoldReactNext(options);
@@ -301,9 +320,11 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     }
 
     // Write the HELiX integration helper
+    logVerbose(`Writing ${path.join(options.directory, 'src', 'helix-setup.ts')}`);
     await writeHelixSetup(options);
 
     // Write .gitignore
+    logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
     await writeGitignore(options);
   } catch (err) {
     _dryRunActive = false;

@@ -138,6 +138,22 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--verbose flag', () => {
+    it('detects --verbose', () => {
+      expect(parseArgs(['my-app', '--verbose']).verbose).toBe(true);
+    });
+
+    it('verbose is false when not present', () => {
+      expect(parseArgs(['my-app']).verbose).toBe(false);
+    });
+
+    it('verbose works with other flags', () => {
+      const parsed = parseArgs(['my-app', '--verbose', '--template', 'react-next']);
+      expect(parsed.verbose).toBe(true);
+      expect(parsed.template).toBe('react-next');
+    });
+  });
+
   describe('--json flag', () => {
     it('detects --json', () => {
       expect(parseArgs(['my-app', '--json']).json).toBe(true);
