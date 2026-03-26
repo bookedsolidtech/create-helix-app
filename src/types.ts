@@ -35,6 +35,26 @@ export interface TemplateConfig {
   features: string[];
 }
 
+/**
+ * A custom template definition loaded from a user-provided templateDir.
+ * Follows the same structure as TemplateConfig but with an unconstrained
+ * string id and an isCustom flag for display purposes.
+ */
+export interface CustomTemplateConfig {
+  id: string;
+  name: string;
+  description: string;
+  hint: string;
+  color: (text: string) => string;
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+  features: string[];
+  isCustom: true;
+}
+
+/** Union of built-in and custom template configs. */
+export type AnyTemplateConfig = TemplateConfig | CustomTemplateConfig;
+
 export interface ProjectOptions {
   name: string;
   directory: string;
@@ -48,6 +68,8 @@ export interface ProjectOptions {
   dryRun?: boolean;
   force?: boolean;
   verbose?: boolean;
+  /** Custom templates loaded from templateDir — used by scaffold for dependency lookup. */
+  customTemplates?: AnyTemplateConfig[];
 }
 
 export interface ComponentBundleConfig {

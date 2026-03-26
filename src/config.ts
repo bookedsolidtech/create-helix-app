@@ -26,6 +26,8 @@ export interface HelixProfile {
 export interface HelixConfig {
   defaults?: HelixConfigDefaults;
   profiles?: Record<string, HelixProfile>;
+  /** Path to a directory containing custom template JSON definition files. */
+  templateDir?: string;
 }
 
 export interface LoadConfigResult {
@@ -44,6 +46,8 @@ export interface EnvVarOverrides {
   preset?: DrupalPreset;
   verbose?: boolean;
   offline?: boolean;
+  /** Path to a directory containing custom template JSON definition files. */
+  templateDir?: string;
 }
 
 function parseEnvBool(val: string | undefined): boolean | undefined {
@@ -85,6 +89,8 @@ export function readEnvVars(): EnvVarOverrides {
 
   const offline = parseEnvBool(env['HELIX_OFFLINE']);
   if (offline !== undefined) result.offline = offline;
+
+  if (env['HELIX_TEMPLATE_DIR']) result.templateDir = env['HELIX_TEMPLATE_DIR'];
 
   return result;
 }

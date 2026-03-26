@@ -3,9 +3,10 @@ import pc from 'picocolors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
+import { TEMPLATES, COMPONENT_BUNDLES, mergeWithCustomTemplates } from './templates.js';
+import { loadCustomTemplates } from './custom-templates.js';
 import { scaffoldProject, getDryRunEntries } from './scaffold.js';
-import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
+import type { Framework, ComponentBundle, ProjectOptions, AnyTemplateConfig, CustomTemplateConfig } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
@@ -212,15 +213,24 @@ export async function runJsonScaffold(
     tokensFlag: boolean;
     bundlesFromFlag: ComponentBundle[] | null;
     outputDirArg: string | null;
+    customTemplates?: CustomTemplateConfig[];
   },
 ): Promise<void> {
-  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
+  const mergedTemplates =
+    opts.customTemplates && opts.customTemplates.length > 0
+      ? mergeWithCustomTemplates(opts.customTemplates)
+      : TEMPLATES;
+  const validIds = mergedTemplates.map((t) => t.id);
 
-  // Use both the template list check and the hardened validateFramework type guard
-  if (!validFrameworks.includes(templateArg as Framework) || !validateFramework(templateArg)) {
+  // Built-in templates also require the hardened validateFramework type guard.
+  // Custom templates bypass the Framework union check since their IDs are arbitrary strings.
+  const isBuiltIn = validateFramework(templateArg);
+  const isCustom = !isBuiltIn && validIds.includes(templateArg);
+
+  if (!isBuiltIn && !isCustom) {
     const result: ScaffoldJsonResult = {
       success: false,
-      error: `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
+      error: `Invalid template: "${templateArg}". Valid options: ${validIds.join(', ')}`,
     };
     console.log(JSON.stringify(result, null, 2));
     process.exit(1);
@@ -247,6 +257,8 @@ export async function runJsonScaffold(
     dryRun: opts.isDryRun,
     force: opts.isForce,
     verbose: opts.isVerbose,
+    customTemplates:
+      opts.customTemplates && opts.customTemplates.length > 0 ? opts.customTemplates : undefined,
   };
 
   try {
@@ -367,6 +379,15 @@ export async function runCLI(): Promise<void> {
 
   const templateArg = templateArgRaw ?? envVars.template ?? cfgDefaults.template ?? null;
   const bundlesFromFlag = bundlesFromFlagRaw ?? envVars.bundles ?? cfgDefaults.bundles ?? null;
+
+  // Load custom templates from templateDir (env var takes precedence over config file)
+  const templateDirResolved =
+    envVars.templateDir ?? helixConfig.templateDir ?? null;
+  const customTemplates: CustomTemplateConfig[] =
+    templateDirResolved !== null ? loadCustomTemplates(templateDirResolved) : [];
+  // Merge built-ins with custom templates for display in TUI and validation
+  const allTemplates: AnyTemplateConfig[] =
+    customTemplates.length > 0 ? mergeWithCustomTemplates(customTemplates) : TEMPLATES;
   const typescriptFlag = explicitFlags.typescript
     ? typescriptFlagRaw
     : (envVars.typescript ?? cfgDefaults.typescript ?? true);
@@ -571,6 +592,7 @@ ${presetList}
       tokensFlag,
       bundlesFromFlag,
       outputDirArg,
+      customTemplates: customTemplates.length > 0 ? customTemplates : undefined,
     });
     return;
   }
@@ -594,10 +616,10 @@ ${presetList}
           ? Promise.resolve(templateArg as Framework)
           : p.select({
               message: 'Which framework?',
-              options: TEMPLATES.map((t) => ({
+              options: allTemplates.map((t) => ({
                 value: t.id as Framework,
                 label: t.color(t.name),
-                hint: t.hint,
+                hint: 'isCustom' in t ? `[custom] ${t.hint}` : t.hint,
               })),
             }),
 
@@ -678,9 +700,10 @@ ${presetList}
     dryRun: isDryRun,
     force: isForce,
     verbose: isVerbose,
+    customTemplates: customTemplates.length > 0 ? customTemplates : undefined,
   };
 
-  const template = TEMPLATES.find((t) => t.id === options.framework);
+  const template = allTemplates.find((t) => t.id === options.framework);
 
   const s = p.spinner();
 
@@ -764,7 +787,11 @@ ${presetList}
 
   console.log();
   console.log(pc.dim('  Project:    ') + pc.cyan(project.name as string));
-  console.log(pc.dim('  Framework:  ') + (template?.color(template.name) ?? project.framework));
+  const frameworkLabel =
+    template !== undefined
+      ? template.color(template.name) + ('isCustom' in template ? pc.dim(' [custom]') : '')
+      : String(project.framework);
+  console.log(pc.dim('  Framework:  ') + frameworkLabel);
   console.log(pc.dim('  Directory:  ') + pc.white(options.directory));
   if (!isQuiet) {
     console.log(pc.dim('  TypeScript: ') + (options.typescript ? pc.green('yes') : pc.dim('no')));
