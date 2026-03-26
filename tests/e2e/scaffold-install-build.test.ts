@@ -28,7 +28,11 @@ interface FrameworkTestEntry {
   buildOutputDir: string;
   /** Known upstream build failure -- marks build test with it.fails() */
   knownBuildFailure?: string;
+  /** Minimum Node.js major version required for install/build (skips on older) */
+  minNodeMajor?: number;
 }
+
+const NODE_MAJOR = Number(process.versions.node.split('.')[0]);
 
 const FRAMEWORKS: FrameworkTestEntry[] = [
   { framework: 'react-next', hasBuild: true, buildOutputDir: '.next' },
@@ -40,7 +44,12 @@ const FRAMEWORKS: FrameworkTestEntry[] = [
     knownBuildFailure:
       'Remix Vite plugin runs pnpm install internally during build, causing failure',
   },
-  { framework: 'vue-nuxt', hasBuild: true, buildOutputDir: '.nuxt' },
+  {
+    framework: 'vue-nuxt',
+    hasBuild: true,
+    buildOutputDir: '.nuxt',
+    minNodeMajor: 22,
+  },
   { framework: 'vue-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'solid-vite', hasBuild: true, buildOutputDir: 'dist' },
   {
@@ -50,12 +59,7 @@ const FRAMEWORKS: FrameworkTestEntry[] = [
     knownBuildFailure: 'Qwik build fails in temp directory environment',
   },
   { framework: 'svelte-kit', hasBuild: true, buildOutputDir: '.svelte-kit' },
-  {
-    framework: 'angular',
-    hasBuild: true,
-    buildOutputDir: 'dist',
-    knownBuildFailure: 'Angular 18 requires TypeScript >=5.4.0 and <5.6.0; project uses 5.9.3',
-  },
+  { framework: 'angular', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'astro', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'lit-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'preact-vite', hasBuild: true, buildOutputDir: 'dist' },
@@ -97,7 +101,8 @@ function run(cmd: string, cwd: string): { ok: boolean; output: string } {
 
 describe.each(FRAMEWORKS)(
   'E2E scaffold + install + build: $framework',
-  ({ framework, hasBuild, buildOutputDir, knownBuildFailure }) => {
+  ({ framework, hasBuild, buildOutputDir, knownBuildFailure, minNodeMajor }) => {
+    const skipForNode = minNodeMajor !== undefined && NODE_MAJOR < minNodeMajor;
     const tmpRoot = makeTmpRoot(`e2e-${framework}`);
     const projectDir = path.join(tmpRoot, `test-${framework}`);
     tempDirs.push(tmpRoot);
@@ -121,29 +126,34 @@ describe.each(FRAMEWORKS)(
       expect(fs.existsSync(pkgPath)).toBe(true);
     }, 120_000);
 
-    it(`installs dependencies for ${framework}`, () => {
-      const result = run('pnpm install --no-frozen-lockfile', projectDir);
+    const installIt = skipForNode ? it.skip : it;
+    installIt(
+      `installs dependencies for ${framework}${skipForNode ? ` (requires Node >=${minNodeMajor})` : ''}`,
+      () => {
+        const result = run('pnpm install --no-frozen-lockfile', projectDir);
 
-      // Flag @helixui package 404s with a clear message
-      if (
-        !result.ok &&
-        (result.output.includes('ERR_PNPM_FETCH_404') || result.output.includes('404 Not Found'))
-      ) {
-        const helixPkgMatch = result.output.match(/@helixui\/[\w-]+/);
-        if (helixPkgMatch) {
-          throw new Error(
-            `HELIX PACKAGE NOT FOUND: ${helixPkgMatch[0]} -- report to HELiX team\n\n${result.output}`,
-          );
+        // Flag @helixui package 404s with a clear message
+        if (
+          !result.ok &&
+          (result.output.includes('ERR_PNPM_FETCH_404') || result.output.includes('404 Not Found'))
+        ) {
+          const helixPkgMatch = result.output.match(/@helixui\/[\w-]+/);
+          if (helixPkgMatch) {
+            throw new Error(
+              `HELIX PACKAGE NOT FOUND: ${helixPkgMatch[0]} -- report to HELiX team\n\n${result.output}`,
+            );
+          }
         }
-      }
 
-      expect(result.ok, `pnpm install failed:\n${result.output}`).toBe(true);
-    }, 120_000);
+        expect(result.ok, `pnpm install failed:\n${result.output}`).toBe(true);
+      },
+      120_000,
+    );
 
     if (hasBuild) {
-      const buildIt = knownBuildFailure ? it.fails : it;
+      const buildIt = knownBuildFailure ? it.fails : skipForNode ? it.skip : it;
       buildIt(
-        `builds ${framework} successfully${knownBuildFailure ? ` (KNOWN ISSUE: ${knownBuildFailure})` : ''}`,
+        `builds ${framework} successfully${knownBuildFailure ? ` (KNOWN ISSUE: ${knownBuildFailure})` : ''}${skipForNode ? ` (requires Node >=${minNodeMajor})` : ''}`,
         () => {
           // Read package.json to confirm a build script exists
           const pkgPath = path.join(projectDir, 'package.json');
