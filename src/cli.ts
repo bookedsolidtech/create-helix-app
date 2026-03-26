@@ -10,6 +10,7 @@ import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
 import { validateProjectName } from './validation.js';
+import { parseArgs } from './args.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -402,27 +403,60 @@ async function collectFiles(dir: string): Promise<string[]> {
 }
 
 export async function runCLI(): Promise<void> {
-  // Parse flags before prompting
-  const args = process.argv.slice(2);
+  const argv = process.argv.slice(2);
 
-  if (args.includes('--version') || args.includes('-v')) {
+  let parsed: ReturnType<typeof parseArgs>;
+  try {
+    parsed = parseArgs(argv);
+  } catch (err) {
+    const isJsonMode = argv.includes('--json');
+    const message = err instanceof Error ? err.message : String(err);
+    if (isJsonMode) {
+      console.log(JSON.stringify({ success: false, error: message }, null, 2));
+    } else {
+      console.error(message);
+    }
+    process.exit(1);
+  }
+
+  const {
+    showVersion,
+    subcommand,
+    subcommandArg,
+    showHelp,
+    dryRun: isDryRun,
+    force: isForce,
+    noInstall: isNoInstall,
+    quiet: isQuiet,
+    json: isJson,
+    isDrupal,
+    template: templateArg,
+    preset: presetArg,
+    bundles: bundlesFromFlag,
+    outputDir: outputDirArg,
+    typescript: typescriptFlag,
+    eslint: eslintFlag,
+    darkMode: darkModeFlag,
+    tokens: tokensFlag,
+    projectName,
+  } = parsed;
+
+  if (showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
     process.exit(0);
   }
 
-  if (args[0] === 'list') {
-    runListCommand(args.includes('--json'));
+  if (subcommand === 'list') {
+    runListCommand(isJson);
     process.exit(0);
   }
 
-  if (args[0] === 'info') {
-    const isJson = args.includes('--json');
-    const templateId = args.find((a) => !a.startsWith('--') && a !== 'info') ?? null;
-    runInfoCommand(templateId, isJson);
+  if (subcommand === 'info') {
+    runInfoCommand(subcommandArg, isJson);
     process.exit(0);
   }
 
-  if (args.includes('--help') || args.includes('-h')) {
+  if (showHelp) {
     const frameworkList = TEMPLATES.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
     const presetList = PRESETS.map((pr) => `    ${pr.id.padEnd(16)} ${pr.description}`).join('\n');
     console.log(`
@@ -476,47 +510,6 @@ ${presetList}
     process.exit(0);
   }
 
-  const isDryRun = args.includes('--dry-run');
-  const isForce = args.includes('--force');
-  const isNoInstall = args.includes('--no-install');
-  const isQuiet = args.includes('--quiet') || args.includes('-q');
-  const isJson = args.includes('--json');
-  const isDrupal = args.includes('--drupal');
-  const typescriptFlag = args.includes('--no-typescript') ? false : true;
-  const eslintFlag = args.includes('--no-eslint') ? false : true;
-  const darkModeFlag = args.includes('--no-dark-mode') ? false : true;
-  const tokensFlag = args.includes('--no-tokens') ? false : true;
-  const presetArgIndex = args.indexOf('--preset');
-  const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
-
-  const templateArgIndex = args.indexOf('--template');
-  const templateArg = templateArgIndex !== -1 ? (args[templateArgIndex + 1] ?? null) : null;
-  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
-
-  if (templateArg !== null && !validFrameworks.includes(templateArg as Framework)) {
-    if (isJson) {
-      console.log(
-        JSON.stringify(
-          {
-            success: false,
-            error: `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
-          },
-          null,
-          2,
-        ),
-      );
-      process.exit(1);
-    }
-    console.error(
-      `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
-    );
-    process.exit(1);
-  }
-
-  const outputDirArgIndex =
-    args.indexOf('--output-dir') !== -1 ? args.indexOf('--output-dir') : args.indexOf('-o');
-  const outputDirArg = outputDirArgIndex !== -1 ? (args[outputDirArgIndex + 1] ?? null) : null;
-
   if (outputDirArg !== null) {
     const resolvedOutputDir = path.resolve(process.cwd(), outputDirArg);
     try {
@@ -528,31 +521,13 @@ ${presetList}
     }
   }
 
-  const bundlesArgIndex = args.indexOf('--bundles');
-  const bundlesArg = bundlesArgIndex !== -1 ? (args[bundlesArgIndex + 1] ?? null) : null;
-  const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
-
-  let bundlesFromFlag: ComponentBundle[] | null = null;
-  if (bundlesArg !== null) {
-    const requested = bundlesArg.split(',').map((s) => s.trim()) as ComponentBundle[];
-    const invalid = requested.filter((b) => !validBundles.includes(b));
-    if (invalid.length > 0) {
-      console.error(
-        `Invalid bundle(s): ${invalid.map((b) => `"${b}"`).join(', ')}. Valid options: ${validBundles.join(', ')}`,
-      );
-      process.exit(1);
-    }
-    bundlesFromFlag = requested;
-  }
-
   if (isDrupal || presetArg !== null) {
     await runDrupalCLI(presetArg, isQuiet);
     return;
   }
 
   if (isJson) {
-    const argName = process.argv[2];
-    if (!argName || argName.startsWith('--')) {
+    if (projectName === null) {
       console.log(
         JSON.stringify(
           { success: false, error: 'Project name is required in --json mode' },
@@ -568,7 +543,7 @@ ${presetList}
       );
       process.exit(1);
     }
-    await runJsonScaffold(argName, templateArg, {
+    await runJsonScaffold(projectName, templateArg, {
       isDryRun,
       isForce,
       isNoInstall,
@@ -586,15 +561,13 @@ ${presetList}
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix ')));
 
-  const argName = process.argv[2];
-
   const project = await p.group(
     {
       name: () =>
         p.text({
           message: 'Project name',
           placeholder: 'my-helix-app',
-          initialValue: argName ?? '',
+          initialValue: projectName ?? '',
           validate: validateProjectName,
         }),
 
