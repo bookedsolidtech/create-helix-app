@@ -99,6 +99,26 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test -- --coverage
+      - name: Generate coverage badge JSON
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            PCT=$(node -e "const s=require('./coverage/coverage-summary.json');console.log(Math.floor(s.total.lines.pct))")
+            if [ "$PCT" -ge 80 ]; then COLOR="brightgreen"
+            elif [ "$PCT" -ge 60 ]; then COLOR="yellow"
+            else COLOR="red"
+            fi
+            echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${PCT}%\",\"color\":\"${COLOR}\"}" > coverage/coverage-badge.json
+            echo "Coverage: ${PCT}%"
+            cat coverage/coverage-badge.json
+          fi
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
 
   build:
     name: Build
