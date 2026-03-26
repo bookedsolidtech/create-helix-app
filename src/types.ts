@@ -5,6 +5,7 @@ export type Framework =
   | 'vue-nuxt'
   | 'vue-vite'
   | 'solid-vite'
+  | 'qwik-vite'
   | 'svelte-kit'
   | 'angular'
   | 'astro'
