@@ -577,6 +577,77 @@ describe('scaffoldProject — remix', () => {
   });
 });
 
+// ─── Solid.js + Vite ─────────────────────────────────────────────────────────
+
+describe('scaffoldProject — solid-vite', () => {
+  it('generates expected file structure', async () => {
+    const opts = makeOptions({ name: 'solid-vite-app', framework: 'solid-vite' });
+    await scaffoldProject(opts);
+
+    const expectedFiles = [
+      'package.json',
+      'vite.config.ts',
+      'index.html',
+      'src/main.tsx',
+      'src/App.tsx',
+      'src/index.css',
+    ];
+
+    for (const file of expectedFiles) {
+      expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
+    }
+  });
+
+  it('package.json has vite scripts', async () => {
+    const opts = makeOptions({ name: 'solid-scripts', framework: 'solid-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.scripts.dev).toBe('vite');
+    expect(pkg.scripts.build).toBe('vite build');
+    expect(pkg.scripts.preview).toBe('vite preview');
+  });
+
+  it('vite.config.ts uses vite-plugin-solid', async () => {
+    const opts = makeOptions({ name: 'solid-vite-config', framework: 'solid-vite' });
+    await scaffoldProject(opts);
+    const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
+    expect(viteConfig).toContain('vite-plugin-solid');
+    expect(viteConfig).toContain('solidPlugin');
+  });
+
+  it('App.tsx uses createSignal and createEffect', async () => {
+    const opts = makeOptions({ name: 'solid-app-tsx', framework: 'solid-vite' });
+    await scaffoldProject(opts);
+    const appContent = await fs.readFile(path.join(opts.directory, 'src', 'App.tsx'), 'utf-8');
+    expect(appContent).toContain('createSignal');
+    expect(appContent).toContain('createEffect');
+  });
+
+  it('index.html mounts to #app', async () => {
+    const opts = makeOptions({ name: 'solid-html', framework: 'solid-vite' });
+    await scaffoldProject(opts);
+    const html = await fs.readFile(path.join(opts.directory, 'index.html'), 'utf-8');
+    expect(html).toContain('<div id="app">');
+  });
+
+  it('tsconfig.json has jsx: preserve when typescript is true', async () => {
+    const opts = makeOptions({ name: 'solid-tsconfig', framework: 'solid-vite' });
+    await scaffoldProject(opts);
+    const tsconfig = await fs.readJson(path.join(opts.directory, 'tsconfig.json'));
+    expect(tsconfig.compilerOptions.jsx).toBe('preserve');
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('solid-js');
+  });
+
+  it('package.json includes solid-js dependency', async () => {
+    const opts = makeOptions({ name: 'solid-deps', framework: 'solid-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.dependencies['solid-js']).toBeDefined();
+    expect(pkg.devDependencies['vite-plugin-solid']).toBeDefined();
+    expect(pkg.devDependencies['vite']).toBeDefined();
+  });
+});
+
 // ─── Security: path traversal prevention ─────────────────────────────────────
 
 describe('scaffoldProject — path traversal security', () => {

@@ -106,6 +106,24 @@ export const TEMPLATES: TemplateConfig[] = [
     features: ['hot-reload', 'native-wc-support'],
   },
   {
+    id: 'solid-vite',
+    name: 'Solid.js + Vite',
+    description: 'Fine-grained reactive SPA with native web component support',
+    hint: 'fine-grained reactivity',
+    color: pc.blue,
+    dependencies: {
+      'solid-js': '^1.9.0',
+      '@helixui/library': '^1.0.0',
+      '@helixui/tokens': '^0.3.0',
+    },
+    devDependencies: {
+      'vite-plugin-solid': '^2.11.0',
+      vite: '^6.4.0',
+      typescript: '^5.7.0',
+    },
+    features: ['hot-reload', 'fine-grained-reactivity', 'native-wc-support'],
+  },
+  {
     id: 'svelte-kit',
     name: 'SvelteKit',
     description: 'Svelte 5 + SvelteKit, native custom element support',
