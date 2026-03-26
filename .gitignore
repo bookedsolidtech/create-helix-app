@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.cache/
+*.tgz
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+.turbo/
+# Worktree directories (managed by protoLabs Studio)
+.automaker/
+.claude/worktrees/
+.worktrees/
+
+# protoLabs Studio local files
+protolab.config
+proto.config.yaml
+protoLabs.report.html
+spec.md
+
+# Internal docs
+PE-REVIEW.md
+
+# Temp files
+test-scaffold.ts

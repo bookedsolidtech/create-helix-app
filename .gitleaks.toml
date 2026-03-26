@@ -1,0 +1,27 @@
+title = "create-helix-app Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "npm-token"
+description = "npm auth token"
+regex = '''npm_[a-zA-Z0-9]{36}'''
+tags = ["npm", "token"]
+
+[[rules]]
+id = "discord-bot-token"
+description = "Discord Bot Token"
+regex = '''(?:Bot\s+)?[MN][a-zA-Z0-9_-]{23,25}\.[a-zA-Z0-9_-]{6}\.[a-zA-Z0-9_-]{27,38}'''
+tags = ["discord", "token"]
+
+[allowlist]
+description = "Paths and patterns that are safe to ignore"
+paths = [
+    '''node_modules''',
+    '''pnpm-lock\.yaml''',
+    '''CHANGELOG\.md''',
+]
+regexes = [
+    '''\$\{\{\s*secrets\.[A-Z0-9_]+\s*\}\}''',
+]

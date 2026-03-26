@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev, staging]
+  pull_request:
+    branches: [main, dev, staging]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION="8.21.2"
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Scan for secrets
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            gitleaks detect --source . --config .gitleaks.toml \
+              --log-opts "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
+              --redact --no-git=false --exit-code 1
+          else
+            gitleaks detect --source . --config .gitleaks.toml \
+              --log-opts "HEAD~1..HEAD" --redact --no-git=false --exit-code 1
+          fi
+
+  lint:
+    name: Lint
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run lint
+
+  format:
+    name: Format
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run format:check
+
+  type-check:
+    name: Type Check
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run type-check
+
+  test:
+    name: Test
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run test
+
+  build:
+    name: Build
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      - name: Validate package (dry-run publish)
+        run: npm publish --dry-run
+
+  audit:
+    name: Security Audit
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm audit --audit-level=critical
+
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    needs: [secret-scan, lint, format, type-check, test, build, audit]
+    if: always()
+    steps:
+      - name: Check all gates
+        run: |
+          echo "Secret Scan: ${{ needs.secret-scan.result }}"
+          echo "Lint:        ${{ needs.lint.result }}"
+          echo "Format:      ${{ needs.format.result }}"
+          echo "Type Check:  ${{ needs.type-check.result }}"
+          echo "Test:        ${{ needs.test.result }}"
+          echo "Build:       ${{ needs.build.result }}"
+          echo "Audit:       ${{ needs.audit.result }}"
+
+          FAIL=0
+          for gate in secret-scan lint format type-check test build audit; do
+            result="skipped"
+            case "$gate" in
+              secret-scan) result="${{ needs.secret-scan.result }}" ;;
+              lint)        result="${{ needs.lint.result }}" ;;
+              format)      result="${{ needs.format.result }}" ;;
+              type-check)  result="${{ needs.type-check.result }}" ;;
+              test)        result="${{ needs.test.result }}" ;;
+              build)       result="${{ needs.build.result }}" ;;
+              audit)       result="${{ needs.audit.result }}" ;;
+            esac
+            if [[ "$result" != "success" ]]; then
+              echo "::error::Gate '$gate' did not succeed: $result"
+              FAIL=1
+            fi
+          done
+
+          if [[ "$FAIL" -eq 1 ]]; then
+            echo "::error::One or more quality gates failed"
+            exit 1
+          fi
+
+          echo "All quality gates passed!"
