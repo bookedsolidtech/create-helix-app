@@ -143,6 +143,29 @@ jobs:
       - name: Validate package (dry-run publish)
         run: pnpm publish --dry-run --no-git-checks
 
+  smoke-test:
+    name: Smoke Test
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Smoke test - version flag
+        run: node dist/index.js --version
+      - name: Smoke test - help flag
+        run: node dist/index.js --help
+      - name: Smoke test - dry-run with template
+        run: |
+          node dist/index.js test-app --template react-next --dry-run --no-install
+          # Verify it exits cleanly (exit code 0)
+
   audit:
     name: Security Audit
     needs: [secret-scan]
@@ -162,7 +185,7 @@ jobs:
     name: Quality Gates
     runs-on: ubuntu-latest
     timeout-minutes: 1
-    needs: [secret-scan, lint, format, type-check, test, build, audit]
+    needs: [secret-scan, lint, format, type-check, test, build, audit, smoke-test]
     if: always()
     steps:
       - name: Check all gates
@@ -174,9 +197,10 @@ jobs:
           echo "Test:        ${{ needs.test.result }}"
           echo "Build:       ${{ needs.build.result }}"
           echo "Audit:       ${{ needs.audit.result }}"
+          echo "Smoke Test:  ${{ needs.smoke-test.result }}"
 
           FAIL=0
-          for gate in secret-scan lint format type-check test build audit; do
+          for gate in secret-scan lint format type-check test build audit smoke-test; do
             result="skipped"
             case "$gate" in
               secret-scan) result="${{ needs.secret-scan.result }}" ;;
@@ -186,6 +210,7 @@ jobs:
               test)        result="${{ needs.test.result }}" ;;
               build)       result="${{ needs.build.result }}" ;;
               audit)       result="${{ needs.audit.result }}" ;;
+              smoke-test)  result="${{ needs.smoke-test.result }}" ;;
             esac
             if [[ "$result" != "success" ]]; then
               echo "::error::Gate '$gate' did not succeed: $result"
