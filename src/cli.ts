@@ -11,6 +11,7 @@ import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
 import { validateProjectName } from './validation.js';
 import { parseArgs } from './args.js';
+import { runDoctor, formatDoctorOutput } from './doctor.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -454,6 +455,16 @@ export async function runCLI(): Promise<void> {
   if (subcommand === 'info') {
     runInfoCommand(subcommandArg, isJson);
     process.exit(0);
+  }
+
+  if (subcommand === 'doctor') {
+    const result = await runDoctor(HELIX_VERSION);
+    if (isJson) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(formatDoctorOutput(result));
+    }
+    process.exit(result.allPassed ? 0 : 1);
   }
 
   if (showHelp) {

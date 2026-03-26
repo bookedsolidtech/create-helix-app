@@ -4,7 +4,7 @@ import { isValidPreset } from './presets/loader.js';
 
 export interface ParsedArgs {
   // Subcommands
-  subcommand: 'list' | 'info' | null;
+  subcommand: 'list' | 'info' | 'doctor' | null;
   subcommandArg: string | null;
 
   // Project
@@ -37,9 +37,10 @@ export interface ParsedArgs {
 
 export function parseArgs(argv: string[]): ParsedArgs {
   // Subcommand detection
-  let subcommand: 'list' | 'info' | null = null;
+  let subcommand: 'list' | 'info' | 'doctor' | null = null;
   if (argv[0] === 'list') subcommand = 'list';
   else if (argv[0] === 'info') subcommand = 'info';
+  else if (argv[0] === 'doctor') subcommand = 'doctor';
 
   // Subcommand arg (for 'info' command)
   const subcommandArg =
