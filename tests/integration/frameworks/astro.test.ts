@@ -82,4 +82,39 @@ describe('astro integration', () => {
     );
     expect(tsconfig.compilerOptions.strict).toBe(true);
   });
+
+  it('typescript: false omits tsconfig.json', async () => {
+    const o = opts('astro-no-ts', { typescript: false });
+    await scaffoldProject(o);
+    const fs = await import('node:fs/promises');
+    await expect(fs.access(path.join(o.directory, 'tsconfig.json'))).rejects.toThrow();
+  });
+
+  it('generates eslint.config.js and .prettierrc when eslint is true', async () => {
+    const o = opts('astro-eslint', { eslint: true });
+    await scaffoldProject(o);
+    await assertFilesExist(o.directory, ['eslint.config.js', '.prettierrc']);
+  });
+
+  it('generates helix-tokens.css with design token overrides', async () => {
+    const o = opts('astro-tokens');
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('@import');
+    expect(css).toContain('--hx-color-primary');
+  });
+
+  it('helix-tokens.css includes dark mode overrides when darkMode is true', async () => {
+    const o = opts('astro-dark', { darkMode: true });
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('prefers-color-scheme: dark');
+  });
+
+  it('dry-run mode produces no files', async () => {
+    const o = opts('astro-dry', { dryRun: true });
+    await scaffoldProject(o);
+    const fs = await import('node:fs/promises');
+    await expect(fs.access(path.join(o.directory, 'package.json'))).rejects.toThrow();
+  });
 });
