@@ -1,6 +1,7 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import path from 'node:path';
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
 import { scaffoldProject } from './scaffold.js';
@@ -176,11 +177,13 @@ ${presetList}
     --no-tokens             Exclude HELiX design tokens
     --dark-mode             Enable dark mode support (default: true)
     --no-dark-mode          Disable dark mode support
+    --output-dir, -o <path> Use a custom output directory instead of the project name
 
   Examples:
     create-helix my-app                          # Interactive mode
     create-helix my-app --template react-next    # Skip framework prompt
     create-helix my-app --dry-run                # Preview without writing
+    create-helix my-app --output-dir ./projects  # Custom output directory
     create-helix my-theme --drupal --preset blog # Drupal blog theme
 `);
     process.exit(0);
@@ -206,6 +209,21 @@ ${presetList}
       `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
     );
     process.exit(1);
+  }
+
+  const outputDirArgIndex =
+    args.indexOf('--output-dir') !== -1 ? args.indexOf('--output-dir') : args.indexOf('-o');
+  const outputDirArg = outputDirArgIndex !== -1 ? (args[outputDirArgIndex + 1] ?? null) : null;
+
+  if (outputDirArg !== null) {
+    const resolvedOutputDir = path.resolve(process.cwd(), outputDirArg);
+    try {
+      fs.mkdirSync(resolvedOutputDir, { recursive: true });
+      fs.accessSync(resolvedOutputDir, fs.constants.W_OK);
+    } catch {
+      console.error(`Output directory is not writable: "${resolvedOutputDir}"`);
+      process.exit(1);
+    }
   }
 
   const bundlesArgIndex = args.indexOf('--bundles');
@@ -321,7 +339,10 @@ ${presetList}
 
   const options: ProjectOptions = {
     name: project.name as string,
-    directory: path.resolve(process.cwd(), project.name as string),
+    directory:
+      outputDirArg !== null
+        ? path.resolve(process.cwd(), outputDirArg)
+        : path.resolve(process.cwd(), project.name as string),
     framework: project.framework as Framework,
     componentBundles: project.componentBundles as ComponentBundle[],
     typescript: (project.features as string[]).includes('typescript'),
