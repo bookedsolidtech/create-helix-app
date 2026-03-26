@@ -86,11 +86,7 @@ export async function loadHelixRcHooks(projectRoot: string): Promise<LoadedHook[
 }
 
 function extractDefaultExport(mod: unknown): unknown {
-  if (
-    mod !== null &&
-    typeof mod === 'object' &&
-    'default' in mod
-  ) {
+  if (mod !== null && typeof mod === 'object' && 'default' in mod) {
     return (mod as Record<string, unknown>)['default'];
   }
   return mod;

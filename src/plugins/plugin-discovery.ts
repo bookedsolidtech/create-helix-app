@@ -86,9 +86,7 @@ export async function discoverPlugins(projectRoot: string): Promise<DiscoveredPl
     }
 
     if (!hasValidHook) {
-      console.warn(
-        `[create-helix] Warning: plugin "${pluginName}" has no valid hooks. Skipping.`,
-      );
+      console.warn(`[create-helix] Warning: plugin "${pluginName}" has no valid hooks. Skipping.`);
     }
   }
 
@@ -102,7 +100,7 @@ async function loadPlugin(pluginDir: string, pluginName: string): Promise<unknow
 
   if (await fs.pathExists(pkgPath)) {
     try {
-      const pkg = await fs.readJson(pkgPath) as Record<string, unknown>;
+      const pkg = (await fs.readJson(pkgPath)) as Record<string, unknown>;
       // Prefer exports > main
       if (typeof pkg['main'] === 'string') {
         entryPoint = path.join(pluginDir, pkg['main'] as string);

@@ -103,16 +103,24 @@ describe('HookManager — lifecycle events', () => {
   it('fires all hooks for the same lifecycle in registration order', async () => {
     const order: number[] = [];
     const manager = new HookManager();
-    manager.register('pre-scaffold', () => { order.push(1); });
-    manager.register('pre-scaffold', () => { order.push(2); });
-    manager.register('pre-scaffold', () => { order.push(3); });
+    manager.register('pre-scaffold', () => {
+      order.push(1);
+    });
+    manager.register('pre-scaffold', () => {
+      order.push(2);
+    });
+    manager.register('pre-scaffold', () => {
+      order.push(3);
+    });
     await manager.run('pre-scaffold', makeContext());
     expect(order).toEqual([1, 2, 3]);
   });
 
   it('returns unmodified context when hook returns void', async () => {
     const manager = new HookManager();
-    manager.register('pre-scaffold', () => { /* void */ });
+    manager.register('pre-scaffold', () => {
+      /* void */
+    });
     const ctx = makeContext();
     const result = await manager.run('pre-scaffold', ctx);
     expect(result).toEqual(ctx);
@@ -153,7 +161,10 @@ describe('HookManager — modify context', () => {
   it('passes modified context from one hook to the next', async () => {
     const manager = new HookManager();
     manager.register('pre-scaffold', (ctx) => ({ ...ctx, projectName: 'first' }));
-    manager.register('pre-scaffold', (ctx) => ({ ...ctx, projectName: ctx.projectName + '-second' }));
+    manager.register('pre-scaffold', (ctx) => ({
+      ...ctx,
+      projectName: ctx.projectName + '-second',
+    }));
     const result = await manager.run('pre-scaffold', makeContext());
     expect(result.projectName).toBe('first-second');
   });
@@ -162,9 +173,13 @@ describe('HookManager — modify context', () => {
 describe('HookManager — abort on error', () => {
   it('throws when a hook throws', async () => {
     const manager = new HookManager();
-    manager.register('pre-scaffold', () => {
-      throw new Error('hook failed intentionally');
-    }, 'test-plugin');
+    manager.register(
+      'pre-scaffold',
+      () => {
+        throw new Error('hook failed intentionally');
+      },
+      'test-plugin',
+    );
     await expect(manager.run('pre-scaffold', makeContext())).rejects.toThrow(
       'Hook "test-plugin" [pre-scaffold] aborted: hook failed intentionally',
     );
@@ -183,9 +198,13 @@ describe('HookManager — abort on error', () => {
 
   it('includes hook name in error when pluginName provided', async () => {
     const manager = new HookManager();
-    manager.register('post-scaffold', () => {
-      throw new Error('bad');
-    }, 'my-plugin');
+    manager.register(
+      'post-scaffold',
+      () => {
+        throw new Error('bad');
+      },
+      'my-plugin',
+    );
     await expect(manager.run('post-scaffold', makeContext())).rejects.toThrow('my-plugin');
   });
 });
@@ -221,7 +240,9 @@ describe('.helixrc.json lifecycle', () => {
 
   it('buildHookContext accepts custom files', () => {
     const opts = makeOptions();
-    const ctx = buildHookContext('my-app', 'react-next', '/tmp/my-app', opts, { 'a.ts': 'content' });
+    const ctx = buildHookContext('my-app', 'react-next', '/tmp/my-app', opts, {
+      'a.ts': 'content',
+    });
     expect(ctx.files).toEqual({ 'a.ts': 'content' });
   });
 });

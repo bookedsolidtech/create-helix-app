@@ -100,15 +100,10 @@ describe('loadHelixRcHooks — hook file resolution', () => {
   it('throws when hook file does not export a default function', async () => {
     const scriptDir = path.join(TEST_DIR, 'scripts');
     await fs.ensureDir(scriptDir);
-    await fs.writeFile(
-      path.join(scriptDir, 'bad.mjs'),
-      `export const notAFunction = 'oops';\n`,
-    );
+    await fs.writeFile(path.join(scriptDir, 'bad.mjs'), `export const notAFunction = 'oops';\n`);
     await fs.writeJson(path.join(TEST_DIR, '.helixrc.json'), {
       hooks: { 'pre-scaffold': './scripts/bad.mjs' },
     });
-    await expect(loadHelixRcHooks(TEST_DIR)).rejects.toThrow(
-      'must export a default function',
-    );
+    await expect(loadHelixRcHooks(TEST_DIR)).rejects.toThrow('must export a default function');
   });
 });

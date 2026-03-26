@@ -14,11 +14,7 @@ afterAll(async () => {
   await fs.remove(TEST_DIR);
 });
 
-async function createPlugin(
-  pluginName: string,
-  content: string,
-  pkgMain?: string,
-): Promise<void> {
+async function createPlugin(pluginName: string, content: string, pkgMain?: string): Promise<void> {
   const pluginDir = path.join(TEST_DIR, 'node_modules', pluginName);
   await fs.ensureDir(pluginDir);
   const mainFile = pkgMain ?? 'index.mjs';
@@ -83,10 +79,7 @@ describe('discoverPlugins — plugin scanning', () => {
 
 describe('discoverPlugins — invalid plugins', () => {
   it('logs warning and continues when plugin has no hooks', async () => {
-    await createPlugin(
-      'create-helix-plugin-empty',
-      `export default { name: 'empty-plugin' };\n`,
-    );
+    await createPlugin('create-helix-plugin-empty', `export default { name: 'empty-plugin' };\n`);
     const plugins = await discoverPlugins(TEST_DIR);
     expect(plugins).toEqual([]);
   });
