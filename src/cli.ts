@@ -438,6 +438,7 @@ ${presetList}
     create-helix my-theme --drupal --preset blog # Drupal blog theme
     create-helix upgrade                         # Upgrade HELiX deps
     create-helix upgrade --dry-run               # Preview upgrade without writing
+    create-helix doctor                          # Run environment health checks
 `);
     process.exit(0);
   }
