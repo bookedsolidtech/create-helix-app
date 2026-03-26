@@ -1,5 +1,11 @@
 # create-helix
 
+## 0.8.0
+
+### Minor Changes
+
+- 3f2cc48: Add `create-helix list` subcommand to show available templates and presets (with --json support). Add --quiet/-q flag for CI-friendly minimal output. Add CI Node.js 20+22 version matrix. Add E2E smoke test to CI workflow. Add CLI argument validation unit tests.
+
 ## 0.7.4
 
 ### Patch Changes
