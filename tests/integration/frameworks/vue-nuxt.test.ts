@@ -2,13 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldProject } from '../../../src/scaffold.js';
 import type { ProjectOptions } from '../../../src/types.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readJson,
-  readText,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readJson, readText } from '../setup.js';
 
 const ROOT = makeTmpRoot('vue-nuxt');
 
@@ -72,7 +66,10 @@ describe('vue-nuxt integration', () => {
   it('package.json has correct nuxt dependencies', async () => {
     const o = opts('vn-deps');
     await scaffoldProject(o);
-    const pkg = await readJson<{ dependencies: Record<string, string> }>(o.directory, 'package.json');
+    const pkg = await readJson<{ dependencies: Record<string, string> }>(
+      o.directory,
+      'package.json',
+    );
     expect(pkg.dependencies['nuxt']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
   });

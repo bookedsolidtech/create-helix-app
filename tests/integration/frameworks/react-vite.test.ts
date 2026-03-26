@@ -2,13 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldProject } from '../../../src/scaffold.js';
 import type { ProjectOptions } from '../../../src/types.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readJson,
-  readText,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readJson, readText } from '../setup.js';
 
 const ROOT = makeTmpRoot('react-vite');
 
@@ -65,10 +59,10 @@ describe('react-vite integration', () => {
   it('package.json has correct react-vite dependencies', async () => {
     const o = opts('rv-deps');
     await scaffoldProject(o);
-    const pkg = await readJson<{ dependencies: Record<string, string>; devDependencies: Record<string, string> }>(
-      o.directory,
-      'package.json',
-    );
+    const pkg = await readJson<{
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    }>(o.directory, 'package.json');
     expect(pkg.dependencies['react']).toBeDefined();
     expect(pkg.dependencies['react-dom']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();

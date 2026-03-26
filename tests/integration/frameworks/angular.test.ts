@@ -2,13 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldProject } from '../../../src/scaffold.js';
 import type { ProjectOptions } from '../../../src/types.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readJson,
-  readText,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readJson, readText } from '../setup.js';
 
 const ROOT = makeTmpRoot('angular');
 

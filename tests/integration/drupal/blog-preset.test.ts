@@ -1,19 +1,27 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readText,
-  listSubdirs,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
 
 const ROOT = makeTmpRoot('drupal-blog');
 
 // blog preset: standard (7) + blog-specific (5) = 12 SDCs
-const STANDARD_SDCS = ['node-teaser', 'views-grid', 'hero-banner', 'site-header', 'site-footer', 'breadcrumb', 'search-form'];
-const BLOG_SPECIFIC_SDCS = ['article-full', 'author-byline', 'related-articles', 'tag-cloud', 'newsletter-signup'];
+const STANDARD_SDCS = [
+  'node-teaser',
+  'views-grid',
+  'hero-banner',
+  'site-header',
+  'site-footer',
+  'breadcrumb',
+  'search-form',
+];
+const BLOG_SPECIFIC_SDCS = [
+  'article-full',
+  'author-byline',
+  'related-articles',
+  'tag-cloud',
+  'newsletter-signup',
+];
 const ALL_BLOG_SDCS = [...STANDARD_SDCS, ...BLOG_SPECIFIC_SDCS];
 
 afterAll(async () => {

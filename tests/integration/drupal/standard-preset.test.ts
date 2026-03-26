@@ -1,13 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readText,
-  listSubdirs,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
 
 const ROOT = makeTmpRoot('drupal-standard');
 

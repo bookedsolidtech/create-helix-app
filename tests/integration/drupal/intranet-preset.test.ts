@@ -1,19 +1,26 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readText,
-  listSubdirs,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
 
 const ROOT = makeTmpRoot('drupal-intranet');
 
 // intranet preset: standard (7) + intranet-specific (4) = 11 SDCs
-const STANDARD_SDCS = ['node-teaser', 'views-grid', 'hero-banner', 'site-header', 'site-footer', 'breadcrumb', 'search-form'];
-const INTRANET_SPECIFIC_SDCS = ['dashboard-card', 'notification-banner', 'data-table-view', 'user-profile'];
+const STANDARD_SDCS = [
+  'node-teaser',
+  'views-grid',
+  'hero-banner',
+  'site-header',
+  'site-footer',
+  'breadcrumb',
+  'search-form',
+];
+const INTRANET_SPECIFIC_SDCS = [
+  'dashboard-card',
+  'notification-banner',
+  'data-table-view',
+  'user-profile',
+];
 const ALL_INTRANET_SDCS = [...STANDARD_SDCS, ...INTRANET_SPECIFIC_SDCS];
 
 afterAll(async () => {

@@ -1,20 +1,33 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readText,
-  listSubdirs,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
 
 const ROOT = makeTmpRoot('drupal-healthcare');
 
 // healthcare preset: standard (7) + blog (5) + healthcare (4) = 16 SDCs
-const STANDARD_SDCS = ['node-teaser', 'views-grid', 'hero-banner', 'site-header', 'site-footer', 'breadcrumb', 'search-form'];
-const BLOG_SDCS = ['article-full', 'author-byline', 'related-articles', 'tag-cloud', 'newsletter-signup'];
-const HEALTHCARE_SPECIFIC_SDCS = ['provider-card', 'appointment-cta', 'condition-tag', 'medical-disclaimer'];
+const STANDARD_SDCS = [
+  'node-teaser',
+  'views-grid',
+  'hero-banner',
+  'site-header',
+  'site-footer',
+  'breadcrumb',
+  'search-form',
+];
+const BLOG_SDCS = [
+  'article-full',
+  'author-byline',
+  'related-articles',
+  'tag-cloud',
+  'newsletter-signup',
+];
+const HEALTHCARE_SPECIFIC_SDCS = [
+  'provider-card',
+  'appointment-cta',
+  'condition-tag',
+  'medical-disclaimer',
+];
 const ALL_HEALTHCARE_SDCS = [...STANDARD_SDCS, ...BLOG_SDCS, ...HEALTHCARE_SPECIFIC_SDCS];
 
 afterAll(async () => {

@@ -2,13 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldProject } from '../../../src/scaffold.js';
 import type { ProjectOptions } from '../../../src/types.js';
-import {
-  makeTmpRoot,
-  removeTempDir,
-  assertFilesExist,
-  readJson,
-  readText,
-} from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readJson, readText } from '../setup.js';
 
 const ROOT = makeTmpRoot('react-next');
 
@@ -62,7 +56,10 @@ describe('react-next integration', () => {
   it('package.json has correct react-next dependencies', async () => {
     const o = opts('rn-deps');
     await scaffoldProject(o);
-    const pkg = await readJson<{ dependencies: Record<string, string> }>(o.directory, 'package.json');
+    const pkg = await readJson<{ dependencies: Record<string, string> }>(
+      o.directory,
+      'package.json',
+    );
     expect(pkg.dependencies['next']).toBeDefined();
     expect(pkg.dependencies['react']).toBeDefined();
     expect(pkg.dependencies['react-dom']).toBeDefined();
