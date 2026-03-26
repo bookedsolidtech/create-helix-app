@@ -14,12 +14,12 @@ npx create-helix-app --drupal --preset healthcare
 
 ## Available Presets
 
-| Preset | Description | SDC Count |
-|--------|-------------|-----------|
-| `standard` | Core Drupal SDCs for general-purpose themes | 7 |
-| `blog` | Standard + blog-specific content components | 12 |
-| `healthcare` | Blog + healthcare-specific components | 16 |
-| `intranet` | Standard + employee portal components | 11 |
+| Preset       | Description                                 | SDC Count |
+| ------------ | ------------------------------------------- | --------- |
+| `standard`   | Core Drupal SDCs for general-purpose themes | 7         |
+| `blog`       | Standard + blog-specific content components | 12        |
+| `healthcare` | Blog + healthcare-specific components       | 16        |
+| `intranet`   | Standard + employee portal components       | 11        |
 
 ## Generated Structure
 

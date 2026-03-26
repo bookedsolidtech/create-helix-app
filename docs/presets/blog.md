@@ -6,13 +6,13 @@ The blog preset extends [standard](./standard.md) with editorial content compone
 
 Includes all [standard SDCs](./standard.md), plus:
 
-| SDC | Purpose |
-|-----|---------|
-| `article-full` | Full article display with body and metadata |
-| `author-byline` | Author name, avatar, and bio snippet |
-| `related-articles` | Contextual related content block |
-| `tag-cloud` | Taxonomy term cloud with weighting |
-| `newsletter-signup` | Email capture with consent messaging |
+| SDC                 | Purpose                                     |
+| ------------------- | ------------------------------------------- |
+| `article-full`      | Full article display with body and metadata |
+| `author-byline`     | Author name, avatar, and bio snippet        |
+| `related-articles`  | Contextual related content block            |
+| `tag-cloud`         | Taxonomy term cloud with weighting          |
+| `newsletter-signup` | Email capture with consent messaging        |
 
 ## Dependencies
 

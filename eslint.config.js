@@ -14,13 +14,16 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/explicit-function-return-type': ['warn', {
-        allowExpressions: true,
-        allowTypedFunctionExpressions: true,
-      }],
+      '@typescript-eslint/explicit-function-return-type': [
+        'warn',
+        {
+          allowExpressions: true,
+          allowTypedFunctionExpressions: true,
+        },
+      ],
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', '*.js', '*.mjs'],
+    ignores: ['dist/', 'node_modules/', 'coverage/', '*.js', '*.mjs', 'src/__tests__/'],
   },
 );

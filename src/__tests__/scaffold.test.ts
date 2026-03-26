@@ -255,7 +255,7 @@ describe('scaffoldProject — vue-vite', () => {
     await scaffoldProject(opts);
     const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
     expect(viteConfig).toContain('isCustomElement');
-    expect(viteConfig).toContain("hx-");
+    expect(viteConfig).toContain('hx-');
   });
 
   it('package.json has vite scripts', async () => {
@@ -399,11 +399,7 @@ describe('scaffoldProject — astro', () => {
     const opts = makeOptions({ name: 'astro-app', framework: 'astro' });
     await scaffoldProject(opts);
 
-    const expectedFiles = [
-      'package.json',
-      'astro.config.mjs',
-      'src/pages/index.astro',
-    ];
+    const expectedFiles = ['package.json', 'astro.config.mjs', 'src/pages/index.astro'];
 
     for (const file of expectedFiles) {
       expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
@@ -426,7 +422,7 @@ describe('scaffoldProject — astro', () => {
       path.join(opts.directory, 'src', 'pages', 'index.astro'),
       'utf-8',
     );
-    expect(page).toContain("@helixui/library");
+    expect(page).toContain('@helixui/library');
   });
 });
 
@@ -455,7 +451,7 @@ describe('scaffoldProject — vue-nuxt', () => {
     await scaffoldProject(opts);
     const config = await fs.readFile(path.join(opts.directory, 'nuxt.config.ts'), 'utf-8');
     expect(config).toContain('isCustomElement');
-    expect(config).toContain("hx-");
+    expect(config).toContain('hx-');
   });
 
   it('helix plugin imports @helixui/library', async () => {
@@ -465,7 +461,7 @@ describe('scaffoldProject — vue-nuxt', () => {
       path.join(opts.directory, 'plugins', 'helix.client.ts'),
       'utf-8',
     );
-    expect(plugin).toContain("@helixui/library");
+    expect(plugin).toContain('@helixui/library');
   });
 
   it('package.json has nuxt scripts', async () => {

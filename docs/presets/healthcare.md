@@ -6,12 +6,12 @@ The healthcare preset extends [blog](./blog.md) with components specific to pati
 
 Includes all [blog SDCs](./blog.md) (which include all [standard SDCs](./standard.md)), plus:
 
-| SDC | Purpose |
-|-----|---------|
-| `provider-card` | Clinician profile with specialty and contact |
-| `appointment-cta` | Appointment scheduling call-to-action |
-| `condition-tag` | Medical condition taxonomy term display |
-| `medical-disclaimer` | Required legal/medical disclaimer block |
+| SDC                  | Purpose                                      |
+| -------------------- | -------------------------------------------- |
+| `provider-card`      | Clinician profile with specialty and contact |
+| `appointment-cta`    | Appointment scheduling call-to-action        |
+| `condition-tag`      | Medical condition taxonomy term display      |
+| `medical-disclaimer` | Required legal/medical disclaimer block      |
 
 ## Dependencies
 

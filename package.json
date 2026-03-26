@@ -19,8 +19,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run lint && npm run format:check && npm run type-check",
-    "preflight": "npm run verify && npm run test",
+    "verify": "pnpm run lint && pnpm run format:check && pnpm run type-check",
+    "preflight": "pnpm run verify && pnpm run test",
     "prepare": "husky"
   },
   "dependencies": {
@@ -41,8 +41,10 @@
     "husky": "^9.0.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0",
+    "pnpm": ">=9"
   },
+  "packageManager": "pnpm@9.15.9",
   "publishConfig": {
     "access": "public"
   },

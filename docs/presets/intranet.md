@@ -6,12 +6,12 @@ The intranet preset extends [standard](./standard.md) with components for intern
 
 Includes all [standard SDCs](./standard.md), plus:
 
-| SDC | Purpose |
-|-----|---------|
-| `dashboard-card` | Metric and status card for dashboard views |
-| `notification-banner` | Dismissible system notification |
-| `data-table-view` | Structured data table with Views integration |
-| `user-profile` | Employee profile summary with avatar |
+| SDC                   | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `dashboard-card`      | Metric and status card for dashboard views   |
+| `notification-banner` | Dismissible system notification              |
+| `data-table-view`     | Structured data table with Views integration |
+| `user-profile`        | Employee profile summary with avatar         |
 
 ## Dependencies
 
