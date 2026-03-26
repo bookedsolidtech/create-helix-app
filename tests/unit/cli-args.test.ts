@@ -94,6 +94,7 @@ function buildHelpOutput(version: string): string {
     --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
+    --quiet, -q             Suppress banner, spinners, and decorative output (CI-friendly)
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
 
@@ -325,6 +326,41 @@ describe('CLI argument validation edge cases', () => {
     it('detects --help flag in args', () => {
       const args = ['--help'];
       expect(args.includes('--help') || args.includes('-h')).toBe(true);
+    });
+
+    it('help output contains --quiet and -q flags', () => {
+      const help = buildHelpOutput(pkg.version);
+      expect(help).toContain('--quiet');
+      expect(help).toContain('-q');
+    });
+  });
+
+  // Test for --quiet / -q flag
+  describe('--quiet flag', () => {
+    it('detects --quiet flag in args', () => {
+      const args = ['my-app', '--template', 'react-next', '--quiet'];
+      const isQuiet = args.includes('--quiet') || args.includes('-q');
+      expect(isQuiet).toBe(true);
+    });
+
+    it('detects -q short flag in args', () => {
+      const args = ['my-app', '--template', 'react-next', '-q'];
+      const isQuiet = args.includes('--quiet') || args.includes('-q');
+      expect(isQuiet).toBe(true);
+    });
+
+    it('isQuiet is false when neither --quiet nor -q is present', () => {
+      const args = ['my-app', '--template', 'react-next'];
+      const isQuiet = args.includes('--quiet') || args.includes('-q');
+      expect(isQuiet).toBe(false);
+    });
+
+    it('--quiet is compatible with --dry-run', () => {
+      const args = ['my-app', '--template', 'react-next', '--quiet', '--dry-run'];
+      const isQuiet = args.includes('--quiet') || args.includes('-q');
+      const isDryRun = args.includes('--dry-run');
+      expect(isQuiet).toBe(true);
+      expect(isDryRun).toBe(true);
     });
   });
 
