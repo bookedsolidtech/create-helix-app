@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import pc from 'picocolors';
+import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions } from './types.js';
 
@@ -122,6 +123,17 @@ function assertNoPathTraversal(targetPath: string): void {
   }
 }
 
+function getScaffoldErrorMessage(err: unknown): string | null {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EACCES') return 'Cannot write to directory. Check permissions.';
+    if (code === 'ENOSPC') return 'Disk full. Free some space and try again.';
+    if (code === 'EEXIST')
+      return 'Directory already exists and is not empty. Choose a different name or use --force.';
+  }
+  return null;
+}
+
 export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   const template = getTemplate(options.framework);
   if (!template) {
@@ -139,6 +151,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     _dryRunActive = true;
     _dryRunEntries = [];
   }
+
+  // Track whether the directory existed before scaffolding, for cleanup on failure.
+  const dirExistedBefore = await fs.pathExists(options.directory);
 
   try {
     await safeEnsureDir(options.directory);
@@ -236,6 +251,20 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
 
     // Write .gitignore
     await writeGitignore(options);
+  } catch (err) {
+    _dryRunActive = false;
+
+    // Clean up any partially created files if the directory was created by this scaffold run.
+    if (!dirExistedBefore && (await fs.pathExists(options.directory))) {
+      await fs.remove(options.directory);
+    }
+
+    const friendlyMessage = getScaffoldErrorMessage(err);
+    if (friendlyMessage) {
+      p.log.error(friendlyMessage);
+      throw new Error(friendlyMessage);
+    }
+    throw err;
   } finally {
     _dryRunActive = false;
   }
