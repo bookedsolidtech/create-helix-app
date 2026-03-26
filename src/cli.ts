@@ -286,9 +286,7 @@ export async function runCLI(): Promise<void> {
   s.stop(pc.green('Project scaffolded'));
 
   if (isNoInstall) {
-    console.log(
-      pc.dim('  Skipping dependency installation. Run `npm install` when ready.'),
-    );
+    console.log(pc.dim('  Skipping dependency installation. Run `npm install` when ready.'));
   }
 
   if (options.installDeps) {
