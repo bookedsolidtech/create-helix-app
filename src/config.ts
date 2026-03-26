@@ -13,8 +13,19 @@ export interface HelixConfigDefaults {
   bundles?: ComponentBundle[];
 }
 
+export interface HelixProfile {
+  template?: Framework;
+  typescript?: boolean;
+  eslint?: boolean;
+  darkMode?: boolean;
+  tokens?: boolean;
+  bundles?: ComponentBundle[];
+  preset?: DrupalPreset;
+}
+
 export interface HelixConfig {
   defaults?: HelixConfigDefaults;
+  profiles?: Record<string, HelixProfile>;
 }
 
 export interface LoadConfigResult {
@@ -78,16 +89,7 @@ export function readEnvVars(): EnvVarOverrides {
   return result;
 }
 
-export function loadConfig(noConfig: boolean): LoadConfigResult {
-  if (noConfig) {
-    return { config: {}, configFile: null };
-  }
-
-  const candidates = [
-    path.resolve(process.cwd(), '.helixrc.json'),
-    path.resolve(os.homedir(), '.helixrc.json'),
-  ];
-
+function readHelixRcFile(candidates: string[]): { raw: HelixConfig; configFile: string } | null {
   for (const candidate of candidates) {
     let raw: string;
     try {
@@ -101,11 +103,74 @@ export function loadConfig(noConfig: boolean): LoadConfigResult {
       parsed = JSON.parse(raw);
     } catch {
       logger.warn(`Warning: .helixrc.json at "${candidate}" contains invalid JSON — skipping`);
-      return { config: {}, configFile: candidate };
+      return { raw: {}, configFile: candidate };
     }
 
-    return { config: parsed as HelixConfig, configFile: candidate };
+    return { raw: parsed as HelixConfig, configFile: candidate };
   }
 
-  return { config: {}, configFile: null };
+  return null;
+}
+
+export function loadConfig(noConfig: boolean, profileName?: string): LoadConfigResult {
+  if (noConfig) {
+    return { config: {}, configFile: null };
+  }
+
+  const candidates = [
+    path.resolve(process.cwd(), '.helixrc.json'),
+    path.resolve(os.homedir(), '.helixrc.json'),
+  ];
+
+  const found = readHelixRcFile(candidates);
+
+  if (found === null) {
+    return { config: {}, configFile: null };
+  }
+
+  const { raw, configFile } = found;
+
+  if (profileName === undefined) {
+    return { config: raw, configFile };
+  }
+
+  // Profile merge: defaults < helixrc default section < selected profile
+  const profiles = raw.profiles ?? {};
+  if (!(profileName in profiles)) {
+    throw new Error(`Unknown profile: ${profileName}`);
+  }
+
+  const selectedProfile = profiles[profileName] ?? {};
+  const mergedDefaults: HelixConfigDefaults = {
+    ...raw.defaults,
+    ...selectedProfile,
+  };
+
+  const mergedConfig: HelixConfig = {
+    ...raw,
+    defaults: mergedDefaults,
+  };
+
+  return { config: mergedConfig, configFile };
+}
+
+export function listProfiles(configDir?: string): string[] {
+  const dir = configDir ?? process.cwd();
+  const candidates = [
+    path.resolve(dir, '.helixrc.json'),
+    path.resolve(os.homedir(), '.helixrc.json'),
+  ];
+
+  const found = readHelixRcFile(candidates);
+
+  if (found === null) {
+    return [];
+  }
+
+  const profiles = found.raw.profiles;
+  if (profiles === undefined) {
+    return [];
+  }
+
+  return Object.keys(profiles);
 }

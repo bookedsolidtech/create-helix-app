@@ -16,7 +16,7 @@ import {
   validateDirectory,
 } from './validation.js';
 import { parseArgs } from './args.js';
-import { loadConfig, readEnvVars } from './config.js';
+import { loadConfig, listProfiles, readEnvVars } from './config.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
 
@@ -338,11 +338,20 @@ export async function runCLI(): Promise<void> {
     tokens: tokensFlagRaw,
     explicitFlags,
     projectName,
+    profile: profileArg,
   } = parsed;
 
   // Load config file and environment variables
   // Precedence: CLI flags > env vars > .helixrc.json > defaults
-  const { config: helixConfig } = loadConfig(noConfig);
+  let helixConfigResult: ReturnType<typeof loadConfig>;
+  try {
+    helixConfigResult = loadConfig(noConfig, profileArg ?? undefined);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(message);
+    process.exit(1);
+  }
+  const { config: helixConfig } = helixConfigResult;
   const cfgDefaults = helixConfig.defaults ?? {};
   const envVars = readEnvVars();
 
@@ -395,6 +404,22 @@ export async function runCLI(): Promise<void> {
     const { runUpgrade } = await import('./commands/upgrade.js');
     await runUpgrade(process.cwd(), { dryRun: isDryRun });
     process.exit(0);
+  }
+
+  if (subcommand === 'config') {
+    if (subcommandArg === 'list-profiles') {
+      const profiles = listProfiles();
+      if (profiles.length === 0) {
+        console.log('No profiles defined in .helixrc.json');
+      } else {
+        for (const name of profiles) {
+          console.log(name);
+        }
+      }
+      process.exit(0);
+    }
+    console.error(`Unknown config subcommand: "${subcommandArg ?? ''}". Available: list-profiles`);
+    process.exit(1);
   }
 
   if (showHelp) {

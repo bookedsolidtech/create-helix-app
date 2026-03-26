@@ -4,7 +4,7 @@ import { isValidPreset } from './presets/loader.js';
 
 export interface ParsedArgs {
   // Subcommands
-  subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | null;
+  subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | 'config' | null;
   subcommandArg: string | null;
 
   // Project
@@ -19,6 +19,7 @@ export interface ParsedArgs {
   isDrupal: boolean;
   noConfig: boolean;
   verbose: boolean;
+  profile: string | null;
 
   // Template options
   template: Framework | null;
@@ -47,15 +48,18 @@ export interface ParsedArgs {
 
 export function parseArgs(argv: string[]): ParsedArgs {
   // Subcommand detection
-  let subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | null = null;
+  let subcommand: 'list' | 'info' | 'doctor' | 'upgrade' | 'config' | null = null;
   if (argv[0] === 'list') subcommand = 'list';
   else if (argv[0] === 'info') subcommand = 'info';
   else if (argv[0] === 'doctor') subcommand = 'doctor';
   else if (argv[0] === 'upgrade') subcommand = 'upgrade';
+  else if (argv[0] === 'config') subcommand = 'config';
 
-  // Subcommand arg (for 'info' command)
+  // Subcommand arg (for 'info' and 'config' commands)
   const subcommandArg =
-    subcommand === 'info' ? (argv.find((a) => !a.startsWith('--') && a !== 'info') ?? null) : null;
+    subcommand === 'info' || subcommand === 'config'
+      ? (argv.find((a) => !a.startsWith('--') && a !== subcommand) ?? null)
+      : null;
 
   // Project name: first arg if not a flag and not a subcommand
   const projectName =
@@ -74,6 +78,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const isDrupal = argv.includes('--drupal');
   const noConfig = argv.includes('--no-config');
   const verbose = argv.includes('--verbose');
+
+  // --profile
+  const profileArgIndex = argv.indexOf('--profile');
+  const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -146,6 +154,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     isDrupal,
     noConfig,
     verbose,
+    profile,
     template,
     preset,
     bundles,
