@@ -150,6 +150,8 @@ export async function runCLI(): Promise<void> {
     --preset <name>         Select a Drupal preset directly (standard, blog, healthcare, intranet)
     --bundles <list>        Select component bundles (comma-separated, skips prompt)
                             Valid values: all,core,forms,navigation,data-display,feedback,layout
+    --typescript            Use TypeScript (default: true)
+    --no-typescript         Disable TypeScript
     --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
@@ -172,6 +174,7 @@ export async function runCLI(): Promise<void> {
   const isForce = args.includes('--force');
   const isNoInstall = args.includes('--no-install');
   const isDrupal = args.includes('--drupal');
+  const typescriptFlag = args.includes('--no-typescript') ? false : true;
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
 
@@ -250,8 +253,17 @@ export async function runCLI(): Promise<void> {
               required: true,
             }),
 
-      features: () =>
-        p.multiselect({
+      features: () => {
+        const defaultFeatures = [
+          ...(typescriptFlag ? ['typescript'] : []),
+          'eslint',
+          'tokens',
+          'examples',
+        ];
+        if (templateArg !== null) {
+          return Promise.resolve(defaultFeatures);
+        }
+        return p.multiselect({
           message: 'Additional features',
           options: [
             { value: 'typescript', label: 'TypeScript' },
@@ -260,9 +272,16 @@ export async function runCLI(): Promise<void> {
             { value: 'dark-mode', label: 'Dark Mode Support' },
             { value: 'examples', label: 'Example Pages (forms, dashboard, settings)' },
           ],
-          initialValues: ['typescript', 'eslint', 'tokens', 'examples'],
+          initialValues: defaultFeatures as (
+            | 'typescript'
+            | 'eslint'
+            | 'tokens'
+            | 'dark-mode'
+            | 'examples'
+          )[],
           required: false,
-        }),
+        });
+      },
 
       installDeps: () =>
         isNoInstall
