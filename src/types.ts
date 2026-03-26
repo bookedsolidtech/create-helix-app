@@ -11,7 +11,8 @@ export type Framework =
   | 'astro'
   | 'vanilla'
   | 'lit-vite'
-  | 'preact-vite';
+  | 'preact-vite'
+  | 'stencil';
 
 export type ComponentBundle =
   | 'all'
