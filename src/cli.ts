@@ -16,7 +16,7 @@ import {
   validateDirectory,
 } from './validation.js';
 import { parseArgs } from './args.js';
-import { loadConfig } from './config.js';
+import { loadConfig, readEnvVars } from './config.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
 
@@ -322,16 +322,16 @@ export async function runCLI(): Promise<void> {
     showHelp,
     dryRun: isDryRun,
     force: isForce,
-    noInstall: isNoInstall,
+    noInstall: isNoInstallFromArgs,
     quiet: isQuiet,
     json: isJson,
     isDrupal,
     noConfig,
-    verbose: isVerbose,
+    verbose: isVerboseFromArgs,
     template: templateArgRaw,
-    preset: presetArg,
+    preset: presetArgFromCli,
     bundles: bundlesFromFlagRaw,
-    outputDir: outputDirArg,
+    outputDir: outputDirFromArgs,
     typescript: typescriptFlagRaw,
     eslint: eslintFlagRaw,
     darkMode: darkModeFlagRaw,
@@ -340,18 +340,30 @@ export async function runCLI(): Promise<void> {
     projectName,
   } = parsed;
 
-  // Load config file (built-in defaults → config file → CLI flags)
+  // Load config file and environment variables
+  // Precedence: CLI flags > env vars > .helixrc.json > defaults
   const { config: helixConfig } = loadConfig(noConfig);
   const cfgDefaults = helixConfig.defaults ?? {};
+  const envVars = readEnvVars();
 
-  const templateArg = templateArgRaw ?? cfgDefaults.template ?? null;
-  const bundlesFromFlag = bundlesFromFlagRaw ?? cfgDefaults.bundles ?? null;
+  const templateArg = templateArgRaw ?? envVars.template ?? cfgDefaults.template ?? null;
+  const bundlesFromFlag = bundlesFromFlagRaw ?? envVars.bundles ?? cfgDefaults.bundles ?? null;
   const typescriptFlag = explicitFlags.typescript
     ? typescriptFlagRaw
-    : (cfgDefaults.typescript ?? true);
-  const eslintFlag = explicitFlags.eslint ? eslintFlagRaw : (cfgDefaults.eslint ?? true);
-  const darkModeFlag = explicitFlags.darkMode ? darkModeFlagRaw : (cfgDefaults.darkMode ?? true);
-  const tokensFlag = explicitFlags.tokens ? tokensFlagRaw : (cfgDefaults.tokens ?? true);
+    : (envVars.typescript ?? cfgDefaults.typescript ?? true);
+  const eslintFlag = explicitFlags.eslint
+    ? eslintFlagRaw
+    : (envVars.eslint ?? cfgDefaults.eslint ?? true);
+  const darkModeFlag = explicitFlags.darkMode
+    ? darkModeFlagRaw
+    : (envVars.darkMode ?? cfgDefaults.darkMode ?? true);
+  const tokensFlag = explicitFlags.tokens
+    ? tokensFlagRaw
+    : (envVars.tokens ?? cfgDefaults.tokens ?? true);
+  const presetArg = presetArgFromCli ?? envVars.preset ?? null;
+  const outputDirArg = outputDirFromArgs ?? envVars.outputDir ?? null;
+  const isVerbose = isVerboseFromArgs || (envVars.verbose ?? false);
+  const isNoInstall = isNoInstallFromArgs || (envVars.offline ?? false);
 
   if (showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
@@ -430,6 +442,20 @@ ${presetList}
     --no-dark-mode          Disable dark mode support
     --output-dir, -o <path> Use a custom output directory instead of the project name
 
+  Environment Variables:
+    HELIX_TEMPLATE=<name>     Framework template (same values as --template)
+    HELIX_TYPESCRIPT=<bool>   Enable TypeScript (true/false/1/0/yes/no)
+    HELIX_ESLINT=<bool>       Include ESLint + Prettier
+    HELIX_DARK_MODE=<bool>    Enable dark mode support
+    HELIX_TOKENS=<bool>       Include HELiX design tokens
+    HELIX_BUNDLES=<list>      Component bundles (comma-separated)
+    HELIX_OUTPUT_DIR=<path>   Custom output directory
+    HELIX_PRESET=<name>       Drupal preset (same values as --preset)
+    HELIX_VERBOSE=<bool>      Show detailed output
+    HELIX_OFFLINE=<bool>      Skip dependency installation (offline mode)
+
+    Precedence: CLI flags > env vars > .helixrc.json > defaults
+
   Examples:
     create-helix my-app                          # Interactive mode
     create-helix my-app --template react-next    # Skip framework prompt
@@ -439,6 +465,7 @@ ${presetList}
     create-helix upgrade                         # Upgrade HELiX deps
     create-helix upgrade --dry-run               # Preview upgrade without writing
     create-helix doctor                          # Run environment health checks
+    HELIX_TEMPLATE=react-vite create-helix app   # Use env var for template
 `);
     process.exit(0);
   }
