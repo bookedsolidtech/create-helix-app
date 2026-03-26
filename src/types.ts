@@ -12,7 +12,8 @@ export type Framework =
   | 'vanilla'
   | 'lit-vite'
   | 'preact-vite'
-  | 'stencil';
+  | 'stencil'
+  | 'ember';
 
 export type ComponentBundle =
   | 'all'
