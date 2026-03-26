@@ -24,6 +24,7 @@ const VALID_FRAMEWORKS: Framework[] = [
   'lit-vite',
   'preact-vite',
   'stencil',
+  'ember',
 ];
 
 /** Known valid Drupal preset IDs — kept in sync with the DrupalPreset union type. */
