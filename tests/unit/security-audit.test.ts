@@ -322,7 +322,94 @@ describe('execSync usage is safe (no user input interpolation)', () => {
   });
 });
 
-// ─── 9. CI workflow security ────────────────────────────────────────────────
+// ─── 9. CI audit level is set to high ──────────────────────────────────────
+
+describe('CI security audit level', () => {
+  it('CI workflow runs audit at --audit-level=high', async () => {
+    const ciPath = path.resolve(__dirname, '..', '..', '.github', 'workflows', 'ci.yml');
+    const content = await fs.readFile(ciPath, 'utf-8');
+
+    expect(content).toContain('--audit-level=high');
+    expect(content).not.toContain('--audit-level=critical');
+  });
+});
+
+// ─── 10. License compliance ─────────────────────────────────────────────────
+
+const APPROVED_LICENSES = ['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', '0BSD'];
+
+describe('license compliance', () => {
+  it('approved license list contains all required permissive licenses', () => {
+    expect(APPROVED_LICENSES).toContain('MIT');
+    expect(APPROVED_LICENSES).toContain('Apache-2.0');
+    expect(APPROVED_LICENSES).toContain('BSD-2-Clause');
+    expect(APPROVED_LICENSES).toContain('BSD-3-Clause');
+    expect(APPROVED_LICENSES).toContain('ISC');
+    expect(APPROVED_LICENSES).toContain('0BSD');
+  });
+
+  it('approved license list does not include copyleft licenses', () => {
+    const copyleftLicenses = ['GPL-2.0', 'GPL-3.0', 'LGPL-2.0', 'LGPL-2.1', 'AGPL-3.0', 'EUPL-1.2'];
+    for (const license of copyleftLicenses) {
+      expect(APPROVED_LICENSES).not.toContain(license);
+    }
+  });
+
+  it('detects a GPL dependency as non-compliant (mock)', () => {
+    // Simulates what license-checker would report for a GPL-licensed dep
+    const mockDependencyLicenses: Record<string, string> = {
+      'some-lib@1.0.0': 'MIT',
+      'another-lib@2.0.0': 'ISC',
+      'bad-dep@3.0.0': 'GPL-3.0',
+    };
+
+    const violations = Object.entries(mockDependencyLicenses).filter(
+      ([, license]) => !APPROVED_LICENSES.includes(license),
+    );
+
+    expect(violations.length).toBe(1);
+    expect(violations[0][0]).toBe('bad-dep@3.0.0');
+    expect(violations[0][1]).toBe('GPL-3.0');
+  });
+
+  it('passes when all dependencies use approved licenses (mock)', () => {
+    const mockDependencyLicenses: Record<string, string> = {
+      '@clack/prompts@0.10.0': 'MIT',
+      'fast-glob@3.3.3': 'MIT',
+      'fs-extra@11.3.0': 'MIT',
+      'picocolors@1.1.1': 'ISC',
+    };
+
+    const violations = Object.entries(mockDependencyLicenses).filter(
+      ([, license]) => !APPROVED_LICENSES.includes(license),
+    );
+
+    expect(violations).toEqual([]);
+  });
+
+  it('package.json license-check script uses approved license list', async () => {
+    const pkgPath = path.resolve(__dirname, '..', '..', 'package.json');
+    const content = await fs.readFile(pkgPath, 'utf-8');
+    const pkg = JSON.parse(content) as { scripts: Record<string, string> };
+
+    expect(pkg.scripts['license-check']).toBeDefined();
+
+    const script = pkg.scripts['license-check'];
+    for (const license of APPROVED_LICENSES) {
+      expect(script).toContain(license);
+    }
+  });
+
+  it('CI workflow includes a license-check job that runs the license-check script', async () => {
+    const ciPath = path.resolve(__dirname, '..', '..', '.github', 'workflows', 'ci.yml');
+    const content = await fs.readFile(ciPath, 'utf-8');
+
+    expect(content).toContain('license-check');
+    expect(content).toContain('pnpm run license-check');
+  });
+});
+
+// ─── 11. CI workflow security ────────────────────────────────────────────────
 
 describe('CI workflow security', () => {
   it('CI workflow uses least-privilege permissions', async () => {
