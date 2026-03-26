@@ -179,7 +179,7 @@ export const TEMPLATES: TemplateConfig[] = [
     devDependencies: {
       '@angular/cli': '^18.0.0',
       '@angular/build': '^18.0.0',
-      typescript: '^5.5.0',
+      typescript: '~5.5.0',
     },
     features: ['signals', 'standalone-components', 'custom-elements-schema'],
   },

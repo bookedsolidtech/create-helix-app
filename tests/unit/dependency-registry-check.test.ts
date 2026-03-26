@@ -30,6 +30,10 @@ function satisfiesCaret(version: string, range: string): boolean {
     }
     return major === 0 && minor === 0 && patch === tPatch;
   }
+  if (range.startsWith('~')) {
+    // ~x.y.z: >=x.y.z <x.(y+1).0
+    return major === tMajor && minor === tMinor && patch >= tPatch;
+  }
   // Fallback: exact or >=
   return major === tMajor && minor === tMinor && patch >= tPatch;
 }
