@@ -56,6 +56,22 @@ describe('svelte-kit integration', () => {
     expect(config).toContain('@sveltejs/adapter-auto');
   });
 
+  it('vite.config.ts uses sveltekit plugin', async () => {
+    const o = opts('sk-vite');
+    await scaffoldProject(o);
+    const config = await readText(o.directory, 'vite.config.ts');
+    expect(config).toContain('@sveltejs/kit/vite');
+    expect(config).toContain('sveltekit()');
+  });
+
+  it('app.html includes sveltekit placeholders', async () => {
+    const o = opts('sk-apphtml');
+    await scaffoldProject(o);
+    const html = await readText(o.directory, 'src/app.html');
+    expect(html).toContain('%sveltekit.head%');
+    expect(html).toContain('%sveltekit.body%');
+  });
+
   it('package.json has correct sveltekit dependencies', async () => {
     const o = opts('sk-deps');
     await scaffoldProject(o);
@@ -85,5 +101,40 @@ describe('svelte-kit integration', () => {
       'tsconfig.json',
     );
     expect(tsconfig.compilerOptions.strict).toBe(true);
+  });
+
+  it('typescript: false omits tsconfig.json', async () => {
+    const o = opts('sk-no-ts', { typescript: false });
+    await scaffoldProject(o);
+    const fs = await import('node:fs/promises');
+    await expect(fs.access(path.join(o.directory, 'tsconfig.json'))).rejects.toThrow();
+  });
+
+  it('generates eslint.config.js and .prettierrc when eslint is true', async () => {
+    const o = opts('sk-eslint', { eslint: true });
+    await scaffoldProject(o);
+    await assertFilesExist(o.directory, ['eslint.config.js', '.prettierrc']);
+  });
+
+  it('generates helix-tokens.css with design token overrides', async () => {
+    const o = opts('sk-tokens');
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('@import');
+    expect(css).toContain('--hx-color-primary');
+  });
+
+  it('helix-tokens.css includes dark mode overrides when darkMode is true', async () => {
+    const o = opts('sk-dark', { darkMode: true });
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('prefers-color-scheme: dark');
+  });
+
+  it('dry-run mode produces no files', async () => {
+    const o = opts('sk-dry', { dryRun: true });
+    await scaffoldProject(o);
+    const fs = await import('node:fs/promises');
+    await expect(fs.access(path.join(o.directory, 'package.json'))).rejects.toThrow();
   });
 });
