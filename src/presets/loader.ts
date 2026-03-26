@@ -1,4 +1,5 @@
 import type { PresetConfig, DrupalPreset } from '../types.js';
+import { HelixError, ErrorCode } from '../errors.js';
 
 export const VALID_PRESETS: DrupalPreset[] = [
   'standard',
@@ -126,7 +127,10 @@ export const PRESETS: PresetConfig[] = [
 export function getPreset(id: DrupalPreset): PresetConfig {
   const preset = PRESETS.find((p) => p.id === id);
   if (!preset) {
-    throw new Error(`Unknown preset: "${id}". Valid presets: ${VALID_PRESETS.join(', ')}`);
+    throw new HelixError(
+      ErrorCode.INVALID_PRESET,
+      `Unknown preset: "${id}". Valid presets: ${VALID_PRESETS.join(', ')}`,
+    );
   }
   return preset;
 }

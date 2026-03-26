@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions } from './types.js';
+import { HelixError, ErrorCode } from './errors.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -151,7 +152,8 @@ function assertNoPathTraversal(targetPath: string): void {
   const normalized = path.normalize(targetPath);
   const segments = normalized.split(path.sep);
   if (segments.includes('..')) {
-    throw new Error(
+    throw new HelixError(
+      ErrorCode.PATH_TRAVERSAL,
       `Security: path "${targetPath}" contains directory traversal sequences. ` +
         `Aborting to prevent unauthorized file system access.`,
     );
@@ -176,7 +178,10 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
 
   const template = getTemplate(options.framework);
   if (!template) {
-    throw new Error(`Unknown framework: ${options.framework}`);
+    throw new HelixError(
+      ErrorCode.UNKNOWN_FRAMEWORK,
+      `Unknown framework: ${options.framework}`,
+    );
   }
 
   logVerbose(`Template: ${template.id} (${template.name})`);
@@ -344,7 +349,7 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     const friendlyMessage = getScaffoldErrorMessage(err);
     if (friendlyMessage) {
       p.log.error(friendlyMessage);
-      throw new Error(friendlyMessage);
+      throw new HelixError(ErrorCode.DISK_ERROR, friendlyMessage, err);
     }
     throw err;
   } finally {

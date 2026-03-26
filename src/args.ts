@@ -1,6 +1,7 @@
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
 import type { Framework, ComponentBundle, DrupalPreset } from './types.js';
 import { isValidPreset } from './presets/loader.js';
+import { HelixError, ErrorCode } from './errors.js';
 
 export interface ParsedArgs {
   // Subcommands
@@ -95,7 +96,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
 
   if (templateStr !== null && !validFrameworks.includes(templateStr as Framework)) {
-    throw new Error(
+    throw new HelixError(
+      ErrorCode.INVALID_TEMPLATE,
       `Invalid template: "${templateStr}". Valid options: ${validFrameworks.join(', ')}`,
     );
   }
@@ -106,7 +108,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const presetStr = presetArgIndex !== -1 ? (argv[presetArgIndex + 1] ?? null) : null;
 
   if (presetStr !== null && !isValidPreset(presetStr)) {
-    throw new Error(
+    throw new HelixError(
+      ErrorCode.INVALID_PRESET,
       `Invalid preset: "${presetStr}". Valid presets: standard, blog, healthcare, intranet`,
     );
   }
@@ -122,7 +125,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const requested = bundlesStr.split(',').map((s) => s.trim()) as ComponentBundle[];
     const invalid = requested.filter((b) => !validBundles.includes(b));
     if (invalid.length > 0) {
-      throw new Error(
+      throw new HelixError(
+        ErrorCode.INVALID_BUNDLE,
         `Invalid bundle(s): ${invalid.map((b) => `"${b}"`).join(', ')}. Valid options: ${validBundles.join(', ')}`,
       );
     }

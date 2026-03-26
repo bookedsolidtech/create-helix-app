@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { DrupalOptions, PresetConfig } from '../types.js';
 import { getPreset } from '../presets/loader.js';
 import { generateLibrariesYml } from './libraries.js';
+import { HelixError, ErrorCode } from '../errors.js';
 
 /**
  * SECURITY: Path traversal guard.
@@ -20,7 +21,8 @@ function assertNoPathTraversal(targetPath: string): void {
   const normalized = path.normalize(targetPath);
   const segments = normalized.split(path.sep);
   if (segments.includes('..')) {
-    throw new Error(
+    throw new HelixError(
+      ErrorCode.PATH_TRAVERSAL,
       `Security: path "${targetPath}" contains directory traversal sequences. ` +
         `Aborting to prevent unauthorized file system access.`,
     );
