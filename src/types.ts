@@ -43,6 +43,7 @@ export interface ProjectOptions {
   darkMode: boolean;
   installDeps: boolean;
   dryRun?: boolean;
+  force?: boolean;
 }
 
 export interface ComponentBundleConfig {

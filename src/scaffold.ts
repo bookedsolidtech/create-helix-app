@@ -146,6 +146,19 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   // programmatic API callers that may not apply the same sanitization.
   assertNoPathTraversal(options.directory);
 
+  // Check if directory exists and is non-empty
+  const dirExists = await fs.pathExists(options.directory);
+  if (dirExists) {
+    const entries = await fs.readdir(options.directory);
+    if (entries.length > 0) {
+      if (!options.force) {
+        console.error(`Error: Directory exists and is not empty: ${options.directory}`);
+        process.exit(1);
+      }
+      console.warn(pc.yellow(`Warning: overwriting existing files in ${options.directory}`));
+    }
+  }
+
   // Activate dry-run collection if requested
   if (options.dryRun) {
     _dryRunActive = true;
