@@ -1,5 +1,12 @@
 # create-helix
 
+## 0.9.0
+
+### Minor Changes
+
+- 2158f41: feat: add config file support (.helixrc.json) for default CLI options
+  security: add CSP meta tag and sanitized HTML output in generated templates
+
 ## 0.8.1
 
 ### Patch Changes
