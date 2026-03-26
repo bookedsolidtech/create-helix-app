@@ -577,6 +577,40 @@ describe('scaffoldProject — remix', () => {
   });
 });
 
+// ─── Security: path traversal prevention ─────────────────────────────────────
+
+describe('scaffoldProject — path traversal security', () => {
+  it('throws on ".." relative traversal', async () => {
+    const opts = makeOptions({ name: 'traversal-test', directory: '../evil' });
+    await expect(scaffoldProject(opts)).rejects.toThrow(/traversal|Security/i);
+  });
+
+  it('throws on multi-level "../.." traversal', async () => {
+    const opts = makeOptions({ name: 'traversal-test2', directory: '../../etc/passwd' });
+    await expect(scaffoldProject(opts)).rejects.toThrow(/traversal|Security/i);
+  });
+
+  it('throws on ".." as a path segment in a relative path', async () => {
+    const opts = makeOptions({ name: 'traversal-test3', directory: 'projects/../../../secret' });
+    await expect(scaffoldProject(opts)).rejects.toThrow(/traversal|Security/i);
+  });
+
+  it('throws on percent-encoded traversal that normalizes to ".."', async () => {
+    // path.normalize treats this as a literal string with %2e segments,
+    // but the guard also catches literal ".." after normalization
+    const opts = makeOptions({ name: 'traversal-test4', directory: '../%2e%2e/secret' });
+    await expect(scaffoldProject(opts)).rejects.toThrow(/traversal|Security/i);
+  });
+
+  it('does NOT throw for a safe directory path', async () => {
+    const opts = makeOptions({
+      name: 'safe-path',
+      directory: '/tmp/helix-test-scaffold/safe-path',
+    });
+    await expect(scaffoldProject(opts)).resolves.not.toThrow();
+  });
+});
+
 // ─── Package.json correctness across frameworks ──────────────────────────────
 
 describe('scaffoldProject — package.json structure', () => {
