@@ -57,7 +57,7 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
   // Validate preset if provided via flag
   if (presetArg !== null && !isValidPreset(presetArg)) {
     console.error(
-      `Invalid preset: "${presetArg}". Valid presets: standard, blog, healthcare, intranet`,
+      `Invalid preset: "${presetArg}". Valid presets: standard, blog, healthcare, intranet, ecommerce`,
     );
     process.exit(1);
   }

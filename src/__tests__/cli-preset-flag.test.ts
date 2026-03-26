@@ -8,6 +8,7 @@ describe('--preset flag argument parsing', () => {
     expect(isValidPreset('blog')).toBe(true);
     expect(isValidPreset('healthcare')).toBe(true);
     expect(isValidPreset('intranet')).toBe(true);
+    expect(isValidPreset('ecommerce')).toBe(true);
   });
 
   it('isValidPreset returns false for invalid preset', () => {
