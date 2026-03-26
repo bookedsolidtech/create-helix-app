@@ -1,5 +1,18 @@
 # create-helix
 
+## 0.7.1
+
+### Patch Changes
+
+- 6211fa9: Add --dark-mode and --no-dark-mode flags for non-interactive mode
+- 57a627d: Add Drupal preset integration tests
+- e3cbd4b: Add Lit framework integration test
+- 3724581: Add React-Vite framework integration test
+- e97454a: Add Stencil framework integration test
+- ddf4b1c: Add --typescript and --no-typescript flags for non-interactive mode
+- d2479f6: Add Vanilla framework integration test
+- 7543259: Add Vue-Vite framework integration test
+
 ## 0.7.0
 
 ### Minor Changes
