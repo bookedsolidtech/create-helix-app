@@ -170,6 +170,8 @@ ${presetList}
                             Values: all, core, forms, navigation, data-display, feedback, layout
     --typescript            Use TypeScript (default: true)
     --no-typescript         Disable TypeScript
+    --tokens                Include HELiX design tokens (default: true)
+    --no-tokens             Exclude HELiX design tokens
     --dark-mode             Enable dark mode support (default: true)
     --no-dark-mode          Disable dark mode support
 
@@ -188,6 +190,7 @@ ${presetList}
   const isDrupal = args.includes('--drupal');
   const typescriptFlag = args.includes('--no-typescript') ? false : true;
   const darkModeFlag = args.includes('--no-dark-mode') ? false : true;
+  const tokensFlag = args.includes('--no-tokens') ? false : true;
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
 
@@ -270,7 +273,7 @@ ${presetList}
         const defaultFeatures = [
           ...(typescriptFlag ? ['typescript'] : []),
           'eslint',
-          'tokens',
+          ...(tokensFlag ? ['tokens'] : []),
           ...(darkModeFlag ? ['dark-mode'] : []),
           'examples',
         ];
