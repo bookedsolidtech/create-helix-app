@@ -81,6 +81,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     case 'react-vite':
       await scaffoldReactVite(options);
       break;
+    case 'remix':
+      await scaffoldRemix(options);
+      break;
     case 'vue-vite':
       await scaffoldVueVite(options);
       break;
@@ -150,6 +153,13 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         dev: 'vite',
         build: 'vite build',
         preview: 'vite preview',
+      };
+    case 'remix':
+      return {
+        dev: 'remix vite:dev',
+        build: 'remix vite:build',
+        start: 'remix-serve ./build/server/index.js',
+        typecheck: 'tsc',
       };
     case 'vue-vite':
       return {
@@ -354,8 +364,8 @@ async function writePrettierConfig(options: ProjectOptions): Promise<void> {
 }
 
 async function writeTsConfig(options: ProjectOptions): Promise<void> {
-  if (options.framework === 'react-next') {
-    // Next.js manages its own tsconfig
+  if (options.framework === 'react-next' || options.framework === 'remix') {
+    // These frameworks manage their own tsconfig
     return;
   }
 
@@ -1446,6 +1456,218 @@ body {
 .container {
   max-width: 800px;
   margin: 0 auto;
+}
+`,
+  );
+}
+
+async function scaffoldRemix(options: ProjectOptions): Promise<void> {
+  const appDir = path.join(options.directory, 'app');
+  const routesDir = path.join(appDir, 'routes');
+  const stylesDir = path.join(appDir, 'styles');
+  const componentsDir = path.join(appDir, 'components', 'helix');
+  await fs.ensureDir(routesDir);
+  await fs.ensureDir(stylesDir);
+  await fs.ensureDir(componentsDir);
+
+  // vite.config.ts
+  await fs.writeFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { vitePlugin as remix } from '@remix-run/dev';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [remix()],
+});
+`,
+  );
+
+  // tsconfig.json for Remix
+  await fs.writeJson(
+    path.join(options.directory, 'tsconfig.json'),
+    {
+      compilerOptions: {
+        target: 'ES2022',
+        lib: ['DOM', 'DOM.Iterable', 'ES2022'],
+        allowJs: true,
+        skipLibCheck: true,
+        strict: true,
+        esModuleInterop: true,
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+        resolveJsonModule: true,
+        isolatedModules: true,
+        jsx: 'react-jsx',
+        noEmit: true,
+      },
+      include: ['**/*.ts', '**/*.tsx', '.server/**/*.ts', '.server/**/*.tsx'],
+      exclude: ['node_modules'],
+    },
+    { spaces: 2 },
+  );
+
+  // React wrappers for HELiX components (no 'use client' — not a Next.js convention)
+  await fs.writeFile(
+    path.join(componentsDir, 'wrappers.tsx'),
+    `/**
+ * React wrappers for HELiX web components.
+ *
+ * @lit/react creates type-safe React components that properly bridge:
+ * - Properties (not just attributes)
+ * - Events (CustomEvent → React callbacks)
+ * - Refs
+ *
+ * Note: HELiX web components rely on browser APIs (customElements).
+ * In Remix SSR routes, import this file only in client-side code
+ * or guard with typeof window !== 'undefined' checks.
+ *
+ * Usage:
+ *   import { HxButton, HxCard } from '~/components/helix/wrappers';
+ *   <HxButton variant="primary" onHxClick={handleClick}>Save</HxButton>
+ */
+import { createComponent } from '@lit/react';
+import React from 'react';
+
+// Import the web components (registers custom elements)
+import '@helixui/library/components/hx-button';
+import '@helixui/library/components/hx-card';
+import '@helixui/library/components/hx-text-input';
+import '@helixui/library/components/hx-select';
+import '@helixui/library/components/hx-checkbox';
+import '@helixui/library/components/hx-switch';
+import '@helixui/library/components/hx-dialog';
+import '@helixui/library/components/hx-alert';
+import '@helixui/library/components/hx-badge';
+import '@helixui/library/components/hx-tabs';
+import '@helixui/library/components/hx-avatar';
+import '@helixui/library/components/hx-divider';
+import '@helixui/library/components/hx-tooltip';
+import '@helixui/library/components/hx-textarea';
+
+export const HxButton = createComponent({
+  tagName: 'hx-button',
+  elementClass: window.customElements.get('hx-button') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxClick: 'hx-click',
+    onHxFocus: 'hx-focus',
+    onHxBlur: 'hx-blur',
+  },
+});
+
+export const HxCard = createComponent({
+  tagName: 'hx-card',
+  elementClass: window.customElements.get('hx-card') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxTextInput = createComponent({
+  tagName: 'hx-text-input',
+  elementClass: window.customElements.get('hx-text-input') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxChange: 'hx-change',
+    onHxInput: 'hx-input',
+  },
+});
+
+export const HxBadge = createComponent({
+  tagName: 'hx-badge',
+  elementClass: window.customElements.get('hx-badge') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxAlert = createComponent({
+  tagName: 'hx-alert',
+  elementClass: window.customElements.get('hx-alert') as CustomElementConstructor,
+  react: React,
+});
+`,
+  );
+
+  // app/styles/globals.css
+  await fs.writeFile(
+    path.join(stylesDir, 'globals.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+`,
+  );
+
+  // app/root.tsx
+  await fs.writeFile(
+    path.join(appDir, 'root.tsx'),
+    `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
+import type { LinksFunction } from '@remix-run/node';
+import globalsStyles from '~/styles/globals.css?url';
+
+export const links: LinksFunction = () => [
+  { rel: 'stylesheet', href: globalsStyles },
+];
+
+export default function App() {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <Outlet />
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+`,
+  );
+
+  // app/routes/_index.tsx
+  await fs.writeFile(
+    path.join(routesDir, '_index.tsx'),
+    `import type { MetaFunction } from '@remix-run/node';
+import { useState } from 'react';
+import { HxButton, HxCard, HxBadge } from '~/components/helix/wrappers';
+
+export const meta: MetaFunction = () => {
+  return [
+    { title: '${options.name}' },
+    { name: 'description', content: 'Built with HELiX + Remix' },
+  ];
+};
+
+export default function Index() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div className="container">
+      <h1>
+        HELiX + Remix <HxBadge variant="info">SSR Ready</HxBadge>
+      </h1>
+      <HxCard>
+        <div slot="header">
+          <h2>Counter Demo</h2>
+        </div>
+        <p>Count: {count}</p>
+        <HxButton variant="primary" onHxClick={() => setCount((c) => c + 1)}>
+          Increment
+        </HxButton>
+      </HxCard>
+    </div>
+  );
 }
 `,
   );

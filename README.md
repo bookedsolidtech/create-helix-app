@@ -2,7 +2,7 @@
 
 [![Coverage](https://img.shields.io/badge/coverage-70%25-brightgreen)](https://github.com/bookedsolidtech/create-helix-app/actions)
 
-Scaffold a new project with [HELiX](https://github.com/bookedsolidtech/helix) enterprise web components. TUI-powered CLI with support for 8 framework targets and 4 Drupal presets.
+Scaffold a new project with [HELiX](https://github.com/bookedsolidtech/helix) enterprise web components. TUI-powered CLI with support for 9 framework targets and 4 Drupal presets.
 
 ## Quick Start
 
@@ -32,6 +32,7 @@ npx create-helix --drupal --preset healthcare
 | ------------------------ | ---------------------------- | ------------------------------------------------------ |
 | **React + Next.js 15**   | recommended for new projects | SSR, App Router, React wrappers                        |
 | **React + Vite**         | best DX for SPAs             | Hot reload, React wrappers                             |
+| **Remix**                | full-stack React, SSR        | SSR, nested routes, React wrappers                     |
 | **Vue + Nuxt 4**         | Vue ecosystem, SSR built-in  | SSR, native WC support, auto-imports                   |
 | **Vue + Vite**           | minimal, fast                | Hot reload, native WC support                          |
 | **SvelteKit**            | best native WC support       | SSR, native WC support, Runes                          |
