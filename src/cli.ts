@@ -20,6 +20,7 @@ import { loadConfig, listProfiles, readEnvVars } from './config.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
 import { auditDependencies } from './security/dep-audit.js';
+import { checkForUpdate } from './version-check.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -375,6 +376,16 @@ export async function runCLI(): Promise<void> {
   const outputDirArg = outputDirFromArgs ?? envVars.outputDir ?? null;
   const isVerbose = isVerboseFromArgs || (envVars.verbose ?? false);
   const isNoInstall = isNoInstallFromArgs || (envVars.offline ?? false);
+
+  // Start version check early (non-blocking) for interactive mode only.
+  // We fire the promise here so the network request runs in parallel with the
+  // rest of CLI startup; we await the already-in-flight promise just before
+  // printing the final outro so startup is never delayed.
+  const isOffline = parsed.noInstall || (readEnvVars().offline ?? false);
+  const updateCheckPromise: Promise<string | null> =
+    !parsed.json && !isOffline
+      ? checkForUpdate({ offline: isOffline, json: parsed.json })
+      : Promise.resolve(null);
 
   if (showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
@@ -769,6 +780,11 @@ ${presetList}
     );
   }
   console.log();
+
+  const updateWarning = await updateCheckPromise;
+  if (updateWarning !== null && !isQuiet) {
+    console.log(pc.yellow(`  ${updateWarning}`));
+  }
 
   if (!isQuiet) p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX.'));
 }
