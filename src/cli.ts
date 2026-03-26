@@ -111,18 +111,14 @@ async function runDrupalCLI(presetArg: string | null): Promise<void> {
 
   s.stop(pc.green('Drupal theme scaffolded'));
 
-  const nextSteps = [
-    `cd ${themeNameStr}`,
-    'npm install',
-    `# Copy theme to: web/themes/custom/${themeNameStr}`,
-    '# Enable in Drupal admin: /admin/appearance',
-  ];
+  const nextSteps = [`Copy ${themeNameStr}/ to your Drupal themes directory`, 'drush cr'];
 
   p.note(nextSteps.join('\n'), 'Next steps');
 
   console.log();
-  console.log(pc.dim('  Theme:  ') + pc.white(themeNameStr));
-  console.log(pc.dim('  Preset: ') + pc.white(preset));
+  console.log(pc.dim('  Theme:     ') + pc.cyan(themeNameStr));
+  console.log(pc.dim('  Preset:    ') + pc.white(preset));
+  console.log(pc.dim('  Directory: ') + pc.white(directory));
   console.log();
 
   p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX + Drupal.'));
@@ -407,26 +403,27 @@ ${presetList}
 
   const nextSteps = [
     `cd ${project.name}`,
-    options.framework === 'vanilla' ? 'open index.html' : 'pnpm dev',
+    options.framework === 'vanilla' ? 'open index.html' : 'npm run dev',
   ];
 
   p.note(nextSteps.join('\n'), 'Next steps');
 
   console.log();
   console.log(pc.dim('  Framework:  ') + (template?.color(template.name) ?? project.framework));
+  console.log(pc.dim('  Directory:  ') + pc.white(options.directory));
+  console.log(pc.dim('  TypeScript: ') + (options.typescript ? pc.green('yes') : pc.dim('no')));
   console.log(
-    pc.dim('  Components: ') +
+    pc.dim('  Bundles:    ') +
       pc.white(
         options.componentBundles.includes('all')
           ? '98 components (full library)'
-          : `${options.componentBundles.length} bundle(s)`,
+          : `${options.componentBundles.join(', ')}`,
       ),
   );
   console.log(
     pc.dim('  Features:   ') +
       pc.white(
         [
-          options.typescript && 'TypeScript',
           options.eslint && 'ESLint',
           options.designTokens && 'Design Tokens',
           options.darkMode && 'Dark Mode',
