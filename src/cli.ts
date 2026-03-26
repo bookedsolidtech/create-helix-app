@@ -8,6 +8,7 @@ import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
+import { validateProjectName } from './validation.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -195,15 +196,7 @@ export async function runCLI(): Promise<void> {
           message: 'Project name',
           placeholder: 'my-helix-app',
           initialValue: argName ?? '',
-          validate(value) {
-            if (!value) return 'Project name is required';
-            // SECURITY: Whitelist-only validation — rejects path traversal
-            // sequences (../), shell metacharacters, and null bytes.
-            // This name becomes both the directory name and package name.
-            if (!/^[a-z0-9-_]+$/i.test(value))
-              return 'Use only letters, numbers, hyphens, and underscores';
-            return undefined;
-          },
+          validate: validateProjectName,
         }),
 
       framework: () =>
