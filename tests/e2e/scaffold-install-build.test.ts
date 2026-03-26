@@ -37,13 +37,7 @@ const NODE_MAJOR = Number(process.versions.node.split('.')[0]);
 const FRAMEWORKS: FrameworkTestEntry[] = [
   { framework: 'react-next', hasBuild: true, buildOutputDir: '.next' },
   { framework: 'react-vite', hasBuild: true, buildOutputDir: 'dist' },
-  {
-    framework: 'remix',
-    hasBuild: true,
-    buildOutputDir: 'build',
-    knownBuildFailure:
-      'Remix Vite plugin runs pnpm install internally during build, causing failure',
-  },
+  { framework: 'remix', hasBuild: true, buildOutputDir: 'build' },
   {
     framework: 'vue-nuxt',
     hasBuild: true,

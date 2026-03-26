@@ -33,6 +33,7 @@ describe('remix integration', () => {
     await assertFilesExist(o.directory, [
       'package.json',
       'vite.config.ts',
+      'react-router.config.ts',
       'tsconfig.json',
       'app/root.tsx',
       'app/routes/_index.tsx',
@@ -43,57 +44,63 @@ describe('remix integration', () => {
     ]);
   });
 
-  it('vite.config.ts uses the remix vite plugin', async () => {
+  it('vite.config.ts uses the react-router vite plugin', async () => {
     const o = opts('remix-vite');
     await scaffoldProject(o);
     const config = await readText(o.directory, 'vite.config.ts');
-    expect(config).toContain("from '@remix-run/dev'");
-    expect(config).toContain('remix()');
+    expect(config).toContain("from '@react-router/dev/vite'");
+    expect(config).toContain('reactRouter()');
   });
 
-  it('app/root.tsx imports from @remix-run/react', async () => {
+  it('react-router.config.ts enables SSR', async () => {
+    const o = opts('remix-rr-config');
+    await scaffoldProject(o);
+    const config = await readText(o.directory, 'react-router.config.ts');
+    expect(config).toContain('ssr: true');
+  });
+
+  it('app/root.tsx imports from react-router', async () => {
     const o = opts('remix-root');
     await scaffoldProject(o);
     const root = await readText(o.directory, 'app/root.tsx');
-    expect(root).toContain("from '@remix-run/react'");
+    expect(root).toContain("from 'react-router'");
     expect(root).toContain('Outlet');
     expect(root).toContain('Links');
     expect(root).toContain('Scripts');
   });
 
-  it('app/routes/_index.tsx imports from @remix-run/node', async () => {
+  it('app/routes/_index.tsx imports from react-router', async () => {
     const o = opts('remix-index');
     await scaffoldProject(o);
     const index = await readText(o.directory, 'app/routes/_index.tsx');
-    expect(index).toContain("from '@remix-run/node'");
+    expect(index).toContain("from 'react-router'");
     expect(index).toContain('MetaFunction');
   });
 
-  it('package.json has correct remix dependencies', async () => {
+  it('package.json has correct react-router dependencies', async () => {
     const o = opts('remix-deps');
     await scaffoldProject(o);
     const pkg = await readJson<{
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
     }>(o.directory, 'package.json');
-    expect(pkg.dependencies['@remix-run/react']).toBeDefined();
-    expect(pkg.dependencies['@remix-run/node']).toBeDefined();
-    expect(pkg.dependencies['@remix-run/serve']).toBeDefined();
+    expect(pkg.dependencies['react-router']).toBeDefined();
     expect(pkg.dependencies['react']).toBeDefined();
     expect(pkg.dependencies['react-dom']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
     expect(pkg.dependencies['@lit/react']).toBeDefined();
-    expect(pkg.devDependencies['@remix-run/dev']).toBeDefined();
+    expect(pkg.devDependencies['@react-router/dev']).toBeDefined();
+    expect(pkg.devDependencies['@react-router/serve']).toBeDefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
   });
 
-  it('package.json has correct remix scripts', async () => {
+  it('package.json has correct react-router scripts', async () => {
     const o = opts('remix-scripts');
     await scaffoldProject(o);
     const pkg = await readJson<{ scripts: Record<string, string> }>(o.directory, 'package.json');
-    expect(pkg.scripts['dev']).toBe('vite');
-    expect(pkg.scripts['build']).toBe('vite build');
-    expect(pkg.scripts['start']).toBe('remix-serve ./build/server/index.js');
+    expect(pkg.scripts['dev']).toBe('react-router dev');
+    expect(pkg.scripts['build']).toBe('react-router build');
+    expect(pkg.scripts['start']).toBe('react-router-serve ./build/server/index.js');
   });
 
   it('tsconfig.json has strict mode enabled', async () => {

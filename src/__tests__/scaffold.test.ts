@@ -484,7 +484,9 @@ describe('scaffoldProject — remix', () => {
     const expectedFiles = [
       'package.json',
       'vite.config.ts',
+      'react-router.config.ts',
       'tsconfig.json',
+      'app/routes.ts',
       'app/root.tsx',
       'app/routes/_index.tsx',
       'app/styles/globals.css',
@@ -496,43 +498,59 @@ describe('scaffoldProject — remix', () => {
     }
   });
 
-  it('package.json has remix scripts', async () => {
+  it('package.json has react-router scripts', async () => {
     const opts = makeOptions({ name: 'remix-scripts', framework: 'remix' });
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
-    expect(pkg.scripts.dev).toBe('vite');
-    expect(pkg.scripts.build).toBe('vite build');
-    expect(pkg.scripts.start).toBe('remix-serve ./build/server/index.js');
+    expect(pkg.scripts.dev).toBe('react-router dev');
+    expect(pkg.scripts.build).toBe('react-router build');
+    expect(pkg.scripts.start).toBe('react-router-serve ./build/server/index.js');
   });
 
-  it('package.json includes remix and react dependencies', async () => {
+  it('package.json includes react-router and react dependencies', async () => {
     const opts = makeOptions({ name: 'remix-deps', framework: 'remix' });
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
-    expect(pkg.dependencies['@remix-run/node']).toBeDefined();
-    expect(pkg.dependencies['@remix-run/react']).toBeDefined();
-    expect(pkg.dependencies['@remix-run/serve']).toBeDefined();
+    expect(pkg.dependencies['react-router']).toBeDefined();
+    expect(pkg.dependencies['@react-router/node']).toBeDefined();
     expect(pkg.dependencies['react']).toBeDefined();
     expect(pkg.dependencies['react-dom']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
     expect(pkg.dependencies['@lit/react']).toBeDefined();
   });
 
-  it('package.json has @remix-run/dev in devDependencies', async () => {
+  it('package.json has @react-router/dev in devDependencies', async () => {
     const opts = makeOptions({ name: 'remix-devdeps', framework: 'remix' });
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
-    expect(pkg.devDependencies['@remix-run/dev']).toBeDefined();
+    expect(pkg.devDependencies['@react-router/dev']).toBeDefined();
+    expect(pkg.devDependencies['@react-router/serve']).toBeDefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
     expect(pkg.devDependencies['typescript']).toBeDefined();
   });
 
-  it('vite.config.ts uses @remix-run/dev plugin', async () => {
+  it('vite.config.ts uses @react-router/dev/vite plugin', async () => {
     const opts = makeOptions({ name: 'remix-vite', framework: 'remix' });
     await scaffoldProject(opts);
     const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
-    expect(viteConfig).toContain('@remix-run/dev');
-    expect(viteConfig).toContain('remix()');
+    expect(viteConfig).toContain('@react-router/dev/vite');
+    expect(viteConfig).toContain('reactRouter()');
+  });
+
+  it('app/routes.ts uses @react-router/fs-routes for file-based routing', async () => {
+    const opts = makeOptions({ name: 'remix-routes', framework: 'remix' });
+    await scaffoldProject(opts);
+    const routes = await fs.readFile(path.join(opts.directory, 'app', 'routes.ts'), 'utf-8');
+    expect(routes).toContain('@react-router/fs-routes');
+    expect(routes).toContain('flatRoutes()');
+    expect(routes).toContain('RouteConfig');
+  });
+
+  it('package.json has @react-router/fs-routes in devDependencies', async () => {
+    const opts = makeOptions({ name: 'remix-fsroutes', framework: 'remix' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.devDependencies['@react-router/fs-routes']).toBeDefined();
   });
 
   it('app/root.tsx contains Outlet and HELiX styles', async () => {
@@ -540,7 +558,7 @@ describe('scaffoldProject — remix', () => {
     await scaffoldProject(opts);
     const root = await fs.readFile(path.join(opts.directory, 'app', 'root.tsx'), 'utf-8');
     expect(root).toContain('Outlet');
-    expect(root).toContain('@remix-run/react');
+    expect(root).toContain("from 'react-router'");
     expect(root).toContain('globals.css');
   });
 
