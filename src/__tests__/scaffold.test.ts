@@ -713,3 +713,88 @@ describe('scaffoldProject — package.json structure', () => {
     expect(pkg.dependencies['@helixui/tokens']).toBeDefined();
   });
 });
+
+// ─── scaffoldProject — qwik-vite ─────────────────────────────────────────────
+
+describe('scaffoldProject — qwik-vite', () => {
+  it('generates expected file structure', async () => {
+    const opts = makeOptions({ name: 'qwik-vite-app', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+
+    const expectedFiles = [
+      'package.json',
+      'vite.config.ts',
+      'index.html',
+      'src/root.tsx',
+      'src/entry.dev.tsx',
+      'src/routes/layout.tsx',
+      'src/routes/index.tsx',
+      'src/index.css',
+    ];
+
+    for (const file of expectedFiles) {
+      expect(await fs.pathExists(path.join(opts.directory, file))).toBe(true);
+    }
+  });
+
+  it('package.json has vite scripts', async () => {
+    const opts = makeOptions({ name: 'qwik-scripts', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.scripts.dev).toBe('vite');
+    expect(pkg.scripts.build).toBe('vite build');
+    expect(pkg.scripts.preview).toBe('vite preview');
+    expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
+  });
+
+  it('vite.config.ts uses qwikVite plugin', async () => {
+    const opts = makeOptions({ name: 'qwik-vite-config', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const viteConfig = await fs.readFile(path.join(opts.directory, 'vite.config.ts'), 'utf-8');
+    expect(viteConfig).toContain('@builder.io/qwik/optimizer');
+    expect(viteConfig).toContain('qwikVite');
+  });
+
+  it('root.tsx imports QwikCityProvider and RouterOutlet', async () => {
+    const opts = makeOptions({ name: 'qwik-root', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const root = await fs.readFile(path.join(opts.directory, 'src', 'root.tsx'), 'utf-8');
+    expect(root).toContain('QwikCityProvider');
+    expect(root).toContain('RouterOutlet');
+  });
+
+  it('routes/layout.tsx contains Slot', async () => {
+    const opts = makeOptions({ name: 'qwik-layout', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const layout = await fs.readFile(
+      path.join(opts.directory, 'src', 'routes', 'layout.tsx'),
+      'utf-8',
+    );
+    expect(layout).toContain('Slot');
+  });
+
+  it('routes/index.tsx uses useSignal', async () => {
+    const opts = makeOptions({ name: 'qwik-index', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const index = await fs.readFile(
+      path.join(opts.directory, 'src', 'routes', 'index.tsx'),
+      'utf-8',
+    );
+    expect(index).toContain('useSignal');
+  });
+
+  it('package.json includes @builder.io/qwik dependency', async () => {
+    const opts = makeOptions({ name: 'qwik-deps', framework: 'qwik-vite' });
+    await scaffoldProject(opts);
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    expect(pkg.dependencies['@builder.io/qwik']).toBeDefined();
+    expect(pkg.dependencies['@builder.io/qwik-city']).toBeDefined();
+    expect(pkg.devDependencies['vite']).toBeDefined();
+  });
+
+  it('dryRun does not write files', async () => {
+    const opts = makeOptions({ name: 'qwik-dry-run', framework: 'qwik-vite', dryRun: true });
+    await scaffoldProject(opts);
+    expect(await fs.pathExists(opts.directory)).toBe(false);
+  });
+});

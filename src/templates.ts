@@ -124,6 +124,24 @@ export const TEMPLATES: TemplateConfig[] = [
     features: ['hot-reload', 'fine-grained-reactivity', 'native-wc-support'],
   },
   {
+    id: 'qwik-vite',
+    name: 'Qwik + Vite',
+    description: 'Resumable framework with zero hydration and native web component support',
+    hint: 'resumable, zero hydration',
+    color: pc.magenta,
+    dependencies: {
+      '@builder.io/qwik': '^1.14.0',
+      '@builder.io/qwik-city': '^1.14.0',
+      '@helixui/library': '^1.0.0',
+      '@helixui/tokens': '^0.3.0',
+    },
+    devDependencies: {
+      vite: '^6.4.0',
+      typescript: '^5.7.0',
+    },
+    features: ['resumability', 'zero-hydration', 'native-wc-support'],
+  },
+  {
     id: 'svelte-kit',
     name: 'SvelteKit',
     description: 'Svelte 5 + SvelteKit, native custom element support',

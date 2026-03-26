@@ -204,6 +204,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       case 'solid-vite':
         await scaffoldSolidVite(options);
         break;
+      case 'qwik-vite':
+        await scaffoldQwikVite(options);
+        break;
       case 'vanilla':
         await scaffoldVanilla(options);
         break;
@@ -291,6 +294,13 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         dev: 'vite',
         build: 'vite build',
         preview: 'vite preview',
+      };
+    case 'qwik-vite':
+      return {
+        dev: 'vite',
+        build: 'vite build',
+        preview: 'vite preview',
+        typecheck: 'tsc --noEmit',
       };
     case 'svelte-kit':
       return {
@@ -2585,6 +2595,160 @@ export default function App() {
   );
 
   // index.css
+  await safeWriteFile(
+    path.join(srcDir, 'index.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+body {
+  font-family: var(--hx-font-family, system-ui, sans-serif);
+  margin: 0;
+  padding: 2rem;
+  color: var(--hx-color-text, #1a1a1a);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+`,
+  );
+}
+
+async function scaffoldQwikVite(options: ProjectOptions): Promise<void> {
+  const srcDir = path.join(options.directory, 'src');
+  const routesDir = path.join(srcDir, 'routes');
+  await safeEnsureDir(srcDir);
+  await safeEnsureDir(routesDir);
+
+  // vite.config.ts
+  await safeWriteFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+import { qwikVite } from '@builder.io/qwik/optimizer';
+
+export default defineConfig({
+  plugins: [qwikVite()],
+});
+`,
+  );
+
+  // index.html
+  await safeWriteFile(
+    path.join(options.directory, 'index.html'),
+    `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${options.name}</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/entry.dev.tsx"></script>
+  </body>
+</html>
+`,
+  );
+
+  // src/root.tsx — resumable root component
+  await safeWriteFile(
+    path.join(srcDir, 'root.tsx'),
+    `import { component$ } from '@builder.io/qwik';
+import { QwikCityProvider, RouterOutlet } from '@builder.io/qwik-city';
+${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+import './index.css';
+
+export default component$(() => {
+  return (
+    <QwikCityProvider>
+      <head>
+        <meta charset="UTF-8" />
+        <title>${options.name}</title>
+      </head>
+      <body>
+        <RouterOutlet />
+      </body>
+    </QwikCityProvider>
+  );
+});
+`,
+  );
+
+  // src/entry.dev.tsx
+  await safeWriteFile(
+    path.join(srcDir, 'entry.dev.tsx'),
+    `import { render } from '@builder.io/qwik';
+import Root from './root';
+
+render(document.getElementById('app')!, <Root />);
+`,
+  );
+
+  // src/routes/layout.tsx
+  await safeWriteFile(
+    path.join(routesDir, 'layout.tsx'),
+    `import { component$, Slot } from '@builder.io/qwik';
+
+export default component$(() => {
+  return (
+    <div class="container">
+      <header>
+        <h1>${options.name}</h1>
+      </header>
+      <main>
+        <Slot />
+      </main>
+    </div>
+  );
+});
+`,
+  );
+
+  // src/routes/index.tsx
+  await safeWriteFile(
+    path.join(routesDir, 'index.tsx'),
+    `import { component$, useSignal } from '@builder.io/qwik';
+
+export default component$(() => {
+  const count = useSignal(0);
+
+  return (
+    <div>
+      <hx-card>
+        <div slot="header"><h2>Counter Demo</h2></div>
+        <p>Count: {count.value}</p>
+        <hx-button variant="primary" onClick$={() => count.value++}>
+          Increment
+        </hx-button>
+        <hx-button
+          variant="secondary"
+          style="margin-left: 0.5rem"
+          onClick$={() => (count.value = 0)}
+        >
+          Reset
+        </hx-button>
+      </hx-card>
+
+      <hx-card style="margin-top: 1.5rem">
+        <div slot="header">
+          <h2>Qwik + Web Components</h2>
+          <hx-badge variant="info">Resumable</hx-badge>
+        </div>
+        <p>Qwik uses resumability — no hydration cost. Web components bind natively
+        and load lazily with zero JavaScript overhead by default.</p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+        </div>
+      </hx-card>
+    </div>
+  );
+});
+`,
+  );
+
+  // src/index.css
   await safeWriteFile(
     path.join(srcDir, 'index.css'),
     `@import '@helixui/tokens/tokens.css';

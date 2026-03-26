@@ -17,14 +17,15 @@ describe('TEMPLATES', () => {
     'vue-nuxt',
     'vue-vite',
     'solid-vite',
+    'qwik-vite',
     'svelte-kit',
     'angular',
     'astro',
     'vanilla',
   ];
 
-  it('defines exactly 10 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(10);
+  it('defines exactly 11 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(11);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
