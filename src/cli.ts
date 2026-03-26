@@ -493,6 +493,12 @@ export async function runCLI(): Promise<void> {
     process.exit(result.allPassed ? 0 : 1);
   }
 
+  if (subcommand === 'upgrade') {
+    const { runUpgrade } = await import('./commands/upgrade.js');
+    runUpgrade(process.cwd(), { dryRun: isDryRun });
+    process.exit(0);
+  }
+
   if (showHelp) {
     const frameworkList = TEMPLATES.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
     const presetList = PRESETS.map((pr) => `    ${pr.id.padEnd(16)} ${pr.description}`).join('\n');
@@ -544,6 +550,8 @@ ${presetList}
     create-helix my-app --dry-run                # Preview without writing
     create-helix my-app --output-dir ./projects  # Custom output directory
     create-helix my-theme --drupal --preset blog # Drupal blog theme
+    create-helix upgrade                         # Upgrade HELiX deps
+    create-helix upgrade --dry-run               # Preview upgrade without writing
 `);
     process.exit(0);
   }
