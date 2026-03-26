@@ -1,5 +1,13 @@
 # create-helix
 
+## 0.7.2
+
+### Patch Changes
+
+- 283e2f2: Add --tokens and --no-tokens flags for design tokens in non-interactive mode
+- 2fcfeb1: Add --version flag to CLI
+- 60ad293: Improve --help output with grouped commands and examples
+
 ## 0.7.1
 
 ### Patch Changes
