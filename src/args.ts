@@ -1,6 +1,6 @@
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
 import type { Framework, ComponentBundle, DrupalPreset } from './types.js';
-import { isValidPreset } from './presets/loader.js';
+import { isValidPreset, VALID_PRESETS } from './presets/loader.js';
 
 export interface ParsedArgs {
   // Subcommands
@@ -118,9 +118,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const presetStr = presetArgIndex !== -1 ? (argv[presetArgIndex + 1] ?? null) : null;
 
   if (presetStr !== null && !isValidPreset(presetStr)) {
-    throw new Error(
-      `Invalid preset: "${presetStr}". Valid presets: standard, blog, healthcare, intranet`,
-    );
+    throw new Error(`Invalid preset: "${presetStr}". Valid presets: ${VALID_PRESETS.join(', ')}`);
   }
   const preset = presetStr as DrupalPreset | null;
 
