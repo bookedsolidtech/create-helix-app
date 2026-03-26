@@ -170,6 +170,8 @@ ${presetList}
                             Values: all, core, forms, navigation, data-display, feedback, layout
     --typescript            Use TypeScript (default: true)
     --no-typescript         Disable TypeScript
+    --eslint                Enable ESLint + Prettier (default: true)
+    --no-eslint             Disable ESLint + Prettier
     --dark-mode             Enable dark mode support (default: true)
     --no-dark-mode          Disable dark mode support
 
@@ -187,6 +189,7 @@ ${presetList}
   const isNoInstall = args.includes('--no-install');
   const isDrupal = args.includes('--drupal');
   const typescriptFlag = args.includes('--no-typescript') ? false : true;
+  const eslintFlag = args.includes('--no-eslint') ? false : true;
   const darkModeFlag = args.includes('--no-dark-mode') ? false : true;
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
@@ -269,7 +272,7 @@ ${presetList}
       features: () => {
         const defaultFeatures = [
           ...(typescriptFlag ? ['typescript'] : []),
-          'eslint',
+          ...(eslintFlag ? ['eslint'] : []),
           'tokens',
           ...(darkModeFlag ? ['dark-mode'] : []),
           'examples',
