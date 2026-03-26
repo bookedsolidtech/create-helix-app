@@ -259,9 +259,13 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     if (options.eslint) {
       logVerbose(`Writing ${path.join(options.directory, 'eslint.config.js')}`);
       await writeEslintConfig(options);
-      logVerbose(`Writing ${path.join(options.directory, '.prettierrc')}`);
-      await writePrettierConfig(options);
     }
+
+    // .prettierrc and .editorconfig are always written regardless of eslint option
+    logVerbose(`Writing ${path.join(options.directory, '.prettierrc')}`);
+    await writePrettierConfig(options);
+    logVerbose(`Writing ${path.join(options.directory, '.editorconfig')}`);
+    await writeEditorConfig(options);
 
     if (options.typescript) {
       logVerbose(`Writing ${path.join(options.directory, 'tsconfig.json')}`);
@@ -696,6 +700,20 @@ dist/
 .DS_Store
 `;
   await safeWriteFile(path.join(options.directory, '.gitignore'), content);
+}
+
+async function writeEditorConfig(options: ProjectOptions): Promise<void> {
+  const content = `root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+`;
+  await safeWriteFile(path.join(options.directory, '.editorconfig'), content);
 }
 
 // ─── Framework-specific scaffolding ───────────────────────────────────────────
