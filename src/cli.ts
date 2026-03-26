@@ -170,6 +170,8 @@ ${presetList}
                             Values: all, core, forms, navigation, data-display, feedback, layout
     --typescript            Use TypeScript (default: true)
     --no-typescript         Disable TypeScript
+    --eslint                Include ESLint + Prettier (default: true)
+    --no-eslint             Exclude ESLint + Prettier
     --tokens                Include HELiX design tokens (default: true)
     --no-tokens             Exclude HELiX design tokens
     --dark-mode             Enable dark mode support (default: true)
@@ -189,6 +191,7 @@ ${presetList}
   const isNoInstall = args.includes('--no-install');
   const isDrupal = args.includes('--drupal');
   const typescriptFlag = args.includes('--no-typescript') ? false : true;
+  const eslintFlag = args.includes('--no-eslint') ? false : true;
   const darkModeFlag = args.includes('--no-dark-mode') ? false : true;
   const tokensFlag = args.includes('--no-tokens') ? false : true;
   const presetArgIndex = args.indexOf('--preset');
@@ -272,7 +275,7 @@ ${presetList}
       features: () => {
         const defaultFeatures = [
           ...(typescriptFlag ? ['typescript'] : []),
-          'eslint',
+          ...(eslintFlag ? ['eslint'] : []),
           ...(tokensFlag ? ['tokens'] : []),
           ...(darkModeFlag ? ['dark-mode'] : []),
           'examples',
