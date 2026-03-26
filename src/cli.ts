@@ -137,30 +137,72 @@ export async function runCLI(): Promise<void> {
   }
 
   if (args.includes('--help') || args.includes('-h')) {
-    console.log(`
-  create-helix v${HELIX_VERSION}
+    const frameworks = TEMPLATES.map((t) => t.id);
+    const presetList = PRESETS.map((pr) => ({
+      id: pr.id,
+      description: pr.description,
+    }));
+    const maxPresetLen = Math.max(...presetList.map((pr) => pr.id.length));
 
-  Usage:
-    npx create-helix [project-name] [options]
-
-  Options:
-    --template <framework>  Select a framework directly (skips prompt)
-                            Valid values: ${TEMPLATES.map((t) => t.id).join(', ')}
-    --drupal                Scaffold a Drupal theme instead of a web app
-    --preset <name>         Select a Drupal preset directly (standard, blog, healthcare, intranet)
-    --force                 Overwrite existing files in a non-empty directory
-    --dry-run               Show files that would be created without writing them
-    --no-install            Skip dependency installation after scaffolding
-    --version, -v           Print version and exit
-    --help, -h              Show this help message and exit
-
-  Examples:
-    npx create-helix my-app --template react-next
-    npx create-helix my-app --template vue-vite --no-install
-
-  Docs / Repo:
-    https://github.com/bookedsolidtech/create-helix-app
-`);
+    console.log();
+    console.log(`  ${pc.bold(`create-helix`)} ${pc.dim(`v${HELIX_VERSION}`)}`);
+    console.log();
+    console.log(`  ${pc.bold('Usage:')}`);
+    console.log(`    npx create-helix ${pc.dim('[project-name]')} ${pc.dim('[options]')}`);
+    console.log();
+    console.log(`  ${pc.bold('Options:')}`);
+    console.log(`    ${pc.cyan('--version')}, ${pc.cyan('-v')}           Print version and exit`);
+    console.log(
+      `    ${pc.cyan('--help')}, ${pc.cyan('-h')}              Show this help message and exit`,
+    );
+    console.log();
+    console.log(`  ${pc.bold('Framework Selection:')}`);
+    console.log(
+      `    ${pc.cyan('--template')} ${pc.dim('<framework>')}   Select a framework directly (skips prompt)`,
+    );
+    console.log();
+    console.log(`    ${pc.dim('Available frameworks:')}`);
+    console.log(`      ${frameworks.join(', ')}`);
+    console.log();
+    console.log(`  ${pc.bold('Drupal Options:')}`);
+    console.log(
+      `    ${pc.cyan('--drupal')}                Scaffold a Drupal theme instead of a web app`,
+    );
+    console.log(
+      `    ${pc.cyan('--preset')} ${pc.dim('<name>')}          Select a Drupal preset directly (skips prompt)`,
+    );
+    console.log();
+    console.log(`    ${pc.dim('Available presets:')}`);
+    for (const pr of presetList) {
+      console.log(`      ${pc.cyan(pr.id.padEnd(maxPresetLen))}  ${pc.dim(pr.description)}`);
+    }
+    console.log();
+    console.log(`  ${pc.bold('Output Control:')}`);
+    console.log(
+      `    ${pc.cyan('--force')}                 Overwrite existing files in a non-empty directory`,
+    );
+    console.log(
+      `    ${pc.cyan('--dry-run')}               Show files that would be created without writing them`,
+    );
+    console.log(
+      `    ${pc.cyan('--no-install')}            Skip dependency installation after scaffolding`,
+    );
+    console.log();
+    console.log(`  ${pc.bold('Examples:')}`);
+    console.log(`    create-helix my-app                          ${pc.dim('# Interactive mode')}`);
+    console.log(
+      `    create-helix my-app --template react-next    ${pc.dim('# Skip framework prompt')}`,
+    );
+    console.log(
+      `    create-helix my-app --dry-run                ${pc.dim('# Preview without writing')}`,
+    );
+    console.log(
+      `    create-helix my-theme --drupal --preset blog ${pc.dim('# Drupal blog theme')}`,
+    );
+    console.log();
+    console.log(`  ${pc.dim('Docs / Repo:')}`);
+    console.log(`    ${pc.dim('https://github.com/bookedsolidtech/create-helix-app')}`);
+    console.log();
     process.exit(0);
   }
 
