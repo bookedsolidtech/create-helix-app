@@ -51,7 +51,10 @@ describe('stencil integration', () => {
   it('package.json has correct stencil dependencies', async () => {
     const o = opts('stencil-deps');
     await scaffoldProject(o);
-    const pkg = await readJson<{ dependencies: Record<string, string> }>(o.directory, 'package.json');
+    const pkg = await readJson<{ dependencies: Record<string, string> }>(
+      o.directory,
+      'package.json',
+    );
     expect(pkg.dependencies['@stencil/core']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
   });

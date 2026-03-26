@@ -152,6 +152,8 @@ export async function runCLI(): Promise<void> {
                             Valid values: all,core,forms,navigation,data-display,feedback,layout
     --typescript            Use TypeScript (default: true)
     --no-typescript         Disable TypeScript
+    --dark-mode             Enable dark mode support (default: true)
+    --no-dark-mode          Disable dark mode support
     --force                 Overwrite existing files in a non-empty directory
     --dry-run               Show files that would be created without writing them
     --no-install            Skip dependency installation after scaffolding
@@ -175,6 +177,7 @@ export async function runCLI(): Promise<void> {
   const isNoInstall = args.includes('--no-install');
   const isDrupal = args.includes('--drupal');
   const typescriptFlag = args.includes('--no-typescript') ? false : true;
+  const darkModeFlag = args.includes('--no-dark-mode') ? false : true;
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
 
@@ -258,6 +261,7 @@ export async function runCLI(): Promise<void> {
           ...(typescriptFlag ? ['typescript'] : []),
           'eslint',
           'tokens',
+          ...(darkModeFlag ? ['dark-mode'] : []),
           'examples',
         ];
         if (templateArg !== null) {
