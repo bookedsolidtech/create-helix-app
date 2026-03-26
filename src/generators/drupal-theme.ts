@@ -27,14 +27,14 @@ function assertNoPathTraversal(targetPath: string): void {
   }
 }
 
-function toTitleCase(str: string): string {
+export function toTitleCase(str: string): string {
   return str
     .split(/[-_]/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
 
-function generateThemeInfoYml(themeName: string, preset: PresetConfig): string {
+export function generateThemeInfoYml(themeName: string, preset: PresetConfig): string {
   const displayName = toTitleCase(themeName);
   return `name: '${displayName}'
 type: theme
@@ -46,7 +46,7 @@ libraries:
 `;
 }
 
-function generateThemeLibrariesYml(_themeName: string): string {
+export function generateThemeLibrariesYml(_themeName: string): string {
   return `global:
   version: VERSION
   css:
@@ -55,7 +55,7 @@ function generateThemeLibrariesYml(_themeName: string): string {
 `;
 }
 
-function generateComposerJson(themeName: string): string {
+export function generateComposerJson(themeName: string): string {
   return JSON.stringify(
     {
       name: `helixui/${themeName}`,
@@ -70,7 +70,7 @@ function generateComposerJson(themeName: string): string {
   );
 }
 
-function generatePackageJson(themeName: string, preset: PresetConfig): string {
+export function generatePackageJson(themeName: string, preset: PresetConfig): string {
   return JSON.stringify(
     {
       name: themeName,
@@ -84,7 +84,7 @@ function generatePackageJson(themeName: string, preset: PresetConfig): string {
   );
 }
 
-function generateBehaviorsJs(preset: PresetConfig): string {
+export function generateBehaviorsJs(preset: PresetConfig): string {
   return `/**
  * @file
  * HELiX UI Drupal behaviors for ${preset.id} preset.
@@ -117,7 +117,7 @@ function generateBehaviorsJs(preset: PresetConfig): string {
 `;
 }
 
-function generateComponentYml(sdcName: string, themeName: string): string {
+export function generateComponentYml(sdcName: string, themeName: string): string {
   const displayName = toTitleCase(sdcName);
   return `$schema: 'https://git.drupalcode.org/project/drupal/-/raw/HEAD/core/modules/sdc/src/metadata.schema.json'
 name: '${displayName}'
@@ -140,7 +140,7 @@ libraryOverrides:
 `;
 }
 
-function generateComponentTwig(sdcName: string): string {
+export function generateComponentTwig(sdcName: string): string {
   const cssClass = sdcName;
   const displayName = toTitleCase(sdcName);
   return `{#
