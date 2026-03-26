@@ -65,6 +65,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "author": {
+    "name": "Booked Solid",
+    "url": "https://github.com/bookedsolidtech"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
