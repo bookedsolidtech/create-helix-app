@@ -1,6 +1,7 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
 import { scaffoldProject } from './scaffold.js';
 import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
@@ -8,7 +9,9 @@ import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
 
-const HELIX_VERSION = '0.1.0';
+const _require = createRequire(import.meta.url);
+const pkg = _require('../package.json') as { version: string };
+const HELIX_VERSION = pkg.version;
 
 function banner(): void {
   console.log();
@@ -126,6 +129,31 @@ async function runDrupalCLI(presetArg: string | null): Promise<void> {
 export async function runCLI(): Promise<void> {
   // Parse flags before prompting
   const args = process.argv.slice(2);
+
+  if (args.includes('--version') || args.includes('-v')) {
+    console.log(`create-helix v${HELIX_VERSION}`);
+    process.exit(0);
+  }
+
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`
+  create-helix v${HELIX_VERSION}
+
+  Usage:
+    npx create-helix [options]
+
+  Options:
+    --drupal              Scaffold a Drupal theme instead of a web app
+    --preset <name>       Select a Drupal preset directly (standard, blog, healthcare, intranet)
+    --version, -v         Print version and exit
+    --help, -h            Show this help message and exit
+
+  Docs / Repo:
+    https://github.com/bookedsolidtech/create-helix-app
+`);
+    process.exit(0);
+  }
+
   const isDrupal = args.includes('--drupal');
   const presetArgIndex = args.indexOf('--preset');
   const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
