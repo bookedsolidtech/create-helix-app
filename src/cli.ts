@@ -124,12 +124,44 @@ async function runDrupalCLI(presetArg: string | null): Promise<void> {
   p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX + Drupal.'));
 }
 
+export function runListCommand(isJson: boolean): void {
+  if (isJson) {
+    const output = {
+      templates: TEMPLATES.map((t) => ({ id: t.id, name: t.name, hint: t.hint })),
+      presets: PRESETS.map((pr) => ({ id: pr.id, name: pr.name, description: pr.description })),
+    };
+    console.log(JSON.stringify(output, null, 2));
+    return;
+  }
+
+  console.log('');
+  console.log(pc.bold('  Framework Templates'));
+  console.log('');
+  for (const t of TEMPLATES) {
+    console.log(`  ${pc.cyan(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`);
+  }
+  console.log('');
+  console.log(pc.bold('  Drupal Presets'));
+  console.log('');
+  for (const pr of PRESETS) {
+    console.log(
+      `  ${pc.cyan(pr.id.padEnd(18))} ${pc.white(pr.name.padEnd(26))} ${pc.dim(pr.description)}`,
+    );
+  }
+  console.log('');
+}
+
 export async function runCLI(): Promise<void> {
   // Parse flags before prompting
   const args = process.argv.slice(2);
 
   if (args.includes('--version') || args.includes('-v')) {
     console.log(`create-helix v${HELIX_VERSION}`);
+    process.exit(0);
+  }
+
+  if (args[0] === 'list') {
+    runListCommand(args.includes('--json'));
     process.exit(0);
   }
 
