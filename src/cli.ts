@@ -10,6 +10,7 @@ import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
 import { validateProjectName } from './validation.js';
+import { parseArgs, ParseArgsError } from './args.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -154,19 +155,28 @@ export function runListCommand(isJson: boolean): void {
 
 export async function runCLI(): Promise<void> {
   // Parse flags before prompting
-  const args = process.argv.slice(2);
+  let parsed;
+  try {
+    parsed = parseArgs(process.argv.slice(2));
+  } catch (err) {
+    if (err instanceof ParseArgsError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
+  }
 
-  if (args.includes('--version') || args.includes('-v')) {
+  if (parsed.showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
     process.exit(0);
   }
 
-  if (args[0] === 'list') {
-    runListCommand(args.includes('--json'));
+  if (parsed.subcommand === 'list') {
+    runListCommand(parsed.json);
     process.exit(0);
   }
 
-  if (args.includes('--help') || args.includes('-h')) {
+  if (parsed.showHelp) {
     const frameworkList = TEMPLATES.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
     const presetList = PRESETS.map((pr) => `    ${pr.id.padEnd(16)} ${pr.description}`).join('\n');
     console.log(`
@@ -219,32 +229,19 @@ ${presetList}
     process.exit(0);
   }
 
-  const isDryRun = args.includes('--dry-run');
-  const isForce = args.includes('--force');
-  const isNoInstall = args.includes('--no-install');
-  const isQuiet = args.includes('--quiet') || args.includes('-q');
-  const isDrupal = args.includes('--drupal');
-  const typescriptFlag = args.includes('--no-typescript') ? false : true;
-  const eslintFlag = args.includes('--no-eslint') ? false : true;
-  const darkModeFlag = args.includes('--no-dark-mode') ? false : true;
-  const tokensFlag = args.includes('--no-tokens') ? false : true;
-  const presetArgIndex = args.indexOf('--preset');
-  const presetArg = presetArgIndex !== -1 ? (args[presetArgIndex + 1] ?? null) : null;
-
-  const templateArgIndex = args.indexOf('--template');
-  const templateArg = templateArgIndex !== -1 ? (args[templateArgIndex + 1] ?? null) : null;
-  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
-
-  if (templateArg !== null && !validFrameworks.includes(templateArg as Framework)) {
-    console.error(
-      `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
-    );
-    process.exit(1);
-  }
-
-  const outputDirArgIndex =
-    args.indexOf('--output-dir') !== -1 ? args.indexOf('--output-dir') : args.indexOf('-o');
-  const outputDirArg = outputDirArgIndex !== -1 ? (args[outputDirArgIndex + 1] ?? null) : null;
+  const isDryRun = parsed.dryRun;
+  const isForce = parsed.force;
+  const isNoInstall = parsed.noInstall;
+  const isQuiet = parsed.quiet;
+  const isDrupal = parsed.isDrupal;
+  const typescriptFlag = parsed.typescript;
+  const eslintFlag = parsed.eslint;
+  const darkModeFlag = parsed.darkMode;
+  const tokensFlag = parsed.tokens;
+  const presetArg = parsed.preset;
+  const templateArg = parsed.template;
+  const outputDirArg = parsed.outputDir;
+  const bundlesFromFlag = parsed.bundles;
 
   if (outputDirArg !== null) {
     const resolvedOutputDir = path.resolve(process.cwd(), outputDirArg);
@@ -257,23 +254,6 @@ ${presetList}
     }
   }
 
-  const bundlesArgIndex = args.indexOf('--bundles');
-  const bundlesArg = bundlesArgIndex !== -1 ? (args[bundlesArgIndex + 1] ?? null) : null;
-  const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
-
-  let bundlesFromFlag: ComponentBundle[] | null = null;
-  if (bundlesArg !== null) {
-    const requested = bundlesArg.split(',').map((s) => s.trim()) as ComponentBundle[];
-    const invalid = requested.filter((b) => !validBundles.includes(b));
-    if (invalid.length > 0) {
-      console.error(
-        `Invalid bundle(s): ${invalid.map((b) => `"${b}"`).join(', ')}. Valid options: ${validBundles.join(', ')}`,
-      );
-      process.exit(1);
-    }
-    bundlesFromFlag = requested;
-  }
-
   if (isDrupal || presetArg !== null) {
     await runDrupalCLI(presetArg, isQuiet);
     return;
@@ -283,7 +263,7 @@ ${presetList}
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix ')));
 
-  const argName = process.argv[2];
+  const argName = parsed.projectName;
 
   const project = await p.group(
     {
