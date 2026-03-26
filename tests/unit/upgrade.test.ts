@@ -6,6 +6,8 @@ import {
   detectHelixProject,
   getInstalledVersions,
   buildUpgradePlan,
+  fetchLatestVersions,
+  clearVersionCache,
   runUpgrade,
 } from '../../src/commands/upgrade.js';
 
@@ -21,6 +23,27 @@ function makeTmpDirOnly(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'helix-upgrade-'));
 }
 
+/**
+ * Stub versions used in buildUpgradePlan tests to mirror what the registry
+ * would return for known HELiX packages (so tests don't depend on real network).
+ */
+const STUB_LATEST: Record<string, string> = {
+  '@helix/core': '1.0.0',
+  '@helix/tokens': '1.0.0',
+  '@helix/components': '1.0.0',
+  '@helix/icons': '1.0.0',
+  '@helix/utils': '1.0.0',
+  '@helixui/react': '1.0.0',
+  '@helixui/vue': '1.0.0',
+  '@helixui/angular': '1.0.0',
+  '@helixui/svelte': '1.0.0',
+  '@helixui/lit': '1.0.0',
+  '@helixui/solid': '1.0.0',
+  '@helixui/qwik': '1.0.0',
+  '@helixui/preact': '1.0.0',
+  '@helixui/stencil': '1.0.0',
+};
+
 describe('upgrade command', () => {
   const tmpDirs: string[] = [];
 
@@ -29,6 +52,9 @@ describe('upgrade command', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
     tmpDirs.length = 0;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    clearVersionCache();
   });
 
   // ─── detectHelixProject ──────────────────────────────────────────────────
@@ -262,7 +288,7 @@ describe('upgrade command', () => {
 
   describe('buildUpgradePlan', () => {
     it('marks packages as changed when versions differ', () => {
-      const plan = buildUpgradePlan({ '@helix/core': '^0.5.0' });
+      const plan = buildUpgradePlan({ '@helix/core': '^0.5.0' }, STUB_LATEST);
       const core = plan.find((e) => e.name === '@helix/core');
 
       expect(core).toBeDefined();
@@ -272,7 +298,7 @@ describe('upgrade command', () => {
     });
 
     it('marks packages as not changed when versions match', () => {
-      const plan = buildUpgradePlan({ '@helix/core': '1.0.0' });
+      const plan = buildUpgradePlan({ '@helix/core': '1.0.0' }, STUB_LATEST);
       const core = plan.find((e) => e.name === '@helix/core');
 
       expect(core).toBeDefined();
@@ -280,7 +306,7 @@ describe('upgrade command', () => {
     });
 
     it('marks packages with caret prefix as not changed when base version matches', () => {
-      const plan = buildUpgradePlan({ '@helix/core': '^1.0.0' });
+      const plan = buildUpgradePlan({ '@helix/core': '^1.0.0' }, STUB_LATEST);
       const core = plan.find((e) => e.name === '@helix/core');
 
       expect(core).toBeDefined();
@@ -290,7 +316,7 @@ describe('upgrade command', () => {
     });
 
     it('marks packages with tilde prefix as not changed when base version matches', () => {
-      const plan = buildUpgradePlan({ '@helix/core': '~1.0.0' });
+      const plan = buildUpgradePlan({ '@helix/core': '~1.0.0' }, STUB_LATEST);
       const core = plan.find((e) => e.name === '@helix/core');
 
       expect(core).toBeDefined();
@@ -298,7 +324,7 @@ describe('upgrade command', () => {
     });
 
     it('strips caret prefix before comparing versions', () => {
-      const plan = buildUpgradePlan({ '@helix/core': '^0.9.0' });
+      const plan = buildUpgradePlan({ '@helix/core': '^0.9.0' }, STUB_LATEST);
       const core = plan.find((e) => e.name === '@helix/core');
 
       expect(core).toBeDefined();
@@ -307,7 +333,7 @@ describe('upgrade command', () => {
     });
 
     it('strips tilde prefix before comparing versions', () => {
-      const plan = buildUpgradePlan({ '@helix/core': '~0.9.0' });
+      const plan = buildUpgradePlan({ '@helix/core': '~0.9.0' }, STUB_LATEST);
       const core = plan.find((e) => e.name === '@helix/core');
 
       expect(core).toBeDefined();
@@ -316,7 +342,7 @@ describe('upgrade command', () => {
     });
 
     it('handles unknown packages by keeping current version (normalized)', () => {
-      const plan = buildUpgradePlan({ '@helix/unknown-pkg': '^2.0.0' });
+      const plan = buildUpgradePlan({ '@helix/unknown-pkg': '^2.0.0' }, STUB_LATEST);
       const pkg = plan.find((e) => e.name === '@helix/unknown-pkg');
 
       expect(pkg).toBeDefined();
@@ -325,7 +351,7 @@ describe('upgrade command', () => {
     });
 
     it('handles unknown packages without version prefix', () => {
-      const plan = buildUpgradePlan({ '@helix/custom': '3.2.1' });
+      const plan = buildUpgradePlan({ '@helix/custom': '3.2.1' }, STUB_LATEST);
       const pkg = plan.find((e) => e.name === '@helix/custom');
 
       expect(pkg).toBeDefined();
@@ -334,7 +360,7 @@ describe('upgrade command', () => {
     });
 
     it('returns an empty plan for empty input', () => {
-      const plan = buildUpgradePlan({});
+      const plan = buildUpgradePlan({}, STUB_LATEST);
 
       expect(plan).toEqual([]);
     });
@@ -347,7 +373,7 @@ describe('upgrade command', () => {
         '@helixui/vue': '1.0.0',
       };
 
-      const plan = buildUpgradePlan(installed);
+      const plan = buildUpgradePlan(installed, STUB_LATEST);
 
       expect(plan).toHaveLength(4);
       const names = plan.map((e) => e.name);
@@ -365,7 +391,7 @@ describe('upgrade command', () => {
         '@helixui/vue': '~0.2.0',
       };
 
-      const plan = buildUpgradePlan(installed);
+      const plan = buildUpgradePlan(installed, STUB_LATEST);
       const changed = plan.filter((e) => e.changed);
       const unchanged = plan.filter((e) => !e.changed);
 
@@ -376,11 +402,14 @@ describe('upgrade command', () => {
     });
 
     it('preserves the original current version string in the plan', () => {
-      const plan = buildUpgradePlan({
-        '@helix/core': '^0.5.0',
-        '@helix/tokens': '~0.4.0',
-        '@helix/icons': '0.3.0',
-      });
+      const plan = buildUpgradePlan(
+        {
+          '@helix/core': '^0.5.0',
+          '@helix/tokens': '~0.4.0',
+          '@helix/icons': '0.3.0',
+        },
+        STUB_LATEST,
+      );
 
       const core = plan.find((e) => e.name === '@helix/core');
       const tokens = plan.find((e) => e.name === '@helix/tokens');
@@ -409,7 +438,7 @@ describe('upgrade command', () => {
         '@helixui/stencil': '^0.5.0',
       };
 
-      const plan = buildUpgradePlan(allKnown);
+      const plan = buildUpgradePlan(allKnown, STUB_LATEST);
 
       expect(plan).toHaveLength(14);
       for (const entry of plan) {
@@ -424,7 +453,7 @@ describe('upgrade command', () => {
         '@helix/custom-plugin': '^2.0.0',
       };
 
-      const plan = buildUpgradePlan(installed);
+      const plan = buildUpgradePlan(installed, STUB_LATEST);
 
       const core = plan.find((e) => e.name === '@helix/core');
       const custom = plan.find((e) => e.name === '@helix/custom-plugin');
@@ -433,6 +462,96 @@ describe('upgrade command', () => {
       expect(core!.latest).toBe('1.0.0');
       expect(custom!.changed).toBe(false);
       expect(custom!.latest).toBe('2.0.0');
+    });
+
+    it('uses current version when latestVersions is empty (offline scenario)', () => {
+      const plan = buildUpgradePlan({ '@helix/core': '^0.5.0' }, {});
+      const core = plan.find((e) => e.name === '@helix/core');
+
+      expect(core).toBeDefined();
+      expect(core!.latest).toBe('0.5.0');
+      expect(core!.changed).toBe(false);
+    });
+  });
+
+  // ─── fetchLatestVersions ─────────────────────────────────────────────────
+
+  describe('fetchLatestVersions', () => {
+    it('returns versions for packages that resolve successfully', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ version: '2.3.4' }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await fetchLatestVersions(['@helix/core', '@helix/tokens']);
+
+      expect(result['@helix/core']).toBe('2.3.4');
+      expect(result['@helix/tokens']).toBe('2.3.4');
+    });
+
+    it('omits packages when fetch returns non-ok response', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({}),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await fetchLatestVersions(['@helix/core']);
+
+      expect(result).toEqual({});
+    });
+
+    it('omits packages when fetch throws (offline scenario)', async () => {
+      const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await fetchLatestVersions(['@helix/core', '@helix/tokens']);
+
+      expect(result).toEqual({});
+    });
+
+    it('returns empty object for empty package list', async () => {
+      const mockFetch = vi.fn();
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await fetchLatestVersions([]);
+
+      expect(result).toEqual({});
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('uses %2F encoding for scoped packages', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ version: '1.5.0' }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      await fetchLatestVersions(['@helix/core']);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('@helix%2Fcore'),
+        expect.any(Object),
+      );
+    });
+
+    it('handles partial success when some packages resolve and others fail', async () => {
+      const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if ((url as string).includes('core')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ version: '2.0.0' }),
+          });
+        }
+        return Promise.reject(new Error('Not found'));
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await fetchLatestVersions(['@helix/core', '@helix/tokens']);
+
+      expect(result['@helix/core']).toBe('2.0.0');
+      expect(result['@helix/tokens']).toBeUndefined();
     });
   });
 
@@ -445,13 +564,20 @@ describe('upgrade command', () => {
       mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('process.exit called');
       });
+      // Mock fetch to return '1.0.0' for all packages by default
+      vi.stubGlobal('fetch', () =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ version: '1.0.0' }),
+        }),
+      );
     });
 
     afterEach(() => {
       mockExit.mockRestore();
     });
 
-    it('does not modify package.json in dry-run mode', () => {
+    it('does not modify package.json in dry-run mode', async () => {
       const dir = makeTmpProject({
         name: 'test-project',
         dependencies: { '@helix/core': '^0.5.0' },
@@ -460,28 +586,28 @@ describe('upgrade command', () => {
 
       const originalContent = fs.readFileSync(path.join(dir, 'package.json'), 'utf-8');
 
-      runUpgrade(dir, { dryRun: true });
+      await runUpgrade(dir, { dryRun: true });
 
       const afterContent = fs.readFileSync(path.join(dir, 'package.json'), 'utf-8');
       expect(afterContent).toBe(originalContent);
     });
 
-    it('exits with error for non-helix projects', () => {
+    it('exits with error for non-helix projects', async () => {
       const dir = makeTmpProject({
         name: 'generic',
         dependencies: { react: '^18.0.0' },
       });
       tmpDirs.push(dir);
 
-      expect(() => runUpgrade(dir, { dryRun: true })).toThrow('process.exit called');
+      await expect(runUpgrade(dir, { dryRun: true })).rejects.toThrow('process.exit called');
       expect(mockExit).toHaveBeenCalledWith(1);
     });
 
-    it('exits with error when directory has no package.json', () => {
+    it('exits with error when directory has no package.json', async () => {
       const dir = makeTmpDirOnly();
       tmpDirs.push(dir);
 
-      expect(() => runUpgrade(dir, { dryRun: true })).toThrow('process.exit called');
+      await expect(runUpgrade(dir, { dryRun: true })).rejects.toThrow('process.exit called');
       expect(mockExit).toHaveBeenCalledWith(1);
     });
   });
@@ -489,14 +615,24 @@ describe('upgrade command', () => {
   // ─── runUpgrade writes changes ───────────────────────────────────────────
 
   describe('runUpgrade writes changes', () => {
-    it('updates package.json when not dry-run', () => {
+    beforeEach(() => {
+      // Mock fetch to return '1.0.0' for all packages
+      vi.stubGlobal('fetch', () =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ version: '1.0.0' }),
+        }),
+      );
+    });
+
+    it('updates package.json when not dry-run', async () => {
       const dir = makeTmpProject({
         name: 'test-project',
         dependencies: { '@helix/core': '^0.5.0', react: '^18.0.0' },
       });
       tmpDirs.push(dir);
 
-      runUpgrade(dir, { dryRun: false });
+      await runUpgrade(dir, { dryRun: false });
 
       const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
         dependencies: Record<string, string>;
@@ -505,14 +641,14 @@ describe('upgrade command', () => {
       expect(updated.dependencies['react']).toBe('^18.0.0');
     });
 
-    it('updates devDependencies when not dry-run', () => {
+    it('updates devDependencies when not dry-run', async () => {
       const dir = makeTmpProject({
         name: 'test-project',
         devDependencies: { '@helixui/react': '^0.3.0', vitest: '^1.0.0' },
       });
       tmpDirs.push(dir);
 
-      runUpgrade(dir, { dryRun: false });
+      await runUpgrade(dir, { dryRun: false });
 
       const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
         devDependencies: Record<string, string>;
@@ -521,7 +657,7 @@ describe('upgrade command', () => {
       expect(updated.devDependencies['vitest']).toBe('^1.0.0');
     });
 
-    it('updates packages in both deps and devDeps simultaneously', () => {
+    it('updates packages in both deps and devDeps simultaneously', async () => {
       const dir = makeTmpProject({
         name: 'test-project',
         dependencies: { '@helix/core': '^0.5.0' },
@@ -529,7 +665,7 @@ describe('upgrade command', () => {
       });
       tmpDirs.push(dir);
 
-      runUpgrade(dir, { dryRun: false });
+      await runUpgrade(dir, { dryRun: false });
 
       const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
         dependencies: Record<string, string>;
@@ -539,19 +675,32 @@ describe('upgrade command', () => {
       expect(updated.devDependencies['@helixui/react']).toBe('^1.0.0');
     });
 
-    it('does not modify already-up-to-date packages', () => {
+    it('does not modify already-up-to-date packages', async () => {
       const dir = makeTmpProject({
         name: 'test-project',
         dependencies: { '@helix/core': '^1.0.0', '@helix/tokens': '^1.0.0' },
       });
       tmpDirs.push(dir);
 
-      runUpgrade(dir, { dryRun: false });
+      await runUpgrade(dir, { dryRun: false });
 
       const raw = fs.readFileSync(path.join(dir, 'package.json'), 'utf-8');
       const updated = JSON.parse(raw) as { dependencies: Record<string, string> };
       expect(updated.dependencies['@helix/core']).toBe('^1.0.0');
       expect(updated.dependencies['@helix/tokens']).toBe('^1.0.0');
+    });
+
+    it('shows offline warning when fetch fails for all packages', async () => {
+      vi.stubGlobal('fetch', () => Promise.reject(new Error('Network error')));
+
+      const dir = makeTmpProject({
+        name: 'test-project',
+        dependencies: { '@helix/core': '^0.5.0' },
+      });
+      tmpDirs.push(dir);
+
+      // Should not throw — offline is handled gracefully
+      await expect(runUpgrade(dir, { dryRun: true })).resolves.toBeUndefined();
     });
   });
 
@@ -586,7 +735,7 @@ describe('upgrade command', () => {
     });
 
     it('buildUpgradePlan returns empty array when given empty object', () => {
-      const plan = buildUpgradePlan({});
+      const plan = buildUpgradePlan({}, STUB_LATEST);
       expect(plan).toHaveLength(0);
       expect(plan).toEqual([]);
     });
