@@ -3,6 +3,7 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { validateDirectory } from '../validation.js';
+import { withRetry } from '../retry.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
@@ -37,24 +38,34 @@ function isHelixDep(name: string): boolean {
 
 /**
  * Fetches the latest published version of a single npm package.
- * Returns undefined on any error (network failure, package not found, etc.).
+ * Retries up to 3 times with exponential backoff on transient network errors.
+ * Returns undefined when the package cannot be resolved after all attempts.
  */
 async function fetchPackageVersion(packageName: string): Promise<string | undefined> {
   if (versionCache.has(packageName)) {
     return versionCache.get(packageName);
   }
   try {
-    // Scoped packages like @helix/core require %2F encoding of the slash
-    const encodedName = packageName.startsWith('@') ? packageName.replace('/', '%2F') : packageName;
-    const url = `https://registry.npmjs.org/${encodedName}/latest`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return undefined;
-    const data = (await response.json()) as { version?: string };
-    const version = data.version;
-    if (version !== undefined) {
-      versionCache.set(packageName, version);
-    }
-    return version;
+    return await withRetry(
+      async () => {
+        // Scoped packages like @helix/core require %2F encoding of the slash
+        const encodedName = packageName.startsWith('@')
+          ? packageName.replace('/', '%2F')
+          : packageName;
+        const url = `https://registry.npmjs.org/${encodedName}/latest`;
+        const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!response.ok) {
+          throw new Error(`npm registry returned ${response.status} for ${packageName}`);
+        }
+        const data = (await response.json()) as { version?: string };
+        const version = data.version;
+        if (version !== undefined) {
+          versionCache.set(packageName, version);
+        }
+        return version;
+      },
+      { maxRetries: 3 },
+    );
   } catch {
     return undefined;
   }

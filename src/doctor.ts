@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import https from 'node:https';
+import { withRetry, HelixError } from './retry.js';
 
 export interface CheckResult {
   name: string;
@@ -108,20 +109,38 @@ export function checkWritePermissions(): CheckResult {
   }
 }
 
-export function checkNetwork(): Promise<CheckResult> {
-  return new Promise((resolve) => {
-    const req = https.get('https://registry.npmjs.org/', { timeout: 5000 }, (res) => {
-      res.destroy();
-      resolve({ name: 'Network', status: 'ok', message: 'npmjs.org reachable' });
+/**
+ * Probes npmjs.org reachability with up to 3 retry attempts using exponential
+ * backoff. Returns 'warn' (rather than throwing) after all retries are
+ * exhausted so the doctor report can still complete.
+ */
+export async function checkNetwork(): Promise<CheckResult> {
+  const probe = (): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      const req = https.get('https://registry.npmjs.org/', { timeout: 5000 }, (res) => {
+        res.destroy();
+        resolve();
+      });
+      req.on('error', (err) => {
+        reject(err);
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('npmjs.org timed out'));
+      });
     });
-    req.on('error', () => {
-      resolve({ name: 'Network', status: 'warn', message: 'npmjs.org unreachable' });
-    });
-    req.on('timeout', () => {
-      req.destroy();
-      resolve({ name: 'Network', status: 'warn', message: 'npmjs.org timed out' });
-    });
-  });
+
+  try {
+    await withRetry(probe, { maxRetries: 3 });
+    return { name: 'Network', status: 'ok', message: 'npmjs.org reachable' };
+  } catch (err) {
+    // Preserve specific messages from the last failed attempt (e.g. "npmjs.org timed out")
+    // when they are surfaced via HelixError's cause chain.
+    const lastCause = err instanceof HelixError ? err.cause : err;
+    const specificMsg =
+      lastCause instanceof Error && lastCause.message ? lastCause.message : 'npmjs.org unreachable';
+    return { name: 'Network', status: 'warn', message: specificMsg };
+  }
 }
 
 export async function runDoctor(version: string): Promise<DoctorResult> {
