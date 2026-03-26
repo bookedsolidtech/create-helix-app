@@ -17,6 +17,7 @@ export interface ParsedArgs {
   quiet: boolean;
   json: boolean;
   isDrupal: boolean;
+  noConfig: boolean;
 
   // Template options
   template: Framework | null;
@@ -29,6 +30,14 @@ export interface ParsedArgs {
   eslint: boolean;
   darkMode: boolean;
   tokens: boolean;
+
+  // Tracks which boolean toggles were explicitly set via CLI
+  explicitFlags: {
+    typescript: boolean;
+    eslint: boolean;
+    darkMode: boolean;
+    tokens: boolean;
+  };
 
   // Meta
   showVersion: boolean;
@@ -61,12 +70,21 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const quiet = argv.includes('--quiet') || argv.includes('-q');
   const json = argv.includes('--json');
   const isDrupal = argv.includes('--drupal');
+  const noConfig = argv.includes('--no-config');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
   const eslint = !argv.includes('--no-eslint');
   const darkMode = !argv.includes('--no-dark-mode');
   const tokens = !argv.includes('--no-tokens');
+
+  // Track which boolean toggles were explicitly set via CLI
+  const explicitFlags = {
+    typescript: argv.includes('--typescript') || argv.includes('--no-typescript'),
+    eslint: argv.includes('--eslint') || argv.includes('--no-eslint'),
+    darkMode: argv.includes('--dark-mode') || argv.includes('--no-dark-mode'),
+    tokens: argv.includes('--tokens') || argv.includes('--no-tokens'),
+  };
 
   // --template
   const templateArgIndex = argv.indexOf('--template');
@@ -123,6 +141,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     quiet,
     json,
     isDrupal,
+    noConfig,
     template,
     preset,
     bundles,
@@ -131,6 +150,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     eslint,
     darkMode,
     tokens,
+    explicitFlags,
     showVersion,
     showHelp,
   };

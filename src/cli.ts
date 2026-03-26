@@ -11,6 +11,7 @@ import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
 import { validateProjectName } from './validation.js';
 import { parseArgs } from './args.js';
+import { loadConfig } from './config.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 
 const _require = createRequire(import.meta.url);
@@ -258,12 +259,19 @@ export function runInfoCommand(templateId: string | null, isJson: boolean): void
   process.exit(1);
 }
 
-export function runListCommand(isJson: boolean): void {
+export function runListCommand(isJson: boolean, configFile?: string | null): void {
   if (isJson) {
-    const output = {
+    const output: {
+      templates: { id: string; name: string; hint: string }[];
+      presets: { id: string; name: string; description: string }[];
+      configFile?: string | null;
+    } = {
       templates: TEMPLATES.map((t) => ({ id: t.id, name: t.name, hint: t.hint })),
       presets: PRESETS.map((pr) => ({ id: pr.id, name: pr.name, description: pr.description })),
     };
+    if (configFile !== undefined) {
+      output.configFile = configFile;
+    }
     console.log(JSON.stringify(output, null, 2));
     return;
   }
@@ -431,16 +439,29 @@ export async function runCLI(): Promise<void> {
     quiet: isQuiet,
     json: isJson,
     isDrupal,
-    template: templateArg,
+    noConfig,
+    template: templateArgRaw,
     preset: presetArg,
-    bundles: bundlesFromFlag,
+    bundles: bundlesFromFlagRaw,
     outputDir: outputDirArg,
-    typescript: typescriptFlag,
-    eslint: eslintFlag,
-    darkMode: darkModeFlag,
-    tokens: tokensFlag,
+    typescript: typescriptFlagRaw,
+    eslint: eslintFlagRaw,
+    darkMode: darkModeFlagRaw,
+    tokens: tokensFlagRaw,
+    explicitFlags,
     projectName,
   } = parsed;
+
+  // Load config file (built-in defaults → config file → CLI flags)
+  const { config: helixConfig, configFile } = loadConfig(noConfig);
+  const cfgDefaults = helixConfig.defaults ?? {};
+
+  const templateArg = templateArgRaw ?? (cfgDefaults.template ?? null);
+  const bundlesFromFlag = bundlesFromFlagRaw ?? (cfgDefaults.bundles ?? null);
+  const typescriptFlag = explicitFlags.typescript ? typescriptFlagRaw : (cfgDefaults.typescript ?? true);
+  const eslintFlag = explicitFlags.eslint ? eslintFlagRaw : (cfgDefaults.eslint ?? true);
+  const darkModeFlag = explicitFlags.darkMode ? darkModeFlagRaw : (cfgDefaults.darkMode ?? true);
+  const tokensFlag = explicitFlags.tokens ? tokensFlagRaw : (cfgDefaults.tokens ?? true);
 
   if (showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
@@ -448,7 +469,7 @@ export async function runCLI(): Promise<void> {
   }
 
   if (subcommand === 'list') {
-    runListCommand(isJson);
+    runListCommand(isJson, configFile);
     process.exit(0);
   }
 
