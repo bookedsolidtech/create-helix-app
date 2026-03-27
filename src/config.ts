@@ -128,7 +128,17 @@ function readHelixRcFile(candidates: string[]): { raw: HelixConfig; configFile: 
     let raw: string;
     try {
       raw = fs.readFileSync(candidate, 'utf-8');
-    } catch {
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        // File not found — expected when no config exists at this path
+        logger.debug(`Config file not found at "${candidate}" — skipping`);
+      } else {
+        // Unexpected error (e.g. permission denied, I/O error)
+        logger.warn(
+          `Could not read config file at "${candidate}" (${code ?? 'unknown error'}) — skipping`,
+        );
+      }
       continue;
     }
 

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import https from 'node:https';
 import { withRetry, HelixError } from './retry.js';
+import { logger } from './logger.js';
 
 export interface CheckResult {
   name: string;
@@ -19,7 +20,10 @@ export interface DoctorResult {
 function runCommand(cmd: string): string | null {
   try {
     return execSync(cmd, { stdio: 'pipe', timeout: 5000 }).toString().trim();
-  } catch {
+  } catch (err) {
+    logger.debug(`Command failed: ${cmd}`, {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -95,8 +99,10 @@ export function checkDiskSpace(): CheckResult {
     const freeBytes = os.freemem();
     const freeGb = (freeBytes / (1024 * 1024 * 1024)).toFixed(1);
     return { name: 'Disk space', status: 'ok', message: `~${freeGb} GB available (RAM free)` };
-  } catch {
-    return { name: 'Disk space', status: 'warn', message: 'unable to determine' };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.debug('Disk space check failed', { error: detail });
+    return { name: 'Disk space', status: 'warn', message: `unable to determine (${detail})` };
   }
 }
 
@@ -104,8 +110,10 @@ export function checkWritePermissions(): CheckResult {
   try {
     fs.accessSync(process.cwd(), fs.constants.W_OK);
     return { name: 'Write permissions', status: 'ok', message: 'OK' };
-  } catch {
-    return { name: 'Write permissions', status: 'fail', message: 'not writable' };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.debug('Write permissions check failed', { error: detail });
+    return { name: 'Write permissions', status: 'fail', message: `not writable (${detail})` };
   }
 }
 

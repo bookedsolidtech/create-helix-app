@@ -5,6 +5,7 @@ import pc from 'picocolors';
 import { validateDirectory } from '../validation.js';
 import { withRetry } from '../retry.js';
 import { readRegistryCache, writeRegistryCache } from '../network.js';
+import { logger } from '../logger.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
@@ -28,7 +29,17 @@ function readPackageJson(dir: string): PackageJson | null {
   try {
     const raw = fs.readFileSync(pkgPath, 'utf-8');
     return JSON.parse(raw) as PackageJson;
-  } catch {
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      logger.debug(`package.json not found at "${pkgPath}"`);
+    } else if (err instanceof SyntaxError) {
+      logger.warn(`package.json at "${pkgPath}" contains invalid JSON — unable to read dependencies`);
+    } else {
+      logger.warn(
+        `Could not read package.json at "${pkgPath}" (${code ?? (err instanceof Error ? err.message : String(err))})`,
+      );
+    }
     return null;
   }
 }
@@ -67,7 +78,11 @@ async function fetchPackageVersion(packageName: string): Promise<string | undefi
       },
       { maxRetries: 3 },
     );
-  } catch {
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.warn(
+      `Unable to fetch latest version for "${packageName}" from npm registry — ${detail}. Check your internet connection.`,
+    );
     return undefined;
   }
 }
