@@ -28,6 +28,17 @@ export const VALID_FRAMEWORKS = [
 /** Canonical list of valid Drupal preset IDs. The DrupalPreset type in types.ts derives from this. */
 export const VALID_PRESETS = ['standard', 'blog', 'healthcare', 'intranet', 'ecommerce'] as const;
 
+/** Canonical list of valid component bundle IDs. */
+export const VALID_BUNDLES = [
+  'all',
+  'core',
+  'forms',
+  'navigation',
+  'data-display',
+  'feedback',
+  'layout',
+] as const;
+
 /**
  * Validates a project name for npm compatibility and filesystem safety.
  * Returns an error message string on failure, or undefined if valid.

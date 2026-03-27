@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import type { Framework, ComponentBundle, DrupalPreset } from './types.js';
 import { logger } from './logger.js';
+import { VALID_FRAMEWORKS, VALID_PRESETS, VALID_BUNDLES } from './validation.js';
 
 export interface HelixConfigDefaults {
   template?: Framework;
@@ -62,7 +63,16 @@ export function readEnvVars(): EnvVarOverrides {
   const env = process.env;
   const result: EnvVarOverrides = {};
 
-  if (env['HELIX_TEMPLATE']) result.template = env['HELIX_TEMPLATE'] as Framework;
+  if (env['HELIX_TEMPLATE']) {
+    const val = env['HELIX_TEMPLATE'];
+    if ((VALID_FRAMEWORKS as readonly string[]).includes(val)) {
+      result.template = val as Framework;
+    } else {
+      logger.warn(
+        `Warning: HELIX_TEMPLATE="${val}" is not a valid framework — ignoring (falling through to prompt)`,
+      );
+    }
+  }
 
   const typescript = parseEnvBool(env['HELIX_TYPESCRIPT']);
   if (typescript !== undefined) result.typescript = typescript;
@@ -77,12 +87,30 @@ export function readEnvVars(): EnvVarOverrides {
   if (tokens !== undefined) result.tokens = tokens;
 
   if (env['HELIX_BUNDLES']) {
-    result.bundles = env['HELIX_BUNDLES'].split(',').map((s) => s.trim()) as ComponentBundle[];
+    const requested = env['HELIX_BUNDLES'].split(',').map((s) => s.trim());
+    const valid: ComponentBundle[] = [];
+    for (const b of requested) {
+      if ((VALID_BUNDLES as readonly string[]).includes(b)) {
+        valid.push(b as ComponentBundle);
+      } else {
+        logger.warn(`Warning: HELIX_BUNDLES value "${b}" is not a valid bundle — ignoring`);
+      }
+    }
+    if (valid.length > 0) result.bundles = valid;
   }
 
   if (env['HELIX_OUTPUT_DIR']) result.outputDir = env['HELIX_OUTPUT_DIR'];
 
-  if (env['HELIX_PRESET']) result.preset = env['HELIX_PRESET'] as DrupalPreset;
+  if (env['HELIX_PRESET']) {
+    const val = env['HELIX_PRESET'];
+    if ((VALID_PRESETS as readonly string[]).includes(val)) {
+      result.preset = val as DrupalPreset;
+    } else {
+      logger.warn(
+        `Warning: HELIX_PRESET="${val}" is not a valid preset — ignoring (falling through to prompt)`,
+      );
+    }
+  }
 
   const verbose = parseEnvBool(env['HELIX_VERBOSE']);
   if (verbose !== undefined) result.verbose = verbose;
