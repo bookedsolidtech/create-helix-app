@@ -67,9 +67,11 @@ describe('findPluginPackageNames', () => {
   });
 
   it('returns multiple bare helix-plugin-* packages', () => {
-    vi.mocked(fs.readdirSync).mockReturnValue(
-      ['helix-plugin-a', 'helix-plugin-b', 'express'] as never,
-    );
+    vi.mocked(fs.readdirSync).mockReturnValue([
+      'helix-plugin-a',
+      'helix-plugin-b',
+      'express',
+    ] as never);
     const result = findPluginPackageNames('/project/node_modules');
     expect(result).toEqual(['helix-plugin-a', 'helix-plugin-b']);
   });
@@ -169,9 +171,7 @@ describe('discoverPlugins', () => {
 
   it('skips packages that fail to import and continues', async () => {
     // One importable (node:path) and one that will fail
-    vi.mocked(fs.readdirSync).mockReturnValue(
-      ['helix-plugin-bad', 'helix-plugin-good'] as never,
-    );
+    vi.mocked(fs.readdirSync).mockReturnValue(['helix-plugin-bad', 'helix-plugin-good'] as never);
 
     // We cannot easily control dynamic import() without more elaborate setup,
     // so we test the behaviour indirectly: both names will fail to import

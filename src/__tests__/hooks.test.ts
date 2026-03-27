@@ -79,7 +79,9 @@ describe('HookManager — execute', () => {
   it('calls each handler with the provided context', async () => {
     const mgr = new HookManager();
     const received: HookContext[] = [];
-    mgr.register('onTest', (ctx) => { received.push(ctx); });
+    mgr.register('onTest', (ctx) => {
+      received.push(ctx);
+    });
     const context = buildHookContext('proj', '/dir');
     await mgr.execute('onTest', context);
     expect(received).toHaveLength(1);
@@ -89,9 +91,15 @@ describe('HookManager — execute', () => {
   it('executes handlers in registration order', async () => {
     const mgr = new HookManager();
     const order: number[] = [];
-    mgr.register('ordered', () => { order.push(1); });
-    mgr.register('ordered', () => { order.push(2); });
-    mgr.register('ordered', () => { order.push(3); });
+    mgr.register('ordered', () => {
+      order.push(1);
+    });
+    mgr.register('ordered', () => {
+      order.push(2);
+    });
+    mgr.register('ordered', () => {
+      order.push(3);
+    });
     await mgr.execute('ordered', buildHookContext('p', '/d'));
     expect(order).toEqual([1, 2, 3]);
   });
@@ -122,9 +130,9 @@ describe('HookManager — execute', () => {
     mgr.register('failing', () => {
       throw new Error('hook failed');
     });
-    await expect(
-      mgr.execute('failing', buildHookContext('p', '/d')),
-    ).rejects.toThrow('hook failed');
+    await expect(mgr.execute('failing', buildHookContext('p', '/d'))).rejects.toThrow(
+      'hook failed',
+    );
   });
 
   it('propagates rejected promises from async handlers', async () => {
@@ -132,15 +140,17 @@ describe('HookManager — execute', () => {
     mgr.register('asyncFailing', async () => {
       await Promise.reject(new Error('async hook failed'));
     });
-    await expect(
-      mgr.execute('asyncFailing', buildHookContext('p', '/d')),
-    ).rejects.toThrow('async hook failed');
+    await expect(mgr.execute('asyncFailing', buildHookContext('p', '/d'))).rejects.toThrow(
+      'async hook failed',
+    );
   });
 
   it('does not call subsequent handlers after one throws', async () => {
     const mgr = new HookManager();
     const second = vi.fn();
-    mgr.register('earlyThrow', () => { throw new Error('stop'); });
+    mgr.register('earlyThrow', () => {
+      throw new Error('stop');
+    });
     mgr.register('earlyThrow', second);
 
     await mgr.execute('earlyThrow', buildHookContext('p', '/d')).catch(() => {});
@@ -150,7 +160,9 @@ describe('HookManager — execute', () => {
   it('passes all context properties to the handler', async () => {
     const mgr = new HookManager();
     let received: HookContext | undefined;
-    mgr.register('ctx', (ctx) => { received = ctx; });
+    mgr.register('ctx', (ctx) => {
+      received = ctx;
+    });
     const ctx = buildHookContext('my-proj', '/out', { extra: 42 });
     await mgr.execute('ctx', ctx);
     expect(received?.projectName).toBe('my-proj');

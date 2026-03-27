@@ -24,7 +24,9 @@ export interface HelixPlugin {
  *     scope folder)
  */
 export function isHelixPluginName(name: string): boolean {
-  return name.startsWith('helix-plugin-') || (name.startsWith('@') && name.includes('/helix-plugin-'));
+  return (
+    name.startsWith('helix-plugin-') || (name.startsWith('@') && name.includes('/helix-plugin-'))
+  );
 }
 
 /**

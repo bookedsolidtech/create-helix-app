@@ -34,7 +34,9 @@ function readPackageJson(dir: string): PackageJson | null {
     if (code === 'ENOENT') {
       logger.debug(`package.json not found at "${pkgPath}"`);
     } else if (err instanceof SyntaxError) {
-      logger.warn(`package.json at "${pkgPath}" contains invalid JSON — unable to read dependencies`);
+      logger.warn(
+        `package.json at "${pkgPath}" contains invalid JSON — unable to read dependencies`,
+      );
     } else {
       logger.warn(
         `Could not read package.json at "${pkgPath}" (${code ?? (err instanceof Error ? err.message : String(err))})`,

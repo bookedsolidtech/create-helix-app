@@ -562,6 +562,18 @@ ${presetList}
 
     Precedence: CLI flags > env vars > .helixrc.json > defaults
 
+  Plugins & Hooks:
+    Define hooks in .helixrc.json under a "hooks" key to run scripts at lifecycle events:
+      { "hooks": { "pre-scaffold": "node scripts/pre.js", "post-scaffold": "npm run sync" } }
+
+    Available hook events:
+      pre-scaffold    Runs before project directory and files are created
+      post-scaffold   Runs after all files are written and dependencies installed
+      pre-write       Runs before each file is written
+      post-write      Runs after each file is written
+
+    Plugin discovery: helix-plugin-* packages in node_modules are auto-loaded as plugins.
+
   Examples:
     create-helix my-app                          # Interactive mode
     create-helix my-app --template react-next    # Skip framework prompt

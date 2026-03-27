@@ -146,7 +146,9 @@ describe('loadHelixRcHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(config) as never);
 
     const errors: HelixRcHookEntry[] = [];
-    await loadHelixRcHooks('/project', (entry) => { errors.push(entry); });
+    await loadHelixRcHooks('/project', (entry) => {
+      errors.push(entry);
+    });
 
     expect(errors).toHaveLength(2);
     expect(errors[0].name).toBe('bad');
