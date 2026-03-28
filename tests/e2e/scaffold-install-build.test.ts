@@ -46,12 +46,7 @@ const FRAMEWORKS: FrameworkTestEntry[] = [
   },
   { framework: 'vue-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'solid-vite', hasBuild: true, buildOutputDir: 'dist' },
-  {
-    framework: 'qwik-vite',
-    hasBuild: true,
-    buildOutputDir: 'dist',
-    knownBuildFailure: 'Qwik build fails in temp directory environment',
-  },
+  { framework: 'qwik-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'svelte-kit', hasBuild: true, buildOutputDir: '.svelte-kit' },
   { framework: 'angular', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'astro', hasBuild: true, buildOutputDir: 'dist' },

@@ -823,10 +823,8 @@ describe('scaffoldProject — qwik-vite', () => {
       'package.json',
       'vite.config.ts',
       'index.html',
-      'src/root.tsx',
-      'src/entry.dev.tsx',
-      'src/routes/layout.tsx',
-      'src/routes/index.tsx',
+      'src/app.tsx',
+      'src/entry.tsx',
       'src/index.css',
     ];
 
@@ -853,32 +851,20 @@ describe('scaffoldProject — qwik-vite', () => {
     expect(viteConfig).toContain('qwikVite');
   });
 
-  it('root.tsx imports QwikCityProvider and RouterOutlet', async () => {
-    const opts = makeOptions({ name: 'qwik-root', framework: 'qwik-vite' });
+  it('app.tsx uses useSignal and component$', async () => {
+    const opts = makeOptions({ name: 'qwik-app', framework: 'qwik-vite' });
     await scaffoldProject(opts);
-    const root = await fs.readFile(path.join(opts.directory, 'src', 'root.tsx'), 'utf-8');
-    expect(root).toContain('QwikCityProvider');
-    expect(root).toContain('RouterOutlet');
+    const app = await fs.readFile(path.join(opts.directory, 'src', 'app.tsx'), 'utf-8');
+    expect(app).toContain('useSignal');
+    expect(app).toContain('component$');
   });
 
-  it('routes/layout.tsx contains Slot', async () => {
-    const opts = makeOptions({ name: 'qwik-layout', framework: 'qwik-vite' });
+  it('entry.tsx renders App component', async () => {
+    const opts = makeOptions({ name: 'qwik-entry', framework: 'qwik-vite' });
     await scaffoldProject(opts);
-    const layout = await fs.readFile(
-      path.join(opts.directory, 'src', 'routes', 'layout.tsx'),
-      'utf-8',
-    );
-    expect(layout).toContain('Slot');
-  });
-
-  it('routes/index.tsx uses useSignal', async () => {
-    const opts = makeOptions({ name: 'qwik-index', framework: 'qwik-vite' });
-    await scaffoldProject(opts);
-    const index = await fs.readFile(
-      path.join(opts.directory, 'src', 'routes', 'index.tsx'),
-      'utf-8',
-    );
-    expect(index).toContain('useSignal');
+    const entry = await fs.readFile(path.join(opts.directory, 'src', 'entry.tsx'), 'utf-8');
+    expect(entry).toContain('render');
+    expect(entry).toContain('App');
   });
 
   it('package.json includes @builder.io/qwik dependency', async () => {
@@ -886,7 +872,6 @@ describe('scaffoldProject — qwik-vite', () => {
     await scaffoldProject(opts);
     const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
     expect(pkg.dependencies['@builder.io/qwik']).toBeDefined();
-    expect(pkg.dependencies['@builder.io/qwik-city']).toBeDefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
   });
 
