@@ -21,7 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify": "pnpm run lint && pnpm run format:check && pnpm run type-check",
-    "preflight": "pnpm run verify && pnpm run test",
+    "preflight": "bash scripts/preflight.sh",
     "license-check": "npx license-checker --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD' --summary",
     "sbom": "cyclonedx-npm --output-format JSON --output-file sbom.json",
     "prepare": "husky",
@@ -63,7 +63,7 @@
     ]
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": "^20.0.0 || ^22.0.0 || ^24.0.0",
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.15.9",
