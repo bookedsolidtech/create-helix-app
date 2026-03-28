@@ -3,3 +3,4 @@ node_modules/
 coverage/
 *.tgz
 pnpm-lock.yaml
+.pnpm-store
