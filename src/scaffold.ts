@@ -2833,18 +2833,20 @@ body {
 
 async function scaffoldQwikVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
-  const routesDir = path.join(srcDir, 'routes');
   await safeEnsureDir(srcDir);
-  await safeEnsureDir(routesDir);
 
-  // vite.config.ts
+  // vite.config.ts — Qwik client-only SPA (no Qwik City routing)
   await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
     `import { defineConfig } from 'vite';
 import { qwikVite } from '@builder.io/qwik/optimizer';
 
 export default defineConfig({
-  plugins: [qwikVite()],
+  plugins: [
+    qwikVite({
+      csr: true,
+    }),
+  ],
 });
 `,
   );
@@ -2862,77 +2864,26 @@ export default defineConfig({
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/entry.dev.tsx"></script>
+    <script type="module" src="/src/entry.tsx"></script>
   </body>
 </html>
 `,
   );
 
-  // src/root.tsx — resumable root component
+  // src/app.tsx — main Qwik component
   await safeWriteFile(
-    path.join(srcDir, 'root.tsx'),
-    `import { component$ } from '@builder.io/qwik';
-import { QwikCityProvider, RouterOutlet } from '@builder.io/qwik-city';
+    path.join(srcDir, 'app.tsx'),
+    `import { component$, useSignal } from '@builder.io/qwik';
 ${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
 import './index.css';
 
-export default component$(() => {
-  return (
-    <QwikCityProvider>
-      <head>
-        <meta charset="UTF-8" />
-        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
-        <title>${sanitizeForHtml(options.name)}</title>
-      </head>
-      <body>
-        <RouterOutlet />
-      </body>
-    </QwikCityProvider>
-  );
-});
-`,
-  );
-
-  // src/entry.dev.tsx
-  await safeWriteFile(
-    path.join(srcDir, 'entry.dev.tsx'),
-    `import { render } from '@builder.io/qwik';
-import Root from './root';
-
-render(document.getElementById('app')!, <Root />);
-`,
-  );
-
-  // src/routes/layout.tsx
-  await safeWriteFile(
-    path.join(routesDir, 'layout.tsx'),
-    `import { component$, Slot } from '@builder.io/qwik';
-
-export default component$(() => {
-  return (
-    <div class="container">
-      <header>
-        <h1>${sanitizeForHtml(options.name)}</h1>
-      </header>
-      <main>
-        <Slot />
-      </main>
-    </div>
-  );
-});
-`,
-  );
-
-  // src/routes/index.tsx
-  await safeWriteFile(
-    path.join(routesDir, 'index.tsx'),
-    `import { component$, useSignal } from '@builder.io/qwik';
-
-export default component$(() => {
+export const App = component$(() => {
   const count = useSignal(0);
 
   return (
-    <div>
+    <div class="container">
+      <h1>${sanitizeForHtml(options.name)}</h1>
+
       <hx-card>
         <div slot="header"><h2>Counter Demo</h2></div>
         <p>Count: {count.value}</p>
@@ -2964,6 +2915,16 @@ export default component$(() => {
     </div>
   );
 });
+`,
+  );
+
+  // src/entry.tsx — client-side render entry point
+  await safeWriteFile(
+    path.join(srcDir, 'entry.tsx'),
+    `import { render } from '@builder.io/qwik';
+import { App } from './app';
+
+render(document.getElementById('app')!, <App />);
 `,
   );
 
