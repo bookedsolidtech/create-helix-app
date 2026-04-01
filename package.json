@@ -29,7 +29,7 @@
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "node scripts/block-local-publish.mjs && pnpm run build"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.0",
