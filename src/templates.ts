@@ -18,9 +18,13 @@ export const TEMPLATES: TemplateConfig[] = [
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
+      '@types/node': '^22.0.0',
       '@types/react': '^19.1.0',
       '@types/react-dom': '^19.1.0',
       typescript: '^5.7.0',
+      eslint: '^9.0.0',
+      '@eslint/js': '^9.0.0',
+      'typescript-eslint': '^8.0.0',
     },
     features: ['ssr', 'app-router', 'react-wrappers', 'form-integration'],
   },

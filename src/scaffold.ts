@@ -850,33 +850,8 @@ import '@helixui/library/components/hx-tooltip';
 import '@helixui/library/components/hx-textarea';
 import '@helixui/library/components/hx-data-table';
 
-// Type declarations for the custom elements
-// These map to the actual Lit component classes
-
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace JSX {
-    interface IntrinsicElements {
-      'hx-button': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-card': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-text-input': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-select': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-checkbox': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-switch': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-dialog': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-alert': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-badge': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tabs': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tab': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tab-panel': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-avatar': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-divider': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tooltip': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-textarea': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-data-table': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-    }
-  }
-}
+// JSX types are declared globally in src/helix.d.ts
+// This file provides React-wrapped versions with proper event bridging
 
 /**
  * React-wrapped HELiX Button
@@ -1048,7 +1023,7 @@ export const HxDataTable = createComponent({
  * - All form components use module-level counters (no crypto.randomUUID — SSR-safe)
  * - For client-only components, use next/dynamic with ssr: false
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 interface HelixProviderProps {
   children: ReactNode;
@@ -1057,8 +1032,6 @@ interface HelixProviderProps {
 }
 
 export function HelixProvider({ children, theme }: HelixProviderProps) {
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
     // Dynamic import ensures HELiX only loads on the client
     import('@helixui/library').then(() => {
@@ -1066,8 +1039,9 @@ export function HelixProvider({ children, theme }: HelixProviderProps) {
       if (theme && theme !== 'system') {
         document.documentElement.setAttribute('data-theme', theme);
       }
-      setReady(true);
-    }).catch(() => setReady(true));
+    }).catch(() => {
+      // Library failed to load — components will render as unstyled custom elements
+    });
   }, [theme]);
 
   // Render children immediately — components will upgrade when loaded
@@ -1091,7 +1065,6 @@ import 'react';
 type HxElement = React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
 
 declare module 'react' {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
       'hx-accordion': HxElement;
@@ -1195,9 +1168,7 @@ export default function RootLayout({
   // Global styles
   await safeWriteFile(
     path.join(appDir, 'globals.css'),
-    `@import '@helixui/tokens/tokens.css';
-
-*,
+    `*,
 *::before,
 *::after {
   box-sizing: border-box;
@@ -1652,7 +1623,7 @@ hx-button::part(button) {
   // Examples layout with navigation
   await safeWriteFile(
     path.join(examplesDir, 'layout.tsx'),
-    `'use client';
+    `import Link from 'next/link';
 
 export default function ExamplesLayout({
   children,
@@ -1668,10 +1639,10 @@ export default function ExamplesLayout({
         gap: '1rem',
         alignItems: 'center',
       }}>
-        <a href="/" style={{ textDecoration: 'none', fontWeight: 600 }}>HELiX</a>
+        <Link href="/" style={{ textDecoration: 'none', fontWeight: 600 }}>HELiX</Link>
         <hx-divider vertical style={{ height: '1.5rem' }}></hx-divider>
-        <a href="/examples/forms" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Forms</a>
-        <a href="/examples/dashboard" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Dashboard</a>
+        <Link href="/examples/forms" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Forms</Link>
+        <Link href="/examples/dashboard" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Dashboard</Link>
       </nav>
       {children}
     </div>
