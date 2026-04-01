@@ -1,13 +1,14 @@
 {
   "name": "create-helix",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Scaffold a new project with HELiX web components — TUI-powered CLI",
   "type": "module",
   "bin": {
     "create-helix": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "assets"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/add-shebang.mjs",

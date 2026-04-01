@@ -39,7 +39,7 @@ npx create-helix --drupal --preset healthcare
 
 | Framework                | Command Hint                 | Features                                               |
 | ------------------------ | ---------------------------- | ------------------------------------------------------ |
-| **React + Next.js 15**   | recommended for new projects | SSR, App Router, React wrappers                        |
+| **React + Next.js 16**   | recommended for new projects | SSR, App Router, React wrappers                        |
 | **React + Vite**         | best DX for SPAs             | Hot reload, React wrappers                             |
 | **Remix**                | full-stack React, SSR        | SSR, nested routes, React wrappers                     |
 | **Vue + Nuxt 4**         | Vue ecosystem, SSR built-in  | SSR, native WC support, auto-imports                   |
