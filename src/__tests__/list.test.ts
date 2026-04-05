@@ -8,7 +8,7 @@ vi.mock('../templates.js', () => ({
   TEMPLATES: [
     {
       id: 'react-next',
-      name: 'React + Next.js 15',
+      name: 'React + Next.js 16',
       description: 'App Router, SSR-ready, full HELiX integration',
     },
     {
@@ -75,7 +75,7 @@ describe('listAll — TUI mode', () => {
   it('lists all template names', () => {
     listAll(false);
     const output = consoleSpy.mock.calls.map((args) => String(args[0])).join('\n');
-    expect(output).toContain('React + Next.js 15');
+    expect(output).toContain('React + Next.js 16');
     expect(output).toContain('React + Vite');
   });
 

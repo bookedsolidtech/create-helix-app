@@ -106,7 +106,7 @@ describe('getTemplate', () => {
     const template = getTemplate('react-next');
     expect(template).toBeDefined();
     expect(template!.id).toBe('react-next');
-    expect(template!.name).toBe('React + Next.js 15');
+    expect(template!.name).toBe('React + Next.js 16');
   });
 
   it('returns undefined for an unknown framework ID', () => {
@@ -118,7 +118,7 @@ describe('getTemplate', () => {
   });
 
   it.each([
-    ['react-next', 'React + Next.js 15'],
+    ['react-next', 'React + Next.js 16'],
     ['react-vite', 'React + Vite'],
     ['vue-nuxt', 'Vue + Nuxt 4'],
     ['vue-vite', 'Vue + Vite'],

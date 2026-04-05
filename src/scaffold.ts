@@ -853,16 +853,20 @@ insert_final_newline = true
 async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const appDir = path.join(srcDir, 'app');
+  const componentsDir = path.join(srcDir, 'components');
+  const helixDir = path.join(componentsDir, 'helix');
+  const examplesDir = path.join(appDir, 'examples');
   await safeEnsureDir(appDir);
+  await safeEnsureDir(helixDir);
+  await safeEnsureDir(examplesDir);
 
-  // next.config.ts
+  // next.config.ts — Next.js 16 patterns
   await safeWriteFile(
     path.join(options.directory, 'next.config.ts'),
     `import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Web components need client-side hydration
-  // No special config needed — Next.js 15 handles custom elements natively
+  // Next.js 16 handles custom elements natively
   reactStrictMode: true,
 };
 
@@ -870,7 +874,7 @@ export default nextConfig;
 `,
   );
 
-  // tsconfig.json for Next.js
+  // tsconfig.json for Next.js 16
   await safeWriteJson(
     path.join(options.directory, 'tsconfig.json'),
     {
@@ -1115,9 +1119,9 @@ export const HxDataTable = createComponent({
 `,
   );
 
-  // Client-side HELiX provider component
+  // Client-side HELiX provider component with dark mode support
   await safeWriteFile(
-    path.join(srcDir, 'components', 'helix', 'provider.tsx'),
+    path.join(helixDir, 'provider.tsx'),
     `'use client';
 
 /**
@@ -1147,12 +1151,16 @@ export function HelixProvider({ children, theme }: HelixProviderProps) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // Restore persisted theme from localStorage
+    const stored = localStorage.getItem('helix-theme');
+    if (stored === 'dark' || stored === 'light') {
+      document.documentElement.setAttribute('data-theme', stored);
+    } else if (theme && theme !== 'system') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+
     // Dynamic import ensures HELiX only loads on the client
     import('@helixui/library').then(() => {
-      // Set explicit theme to avoid hx-theme's matchMedia SSR issue
-      if (theme && theme !== 'system') {
-        document.documentElement.setAttribute('data-theme', theme);
-      }
       setReady(true);
     }).catch(() => setReady(true));
   }, [theme]);
@@ -1248,17 +1256,99 @@ export {};
 `,
   );
 
-  // Layout with provider
+  // Navbar component
+  await safeWriteFile(
+    path.join(componentsDir, 'Navbar.tsx'),
+    `'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+export function Navbar() {
+  const [dark, setDark] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('helix-theme');
+    if (stored === 'dark') {
+      setDark(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+    localStorage.setItem('helix-theme', next ? 'dark' : 'light');
+  };
+
+  return (
+    <nav className="navbar">
+      <div className="navbar-inner">
+        <Link href="/" className="navbar-brand">
+          <strong>HELiX</strong>
+        </Link>
+
+        <button
+          className="navbar-toggle"
+          onClick={() => setMenuOpen(!menuOpen)}
+          aria-label="Toggle navigation"
+        >
+          <span className="navbar-toggle-icon" />
+        </button>
+
+        <div className={\`navbar-links \${menuOpen ? 'open' : ''}\`}>
+          <Link href="/">Home</Link>
+          <Link href="/examples/components">Components</Link>
+          <Link href="/examples/forms">Forms</Link>
+          <Link href="/examples/dashboard">Dashboard</Link>
+          <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <button onClick={toggleTheme} className="theme-toggle" aria-label="Toggle dark mode">
+            {dark ? '☀️' : '🌙'}
+          </button>
+        </div>
+      </div>
+    </nav>
+  );
+}
+`,
+  );
+
+  // Footer component
+  await safeWriteFile(
+    path.join(componentsDir, 'Footer.tsx'),
+    `export function Footer() {
+  return (
+    <footer className="site-footer">
+      <div className="footer-inner">
+        <p>
+          Built with <strong>HELiX</strong> + Next.js 16 &mdash;{' '}
+          <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer">
+            Booked Solid
+          </a>
+        </p>
+        <p className="footer-year">&copy; {new Date().getFullYear()} Booked Solid. All rights reserved.</p>
+      </div>
+    </footer>
+  );
+}
+`,
+  );
+
+  // Layout with provider, navbar, footer
   await safeWriteFile(
     path.join(appDir, 'layout.tsx'),
     `import type { Metadata } from 'next';
 import { HelixProvider } from '@/components/helix/provider';
+import { Navbar } from '@/components/Navbar';
+import { Footer } from '@/components/Footer';
 ${options.designTokens ? "import '../../helix-tokens.css';" : ''}
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '${sanitizeForHtml(options.name)}',
-  description: 'Built with HELiX web components',
+  title: '${sanitizeForHtml(options.name)} — Built with HELiX',
+  description: 'Enterprise web components for any framework, powered by HELiX and Next.js 16',
 };
 
 export default function RootLayout({
@@ -1267,10 +1357,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en"${options.darkMode ? ' suppressHydrationWarning' : ''}>
+    <html lang="en" suppressHydrationWarning>
       <body>
         <HelixProvider>
-          {children}
+          <Navbar />
+          <main>{children}</main>
+          <Footer />
         </HelixProvider>
       </body>
     </html>
@@ -1279,11 +1371,12 @@ export default function RootLayout({
 `,
   );
 
-  // Global styles
+  // Global styles with dark mode + responsive design
   await safeWriteFile(
     path.join(appDir, 'globals.css'),
     `@import '@helixui/tokens/tokens.css';
 
+/* ── Reset ──────────────────────────────────────────────────────────── */
 *,
 *::before,
 *::after {
@@ -1292,23 +1385,312 @@ export default function RootLayout({
   padding: 0;
 }
 
+/* ── Light theme (default) ──────────────────────────────────────────── */
+:root {
+  --surface: var(--hx-color-surface, #ffffff);
+  --surface-alt: #f8f9fa;
+  --text: var(--hx-color-text, #1a1a1a);
+  --text-secondary: #555;
+  --border: #e0e0e0;
+  --primary: var(--hx-color-primary, #0066cc);
+  --primary-hover: #0052a3;
+  --code-bg: #f1f3f5;
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────────── */
+[data-theme='dark'] {
+  --surface: #0f1117;
+  --surface-alt: #1a1d27;
+  --text: #e1e4e8;
+  --text-secondary: #8b949e;
+  --border: #30363d;
+  --primary: #58a6ff;
+  --primary-hover: #79b8ff;
+  --code-bg: #161b22;
+}
+
 body {
   font-family: var(--hx-font-family, system-ui, -apple-system, sans-serif);
   line-height: var(--hx-line-height-base, 1.5);
-  color: var(--hx-color-text, #1a1a1a);
-  background: var(--hx-color-surface, #ffffff);
+  color: var(--text);
+  background: var(--surface);
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: var(--hx-spacing-lg, 1.5rem);
+  padding: 0 1.5rem;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────── */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.navbar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.navbar-brand {
+  font-size: 1.25rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.navbar-links {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+}
+.navbar-links a,
+.navbar-links button {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.navbar-links a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.theme-toggle {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.navbar-toggle {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+}
+.navbar-toggle-icon {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text);
+  position: relative;
+}
+.navbar-toggle-icon::before,
+.navbar-toggle-icon::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 2px;
+  background: var(--text);
+  left: 0;
+}
+.navbar-toggle-icon::before { top: -6px; }
+.navbar-toggle-icon::after { top: 6px; }
+
+@media (max-width: 768px) {
+  .navbar-toggle { display: block; }
+  .navbar-links {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    gap: 0.75rem;
+  }
+  .navbar-links.open { display: flex; }
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 5rem 1.5rem 4rem;
+}
+.hero h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+}
+.hero .tagline {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+.hero-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.version-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+  color: var(--text-secondary);
+}
+
+/* ── Sections ────────────────────────────────────────────────────────── */
+.section {
+  padding: 4rem 0;
+}
+.section-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+.section-subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 2.5rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── Card Grid ───────────────────────────────────────────────────────── */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+.showcase-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: border-color 0.2s;
+}
+.showcase-card:hover {
+  border-color: var(--primary);
+}
+.showcase-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+.showcase-card p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+.showcase-card .demo {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ── Dev Guidance ────────────────────────────────────────────────────── */
+.dev-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+.dev-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+.dev-card h3 {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+.dev-card code {
+  background: var(--code-bg);
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+}
+.dev-card ul {
+  list-style: none;
+  padding: 0;
+}
+.dev-card li {
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+.dev-card li:last-child {
+  border-bottom: none;
+}
+
+/* ── Ecosystem Links ─────────────────────────────────────────────────── */
+.ecosystem-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+.ecosystem-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  transition: border-color 0.2s, color 0.2s;
+}
+.ecosystem-link:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.footer-year {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 768px) {
+  .hero h1 { font-size: 2rem; }
+  .hero .tagline { font-size: 1rem; }
+  .hero { padding: 3rem 1rem 2rem; }
+  .section { padding: 2.5rem 0; }
 }
 `,
   );
 
-  // Main page — interactive demo using custom elements directly
+  // Main page — polished landing page
   await safeWriteFile(
     path.join(appDir, 'page.tsx'),
     `'use client';
@@ -1316,182 +1698,185 @@ body {
 import { useState, useRef, useEffect } from 'react';
 
 /**
- * HELiX + Next.js — Interactive Demo
+ * HELiX Landing Page
  *
- * This page demonstrates using HELiX web components directly in React/Next.js.
- * Web components work in JSX — you just need to handle events via refs or addEventListener.
- *
- * Three patterns shown:
- * 1. Direct custom elements in JSX (simplest)
- * 2. Event handling via useRef + addEventListener
- * 3. @lit/react wrappers (see src/components/helix/wrappers.tsx for type-safe approach)
+ * A polished first experience that showcases HELiX components in a real layout.
+ * Server Components aren't used here because web components need DOM access.
  */
 export default function Home() {
-  const [name, setName] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const nameInputRef = useRef<HTMLElement>(null);
-  const greetBtnRef = useRef<HTMLElement>(null);
+  const [switchChecked, setSwitchChecked] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const switchRef = useRef<HTMLElement>(null);
+  const inputRef = useRef<HTMLElement>(null);
 
-  // Pattern: addEventListener for custom events from web components
   useEffect(() => {
-    const input = nameInputRef.current;
-    const btn = greetBtnRef.current;
-
+    const sw = switchRef.current;
+    const inp = inputRef.current;
+    const handleSwitch = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setSwitchChecked(!!detail?.checked);
+    };
     const handleInput = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      setName(detail?.value ?? '');
+      setInputValue(detail?.value ?? '');
     };
-
-    const handleClick = () => {
-      setSubmitted(true);
-      setTimeout(() => setSubmitted(false), 3000);
-    };
-
-    input?.addEventListener('hx-input', handleInput);
-    btn?.addEventListener('hx-click', handleClick);
-
+    sw?.addEventListener('hx-change', handleSwitch);
+    inp?.addEventListener('hx-input', handleInput);
     return () => {
-      input?.removeEventListener('hx-input', handleInput);
-      btn?.removeEventListener('hx-click', handleClick);
+      sw?.removeEventListener('hx-change', handleSwitch);
+      inp?.removeEventListener('hx-input', handleInput);
     };
   }, []);
 
   return (
-    <main className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 700 }}>
-            Welcome to HELiX
-          </h1>
-          <p style={{ color: '#666' }}>
-            Enterprise web components, running in Next.js 15.
+    <>
+      {/* Hero */}
+      <section className="hero">
+        <div className="container">
+          <span className="version-badge">@helixui/library ^1.0.0</span>
+          <h1>Build with HELiX</h1>
+          <p className="tagline">
+            Enterprise web components for any framework. Production-ready, accessible,
+            and themeable &mdash; running on Next.js 16.
           </p>
+          <div className="hero-actions">
+            <hx-button variant="primary" size="lg" onClick={() => {
+              const el = document.getElementById('get-started');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}>
+              Get Started
+            </hx-button>
+            <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">
+              <hx-button variant="secondary" size="lg">View on GitHub</hx-button>
+            </a>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <hx-divider></hx-divider>
-
-      <hx-tabs style={{ marginTop: '2rem' }}>
-        <hx-tab slot="nav">Interactive Demo</hx-tab>
-        <hx-tab slot="nav">Theming</hx-tab>
-        <hx-tab slot="nav">Patterns</hx-tab>
-
-        <hx-tab-panel>
-          <div style={{ padding: '2rem 0', display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-            <hx-card>
-              <div slot="header">
-                <h3>Quick Start</h3>
+      {/* Component Showcase */}
+      <section className="section">
+        <div className="container">
+          <h2 className="section-title">Component Showcase</h2>
+          <p className="section-subtitle">
+            Interactive components you can use right now. Every element below is a live HELiX web component.
+          </p>
+          <div className="card-grid">
+            <div className="showcase-card">
+              <h3>Forms</h3>
+              <p>Text inputs, selects, checkboxes &mdash; all with native form participation.</p>
+              <div className="demo">
+                <hx-text-input ref={inputRef} placeholder="Type here..." size="sm"></hx-text-input>
+                {inputValue && <hx-badge variant="info">{inputValue}</hx-badge>}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <hx-text-input
-                  ref={nameInputRef}
-                  label="Your name"
-                  placeholder="Enter your name"
-                ></hx-text-input>
-                <hx-button ref={greetBtnRef} variant="primary">
-                  Say Hello
-                </hx-button>
-                {submitted && (
-                  <hx-alert variant="success" open>
-                    Hello, {name || 'World'}! HELiX components are working in React.
-                  </hx-alert>
-                )}
-              </div>
-            </hx-card>
+            </div>
 
-            <hx-card>
-              <div slot="header">
-                <h3>Button Variants</h3>
-                <hx-badge variant="info">Shadow DOM</hx-badge>
+            <div className="showcase-card">
+              <h3>Data Display</h3>
+              <p>Badges, progress bars, and status indicators for rich data UIs.</p>
+              <div className="demo">
+                <hx-badge variant="success">Active</hx-badge>
+                <hx-badge variant="warning">Pending</hx-badge>
+                <hx-badge variant="danger">Error</hx-badge>
+                <hx-badge variant="info">Info</hx-badge>
               </div>
-              <p style={{ marginBottom: '1rem', color: '#666' }}>
-                HELiX components use Shadow DOM. Style them via CSS custom properties
-                and ::part() selectors.
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            </div>
+
+            <div className="showcase-card">
+              <h3>Navigation</h3>
+              <p>Tabs, breadcrumbs, and menus for structured app navigation.</p>
+              <div className="demo">
                 <hx-button variant="primary" size="sm">Primary</hx-button>
                 <hx-button variant="secondary" size="sm">Secondary</hx-button>
-                <hx-button variant="danger" size="sm">Danger</hx-button>
                 <hx-button variant="ghost" size="sm">Ghost</hx-button>
               </div>
-            </hx-card>
+            </div>
 
-            <hx-card>
-              <div slot="header">
-                <h3>Event Handling</h3>
+            <div className="showcase-card">
+              <h3>Feedback</h3>
+              <p>Alerts, toasts, and dialogs for user communication.</p>
+              <div className="demo">
+                <hx-alert variant="success" open>Components loaded!</hx-alert>
               </div>
-              <p style={{ color: '#666' }}>
-                Use <code>useRef</code> + <code>addEventListener</code> for custom events,
-                or use the @lit/react wrappers in <code>src/components/helix/wrappers.tsx</code>
-                for a more React-native experience.
-              </p>
-              <pre style={{
-                marginTop: '1rem',
-                padding: '1rem',
-                borderRadius: '0.5rem',
-                background: '#f5f5f5',
-                fontSize: '0.8rem',
-                overflow: 'auto',
-              }}>
-{String.raw\`// Option 1: useRef + addEventListener
-const ref = useRef(null);
-useEffect(() => {
-  ref.current?.addEventListener(
-    'hx-click', handler
-  );
-}, []);
+            </div>
 
-// Option 2: @lit/react wrappers
-import { HxButton } from './wrappers';
-<HxButton onHxClick={handler} />\`}
-              </pre>
-            </hx-card>
+            <div className="showcase-card">
+              <h3>Layout</h3>
+              <p>Cards, dividers, and grid systems for page structure.</p>
+              <div className="demo" style={{ width: '100%' }}>
+                <hx-card style={{ width: '100%' }}>
+                  <div slot="header"><strong>Nested Card</strong></div>
+                  <span>Cards compose naturally inside grids.</span>
+                </hx-card>
+              </div>
+            </div>
+
+            <div className="showcase-card">
+              <h3>Toggles</h3>
+              <p>Switches and checkboxes for boolean state.</p>
+              <div className="demo">
+                <hx-switch ref={switchRef} label="Enable feature"></hx-switch>
+                {switchChecked && <hx-badge variant="success">ON</hx-badge>}
+              </div>
+            </div>
           </div>
-        </hx-tab-panel>
+        </div>
+      </section>
 
-        <hx-tab-panel>
-          <div style={{ padding: '2rem 0' }}>
-            <hx-card>
-              <div slot="header"><h3>CSS Custom Properties</h3></div>
-              <p>Override design tokens to match your brand:</p>
-              <pre style={{ marginTop: '1rem', padding: '1rem', background: '#f5f5f5', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
-{String.raw\`:root {
-  --hx-color-primary: #0066cc;
-  --hx-spacing-md: 1rem;
-  --hx-radius-md: 0.5rem;
-}
-
-/* ::part() for internal elements */
-hx-button::part(button) {
-  font-weight: 700;
-}\`}
-              </pre>
-            </hx-card>
-          </div>
-        </hx-tab-panel>
-
-        <hx-tab-panel>
-          <div style={{ padding: '2rem 0' }}>
-            <hx-card>
-              <div slot="header"><h3>Next.js Patterns</h3></div>
-              <ul style={{ lineHeight: '2' }}>
-                <li><strong>Client Components:</strong> Web components need <code>&apos;use client&apos;</code> — they require DOM</li>
-                <li><strong>HelixProvider:</strong> Wraps your layout to initialize components client-side</li>
-                <li><strong>Dynamic Import:</strong> HELiX loads via <code>import(&apos;@helixui/library&apos;)</code> in useEffect</li>
-                <li><strong>SSR:</strong> Components render as empty custom elements server-side, hydrate on client</li>
+      {/* Developer Guidance */}
+      <section className="section" id="get-started">
+        <div className="container">
+          <h2 className="section-title">What&apos;s Next</h2>
+          <p className="section-subtitle">Everything you need to start building with HELiX.</p>
+          <div className="dev-grid">
+            <div className="dev-card">
+              <h3>Commands</h3>
+              <ul>
+                <li><code>npm run dev</code> &mdash; Start development server</li>
+                <li><code>npm run build</code> &mdash; Production build</li>
+                <li><code>npm run lint</code> &mdash; Run ESLint</li>
               </ul>
-            </hx-card>
+            </div>
+            <div className="dev-card">
+              <h3>Key Files</h3>
+              <ul>
+                <li><code>src/app/layout.tsx</code> &mdash; Root layout</li>
+                <li><code>src/app/page.tsx</code> &mdash; Landing page</li>
+                <li><code>src/components/helix/wrappers.tsx</code> &mdash; React wrappers</li>
+                <li><code>src/components/helix/provider.tsx</code> &mdash; HELiX initializer</li>
+              </ul>
+            </div>
+            <div className="dev-card">
+              <h3>Documentation</h3>
+              <ul>
+                <li><a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">@helixui/library README</a></li>
+                <li><a href="https://github.com/bookedsolidtech/create-helix-app" target="_blank" rel="noopener noreferrer">create-helix-app repo</a></li>
+                <li><a href="https://www.npmjs.com/package/@helixui/library" target="_blank" rel="noopener noreferrer">@helixui/library on npm</a></li>
+              </ul>
+            </div>
           </div>
-        </hx-tab-panel>
-      </hx-tabs>
-    </main>
+        </div>
+      </section>
+
+      {/* Ecosystem Links */}
+      <section className="section">
+        <div className="container">
+          <h2 className="section-title">Ecosystem</h2>
+          <p className="section-subtitle">Part of the Booked Solid open-source ecosystem.</p>
+          <div className="ecosystem-links">
+            <a className="ecosystem-link" href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">GitHub &mdash; helix</a>
+            <a className="ecosystem-link" href="https://github.com/bookedsolidtech/create-helix-app" target="_blank" rel="noopener noreferrer">GitHub &mdash; create-helix-app</a>
+            <a className="ecosystem-link" href="https://www.npmjs.com/package/@helixui/library" target="_blank" rel="noopener noreferrer">npm &mdash; @helixui/library</a>
+            <a className="ecosystem-link" href="https://www.npmjs.com/package/@helixui/tokens" target="_blank" rel="noopener noreferrer">npm &mdash; @helixui/tokens</a>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }
 `,
   );
 
   // Forms example page — demonstrates form participation with web components
-  const examplesDir = path.join(appDir, 'examples');
   const formsDir = path.join(examplesDir, 'forms');
   await safeEnsureDir(formsDir);
 
@@ -1736,10 +2121,10 @@ hx-button::part(button) {
 `,
   );
 
-  // Examples layout with navigation
+  // Examples layout with navigation (uses next/link)
   await safeWriteFile(
     path.join(examplesDir, 'layout.tsx'),
-    `'use client';
+    `import Link from 'next/link';
 
 export default function ExamplesLayout({
   children,
@@ -1747,21 +2132,195 @@ export default function ExamplesLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
       <nav style={{
-        padding: '0.75rem 2rem',
-        borderBottom: '1px solid var(--hx-color-border, #eee)',
         display: 'flex',
         gap: '1rem',
         alignItems: 'center',
+        marginBottom: '2rem',
+        paddingBottom: '1rem',
+        borderBottom: '1px solid var(--border)',
       }}>
-        <a href="/" style={{ textDecoration: 'none', fontWeight: 600 }}>HELiX</a>
-        <hx-divider vertical style={{ height: '1.5rem' }}></hx-divider>
-        <a href="/examples/forms" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Forms</a>
-        <a href="/examples/dashboard" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Dashboard</a>
+        <Link href="/" style={{ fontWeight: 600, color: 'var(--text)' }}>Home</Link>
+        <span style={{ color: 'var(--border)' }}>|</span>
+        <Link href="/examples/components">Components</Link>
+        <Link href="/examples/forms">Forms</Link>
+        <Link href="/examples/dashboard">Dashboard</Link>
       </nav>
       {children}
     </div>
+  );
+}
+`,
+  );
+
+  // /examples/components page — comprehensive component showcase
+  const componentsExDir = path.join(examplesDir, 'components');
+  await safeEnsureDir(componentsExDir);
+
+  await safeWriteFile(
+    path.join(componentsExDir, 'page.tsx'),
+    `'use client';
+
+import { useState, useRef, useEffect } from 'react';
+
+/**
+ * Comprehensive HELiX Component Showcase
+ *
+ * Demonstrates ALL available HELiX component categories with live interactive examples.
+ */
+export default function ComponentsExample() {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const dialogRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    const handleClose = () => setDialogOpen(false);
+    el?.addEventListener('hx-close', handleClose);
+    return () => el?.removeEventListener('hx-close', handleClose);
+  }, []);
+
+  useEffect(() => {
+    if (dialogRef.current) {
+      if (dialogOpen) {
+        dialogRef.current.setAttribute('open', '');
+      } else {
+        dialogRef.current.removeAttribute('open');
+      }
+    }
+  }, [dialogOpen]);
+
+  return (
+    <>
+      <h1>Component Showcase</h1>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
+        Every component below is a live HELiX web component running in Next.js 16.
+      </p>
+
+      {/* Buttons */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Buttons</h2>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+          <hx-button variant="primary">Primary</hx-button>
+          <hx-button variant="secondary">Secondary</hx-button>
+          <hx-button variant="danger">Danger</hx-button>
+          <hx-button variant="ghost">Ghost</hx-button>
+          <hx-button variant="primary" size="sm">Small</hx-button>
+          <hx-button variant="primary" size="lg">Large</hx-button>
+          <hx-button variant="primary" disabled>Disabled</hx-button>
+        </div>
+      </section>
+
+      {/* Badges */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Badges &amp; Tags</h2>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Danger</hx-badge>
+          <hx-tag>Tag A</hx-tag>
+          <hx-tag>Tag B</hx-tag>
+        </div>
+      </section>
+
+      {/* Form Components */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Form Components</h2>
+        <div style={{ display: 'grid', gap: '1rem', maxWidth: '500px', marginTop: '1rem' }}>
+          <hx-text-input label="Text Input" placeholder="Enter text..."></hx-text-input>
+          <hx-textarea label="Textarea" placeholder="Multi-line input..." rows={3}></hx-textarea>
+          <hx-select label="Select">
+            <option value="">Choose...</option>
+            <option value="a">Option A</option>
+            <option value="b">Option B</option>
+          </hx-select>
+          <hx-checkbox label="Checkbox example"></hx-checkbox>
+          <hx-switch label="Switch toggle"></hx-switch>
+        </div>
+      </section>
+
+      {/* Cards */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Cards</h2>
+        <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', marginTop: '1rem' }}>
+          <hx-card>
+            <div slot="header"><strong>Basic Card</strong></div>
+            <p>Card content goes here.</p>
+          </hx-card>
+          <hx-card>
+            <div slot="header"><strong>With Badge</strong> <hx-badge variant="info">New</hx-badge></div>
+            <p>Cards can contain any content.</p>
+          </hx-card>
+          <hx-card>
+            <div slot="header"><strong>Interactive</strong></div>
+            <hx-button variant="primary" size="sm">Action</hx-button>
+          </hx-card>
+        </div>
+      </section>
+
+      {/* Alerts */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Alerts</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+          <hx-alert variant="info" open>Informational alert message.</hx-alert>
+          <hx-alert variant="success" open>Operation completed successfully.</hx-alert>
+          <hx-alert variant="warning" open>Please review before continuing.</hx-alert>
+          <hx-alert variant="danger" open>An error occurred during processing.</hx-alert>
+        </div>
+      </section>
+
+      {/* Tabs */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Tabs</h2>
+        <hx-tabs style={{ marginTop: '1rem' }}>
+          <hx-tab slot="nav">Overview</hx-tab>
+          <hx-tab slot="nav">Details</hx-tab>
+          <hx-tab slot="nav">Settings</hx-tab>
+          <hx-tab-panel><p style={{ padding: '1rem 0' }}>Overview tab content.</p></hx-tab-panel>
+          <hx-tab-panel><p style={{ padding: '1rem 0' }}>Details tab content.</p></hx-tab-panel>
+          <hx-tab-panel><p style={{ padding: '1rem 0' }}>Settings tab content.</p></hx-tab-panel>
+        </hx-tabs>
+      </section>
+
+      {/* Dialog */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Dialog</h2>
+        <hx-button variant="primary" onClick={() => setDialogOpen(true)} style={{ marginTop: '1rem' }}>
+          Open Dialog
+        </hx-button>
+        <hx-dialog ref={dialogRef} label="Example Dialog">
+          <p>This is a HELiX dialog component.</p>
+          <div slot="footer">
+            <hx-button variant="secondary" onClick={() => setDialogOpen(false)}>Close</hx-button>
+            <hx-button variant="primary" onClick={() => setDialogOpen(false)}>Confirm</hx-button>
+          </div>
+        </hx-dialog>
+      </section>
+
+      {/* Avatars & Tooltips */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Avatars &amp; Tooltips</h2>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+          <hx-tooltip content="Alice">
+            <hx-avatar size="md">A</hx-avatar>
+          </hx-tooltip>
+          <hx-tooltip content="Bob">
+            <hx-avatar size="md">B</hx-avatar>
+          </hx-tooltip>
+          <hx-tooltip content="Charlie">
+            <hx-avatar size="md">C</hx-avatar>
+          </hx-tooltip>
+        </div>
+      </section>
+
+      {/* Divider */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <h2>Divider</h2>
+        <hx-divider style={{ margin: '1rem 0' }}></hx-divider>
+        <p style={{ color: 'var(--text-secondary)' }}>Horizontal divider separating content sections.</p>
+      </section>
+    </>
   );
 }
 `,

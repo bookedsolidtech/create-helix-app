@@ -10,12 +10,12 @@ import type {
 export const TEMPLATES: TemplateConfig[] = [
   {
     id: 'react-next',
-    name: 'React + Next.js 15',
+    name: 'React + Next.js 16',
     description: 'App Router, SSR-ready, full HELiX integration',
     hint: 'recommended for new projects',
     color: pc.cyan,
     dependencies: {
-      next: '^15.3.0',
+      next: '^16.0.0',
       react: '^19.1.0',
       'react-dom': '^19.1.0',
       '@helixui/library': '^1.0.0',

@@ -8,11 +8,11 @@ vi.mock('../templates.js', () => ({
   TEMPLATES: [
     {
       id: 'react-next',
-      name: 'React + Next.js 15',
+      name: 'React + Next.js 16',
       description: 'App Router, SSR-ready, full HELiX integration',
       hint: 'recommended for new projects',
       dependencies: {
-        next: '^15.3.0',
+        next: '^16.0.0',
         react: '^19.1.0',
       },
       devDependencies: {
@@ -85,7 +85,7 @@ describe('showTemplateInfo — template (TUI mode)', () => {
   it('outputs the template name to stdout', () => {
     showTemplateInfo('react-next', false);
     const output = consoleSpy.mock.calls.map((args) => String(args[0])).join('\n');
-    expect(output).toContain('React + Next.js 15');
+    expect(output).toContain('React + Next.js 16');
   });
 
   it('outputs the template ID to stdout', () => {
@@ -176,7 +176,7 @@ describe('showTemplateInfo — template (JSON mode)', () => {
     showTemplateInfo('react-next', true);
     const parsed = JSON.parse(consoleSpy.mock.calls[0][0] as string) as Record<string, unknown>;
     expect(parsed.id).toBe('react-next');
-    expect(parsed.name).toBe('React + Next.js 15');
+    expect(parsed.name).toBe('React + Next.js 16');
     expect(parsed.description).toBe('App Router, SSR-ready, full HELiX integration');
   });
 
