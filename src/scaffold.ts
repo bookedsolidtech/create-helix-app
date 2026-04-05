@@ -1825,44 +1825,746 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 `,
   );
 
-  // App.tsx
+  // helix.d.ts — JSX type declarations for HELiX custom elements
   await safeWriteFile(
-    path.join(srcDir, 'App.tsx'),
-    `import { useState } from 'react';
+    path.join(srcDir, 'helix.d.ts'),
+    `/**
+ * JSX type declarations for HELiX web components.
+ *
+ * This allows TypeScript to understand hx-* elements in JSX without errors.
+ * For fully type-safe React wrappers (properties, events, refs), see the
+ * @lit/react wrappers pattern used in the react-next template.
+ */
+import 'react';
 
-export default function App() {
-  const [count, setCount] = useState(0);
+type HxElement = React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
+
+declare module 'react' {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    interface IntrinsicElements {
+      'hx-accordion': HxElement;
+      'hx-accordion-item': HxElement;
+      'hx-alert': HxElement;
+      'hx-avatar': HxElement;
+      'hx-badge': HxElement;
+      'hx-banner': HxElement;
+      'hx-breadcrumb': HxElement;
+      'hx-button': HxElement;
+      'hx-button-group': HxElement;
+      'hx-card': HxElement;
+      'hx-carousel': HxElement;
+      'hx-checkbox': HxElement;
+      'hx-checkbox-group': HxElement;
+      'hx-code-snippet': HxElement;
+      'hx-color-picker': HxElement;
+      'hx-combobox': HxElement;
+      'hx-counter': HxElement;
+      'hx-data-table': HxElement;
+      'hx-date-picker': HxElement;
+      'hx-dialog': HxElement;
+      'hx-divider': HxElement;
+      'hx-drawer': HxElement;
+      'hx-dropdown': HxElement;
+      'hx-field': HxElement;
+      'hx-field-label': HxElement;
+      'hx-file-upload': HxElement;
+      'hx-grid': HxElement;
+      'hx-icon': HxElement;
+      'hx-icon-button': HxElement;
+      'hx-menu': HxElement;
+      'hx-menu-item': HxElement;
+      'hx-meter': HxElement;
+      'hx-nav': HxElement;
+      'hx-pagination': HxElement;
+      'hx-popover': HxElement;
+      'hx-progress-bar': HxElement;
+      'hx-progress-ring': HxElement;
+      'hx-radio-group': HxElement;
+      'hx-rating': HxElement;
+      'hx-select': HxElement;
+      'hx-skeleton': HxElement;
+      'hx-slider': HxElement;
+      'hx-spinner': HxElement;
+      'hx-split-button': HxElement;
+      'hx-split-panel': HxElement;
+      'hx-stat': HxElement;
+      'hx-status-indicator': HxElement;
+      'hx-switch': HxElement;
+      'hx-tab': HxElement;
+      'hx-tab-panel': HxElement;
+      'hx-tabs': HxElement;
+      'hx-tag': HxElement;
+      'hx-text': HxElement;
+      'hx-text-input': HxElement;
+      'hx-textarea': HxElement;
+      'hx-toast': HxElement;
+      'hx-tooltip': HxElement;
+      'hx-tree-item': HxElement;
+      'hx-tree-view': HxElement;
+    }
+  }
+}
+
+export {};
+`,
+  );
+
+  // src/components/Navbar.tsx — responsive navbar with dark mode toggle
+  await safeEnsureDir(path.join(srcDir, 'components'));
+  await safeWriteFile(
+    path.join(srcDir, 'components', 'Navbar.tsx'),
+    `import { useEffect, useRef } from 'react';
+
+interface NavbarProps {
+  /** Current colour scheme applied to <html data-theme> */
+  theme: 'light' | 'dark';
+  /** Toggle callback — parent owns the state */
+  onToggleTheme: () => void;
+}
+
+/**
+ * Navbar — top navigation bar with HELiX branding and dark-mode toggle.
+ *
+ * Uses HELiX icon-button for the theme toggle so the component stays
+ * consistent with the rest of the design system.
+ */
+export function Navbar({ theme, onToggleTheme }: NavbarProps) {
+  const toggleRef = useRef<HTMLElement>(null);
+
+  // HELiX emits 'hx-click' — wire it up once
+  useEffect(() => {
+    const el = toggleRef.current;
+    const handler = () => onToggleTheme();
+    el?.addEventListener('hx-click', handler);
+    return () => el?.removeEventListener('hx-click', handler);
+  }, [onToggleTheme]);
 
   return (
-    <div className="container">
-      <h1>HELiX + React + Vite</h1>
-      <hx-card>
-        <div slot="header"><h2>Counter Demo</h2></div>
-        <p>Count: {count}</p>
-        <hx-button variant="primary" onClick={() => setCount(c => c + 1)}>
-          Increment
-        </hx-button>
-      </hx-card>
-    </div>
+    <header className="navbar">
+      <div className="navbar-inner">
+        <a href="/" className="navbar-brand" aria-label="Home">
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" fill="currentColor">
+            <rect x="2" y="6" width="24" height="4" rx="2" />
+            <rect x="2" y="12" width="16" height="4" rx="2" />
+            <rect x="2" y="18" width="20" height="4" rx="2" />
+          </svg>
+          <span>HELiX</span>
+        </a>
+
+        <nav className="navbar-links" aria-label="Main navigation">
+          <a href="#components">Components</a>
+          <a href="#ecosystem">Ecosystem</a>
+          <a
+            href="https://github.com/bookedsolidtech/helix"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+        </nav>
+
+        <hx-icon-button
+          ref={toggleRef}
+          aria-label={\`Switch to \${theme === 'light' ? 'dark' : 'light'} mode\`}
+          title={\`Switch to \${theme === 'light' ? 'dark' : 'light'} mode\`}
+        >
+          {theme === 'light' ? '🌙' : '☀️'}
+        </hx-icon-button>
+      </div>
+    </header>
   );
 }
 `,
   );
 
-  // index.css
+  // src/components/FeatureCard.tsx — reusable feature/showcase card
+  await safeWriteFile(
+    path.join(srcDir, 'components', 'FeatureCard.tsx'),
+    `interface FeatureCardProps {
+  /** Short emoji or icon shown at the top of the card */
+  icon: string;
+  /** Card heading */
+  title: string;
+  /** Descriptive text below the heading */
+  description: string;
+  /** Optional badge label (e.g. "New", "Beta") */
+  badge?: string;
+}
+
+/**
+ * FeatureCard — lightweight showcase card built on hx-card.
+ *
+ * Demonstrates how to compose HELiX web components inside a typed
+ * React functional component.
+ */
+export function FeatureCard({ icon, title, description, badge }: FeatureCardProps) {
+  return (
+    <hx-card className="feature-card">
+      <div slot="header" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{ fontSize: '1.25rem' }} aria-hidden="true">{icon}</span>
+        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>{title}</h3>
+        {badge && (
+          <hx-badge variant="info" style={{ marginLeft: 'auto' }}>
+            {badge}
+          </hx-badge>
+        )}
+      </div>
+      <p style={{ margin: 0, color: 'var(--hx-color-text-secondary, #555)', lineHeight: 1.6 }}>
+        {description}
+      </p>
+    </hx-card>
+  );
+}
+`,
+  );
+
+  // App.tsx — high-quality landing page matching react-next quality standard
+  await safeWriteFile(
+    path.join(srcDir, 'App.tsx'),
+    `import { useState, useRef, useEffect } from 'react';
+import { Navbar } from './components/Navbar';
+import { FeatureCard } from './components/FeatureCard';
+
+/**
+ * HELiX + React + Vite — Landing Page
+ *
+ * Demonstrates:
+ * 1. Dark / light mode toggle using data-theme on <html>
+ * 2. HELiX web components used directly in JSX
+ * 3. Custom event handling via useRef + addEventListener
+ * 4. Responsive grid layout using CSS custom properties
+ */
+export default function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    // Respect OS preference on first load
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'light';
+  });
+
+  const [name, setName] = useState('');
+  const [greeted, setGreeted] = useState(false);
+  const nameInputRef = useRef<HTMLElement>(null);
+  const greetBtnRef = useRef<HTMLElement>(null);
+
+  // Apply theme to <html> whenever it changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  // Wire up HELiX custom events for the interactive demo
+  useEffect(() => {
+    const input = nameInputRef.current;
+    const btn = greetBtnRef.current;
+
+    const handleInput = (e: Event) => {
+      const detail = (e as CustomEvent<{ value: string }>).detail;
+      setName(detail?.value ?? '');
+    };
+    const handleClick = () => {
+      setGreeted(true);
+      setTimeout(() => setGreeted(false), 3000);
+    };
+
+    input?.addEventListener('hx-input', handleInput);
+    btn?.addEventListener('hx-click', handleClick);
+
+    return () => {
+      input?.removeEventListener('hx-input', handleInput);
+      btn?.removeEventListener('hx-click', handleClick);
+    };
+  }, []);
+
+  const handleToggleTheme = () => {
+    setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+  };
+
+  return (
+    <>
+      <Navbar theme={theme} onToggleTheme={handleToggleTheme} />
+
+      <main>
+        {/* ── Hero ─────────────────────────────────────────────────── */}
+        <section className="hero">
+          <div className="container">
+            <hx-badge variant="success" style={{ marginBottom: '1rem' }}>
+              React 19 · Vite 6 · TypeScript
+            </hx-badge>
+            <h1 className="hero-title">
+              Build faster with<br />
+              <span className="hero-accent">HELiX&nbsp;+&nbsp;React&nbsp;+&nbsp;Vite</span>
+            </h1>
+            <p className="hero-subtitle">
+              Enterprise-grade web components, hot-reload DX, and design tokens —
+              everything you need to ship production UIs at speed.
+            </p>
+            <div className="hero-actions">
+              <hx-button variant="primary" size="lg" onClick={() => {
+                document.getElementById('components')?.scrollIntoView({ behavior: 'smooth' });
+              }}>
+                Explore Components
+              </hx-button>
+              <hx-button variant="ghost" size="lg" onClick={() => {
+                window.open('https://github.com/bookedsolidtech/helix', '_blank', 'noopener,noreferrer');
+              }}>
+                View on GitHub
+              </hx-button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Component Showcase ────────────────────────────────────── */}
+        <section id="components" className="section">
+          <div className="container">
+            <h2 className="section-title">Component Showcase</h2>
+            <p className="section-subtitle">
+              HELiX ships 60+ accessible web components. Here are a few to get you started.
+            </p>
+
+            <div className="feature-grid">
+              <FeatureCard
+                icon="⚡"
+                title="Instant Hot Reload"
+                description="Vite's native ESM dev server gives you sub-50ms HMR. Edit a component and see it live without losing state."
+                badge="Vite 6"
+              />
+              <FeatureCard
+                icon="🎨"
+                title="Design Tokens"
+                description="Override any visual property — colour, spacing, radius, typography — via CSS custom properties. No CSS-in-JS required."
+              />
+              <FeatureCard
+                icon="♿"
+                title="Accessible by Default"
+                description="Every HELiX component ships with full ARIA support, keyboard navigation, and screen-reader announcements built in."
+              />
+              <FeatureCard
+                icon="🔒"
+                title="Shadow DOM Encapsulation"
+                description="Component styles live inside Shadow DOM. Your global CSS never leaks in — and their internals never leak out."
+              />
+              <FeatureCard
+                icon="📋"
+                title="Form Participation"
+                description="HELiX form controls use ElementInternals to participate in native HTML forms — no wrappers, no hacks."
+                badge="React 19"
+              />
+              <FeatureCard
+                icon="🌙"
+                title="Built-in Dark Mode"
+                description="Flip data-theme='dark' on <html> and every component adapts automatically. Toggle it above to see it in action."
+              />
+            </div>
+
+            {/* Interactive demo */}
+            <hx-divider style={{ margin: '3rem 0 2rem' }}></hx-divider>
+            <h3 style={{ marginBottom: '1.5rem' }}>Interactive Demo</h3>
+            <div className="demo-grid">
+              <hx-card>
+                <div slot="header"><h4 style={{ margin: 0 }}>Quick Start</h4></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <hx-text-input
+                    ref={nameInputRef}
+                    label="Your name"
+                    placeholder="Enter your name"
+                  ></hx-text-input>
+                  <hx-button ref={greetBtnRef} variant="primary">
+                    Say Hello
+                  </hx-button>
+                  {greeted && (
+                    <hx-alert variant="success" open>
+                      Hello, {name || 'World'}! HELiX components are working in React.
+                    </hx-alert>
+                  )}
+                </div>
+              </hx-card>
+
+              <hx-card>
+                <div slot="header">
+                  <h4 style={{ margin: 0 }}>Button Variants</h4>
+                  <hx-badge variant="info">Shadow DOM</hx-badge>
+                </div>
+                <p style={{ marginBottom: '1rem', color: 'var(--hx-color-text-secondary, #666)' }}>
+                  Style via CSS custom properties and <code>::part()</code> selectors.
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <hx-button variant="primary" size="sm">Primary</hx-button>
+                  <hx-button variant="secondary" size="sm">Secondary</hx-button>
+                  <hx-button variant="danger" size="sm">Danger</hx-button>
+                  <hx-button variant="ghost" size="sm">Ghost</hx-button>
+                </div>
+              </hx-card>
+
+              <hx-card>
+                <div slot="header"><h4 style={{ margin: 0 }}>Event Handling</h4></div>
+                <p style={{ color: 'var(--hx-color-text-secondary, #666)', marginBottom: '1rem' }}>
+                  Two patterns for wiring HELiX events in React:
+                </p>
+                <pre className="code-block">
+{String.raw\`// Pattern 1 — useRef + addEventListener
+const ref = useRef(null);
+useEffect(() => {
+  ref.current?.addEventListener(
+    'hx-click', handler
+  );
+}, []);
+
+// Pattern 2 — @lit/react wrappers
+import { HxButton } from './wrappers';
+<HxButton onHxClick={handler} />\`}
+                </pre>
+              </hx-card>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Ecosystem ────────────────────────────────────────────── */}
+        <section id="ecosystem" className="section section-alt">
+          <div className="container">
+            <h2 className="section-title">Ecosystem</h2>
+            <p className="section-subtitle">
+              Everything you need to build production-ready applications.
+            </p>
+            <div className="ecosystem-grid">
+              {[
+                { name: 'React 19', href: 'https://react.dev', desc: 'Concurrent rendering, Actions, improved hooks' },
+                { name: 'Vite 6', href: 'https://vite.dev', desc: 'Lightning-fast bundler with native ESM HMR' },
+                { name: 'TypeScript 5', href: 'https://typescriptlang.org', desc: 'Type-safe development with zero config' },
+                { name: 'HELiX Library', href: 'https://github.com/bookedsolidtech/helix', desc: '60+ accessible, design-token-driven components' },
+                { name: 'HELiX Tokens', href: 'https://github.com/bookedsolidtech/helix', desc: 'CSS custom properties for every visual decision' },
+                { name: '@lit/react', href: 'https://lit.dev/docs/frameworks/react/', desc: 'Type-safe React wrappers for web components' },
+              ].map(({ name, href, desc }) => (
+                <a key={name} href={href} target="_blank" rel="noopener noreferrer" className="ecosystem-link">
+                  <strong>{name}</strong>
+                  <span>{desc}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Developer Guidance ────────────────────────────────────── */}
+        <section className="section">
+          <div className="container">
+            <h2 className="section-title">Get Started</h2>
+            <div className="guide-grid">
+              <hx-card>
+                <div slot="header"><h3 style={{ margin: 0 }}>Project Structure</h3></div>
+                <pre className="code-block">
+{String.raw\`src/
+  App.tsx          # Landing page (this file)
+  main.tsx         # Entry point
+  index.css        # Global styles + dark mode
+  helix.d.ts       # JSX types for hx-* elements
+  helix-setup.ts   # HELiX library initialisation
+  components/
+    Navbar.tsx     # Top navigation + theme toggle
+    FeatureCard.tsx # Showcase card component
+    ErrorBoundary.tsx\`}
+                </pre>
+              </hx-card>
+
+              <hx-card>
+                <div slot="header"><h3 style={{ margin: 0 }}>Customise Design Tokens</h3></div>
+                <pre className="code-block">
+{String.raw\`/* src/index.css */
+:root {
+  --hx-color-primary: #0066cc;
+  --hx-spacing-md: 1rem;
+  --hx-radius-md: 0.5rem;
+}
+
+/* Target component internals */
+hx-button::part(button) {
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}\`}
+                </pre>
+              </hx-card>
+
+              <hx-card>
+                <div slot="header"><h3 style={{ margin: 0 }}>Available Commands</h3></div>
+                <pre className="code-block">
+{String.raw\`# Start development server
+npm run dev
+
+# Production build
+npm run build
+
+# Preview production build
+npm run preview\`}
+                </pre>
+              </hx-card>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="footer">
+        <div className="container">
+          <p>
+            Built with <strong>HELiX</strong> · <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">GitHub</a>
+          </p>
+        </div>
+      </footer>
+    </>
+  );
+}
+`,
+  );
+
+  // index.css — global styles with dark/light mode via CSS custom properties
   await safeWriteFile(
     path.join(srcDir, 'index.css'),
     `@import '@helixui/tokens/tokens.css';
 
-body {
-  font-family: var(--hx-font-family, system-ui, sans-serif);
+/* ── Reset ───────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
   margin: 0;
-  padding: 2rem;
+  padding: 0;
 }
 
+/* ── Base ────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: var(--hx-font-family, system-ui, -apple-system, sans-serif);
+  line-height: var(--hx-line-height-base, 1.5);
+  color: var(--hx-color-text, #1a1a1a);
+  background: var(--hx-color-surface, #ffffff);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--hx-color-primary, #0066cc);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+  background: var(--hx-color-surface-hover, #f5f5f5);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────── */
 .container {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
+  padding: 0 var(--hx-spacing-lg, 1.5rem);
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────── */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--hx-color-surface, #fff);
+  border-bottom: 1px solid var(--hx-color-border, #e5e7eb);
+  backdrop-filter: blur(8px);
+}
+
+.navbar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--hx-spacing-lg, 1.5rem);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--hx-color-text, #1a1a1a);
+  text-decoration: none;
+}
+.navbar-brand:hover {
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-left: auto;
+  margin-right: 0.75rem;
+}
+
+.navbar-links a {
+  font-size: 0.9rem;
+  color: var(--hx-color-text-secondary, #555);
+}
+.navbar-links a:hover {
+  color: var(--hx-color-text, #1a1a1a);
+  text-decoration: none;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.hero {
+  padding: 5rem 0 4rem;
+  text-align: center;
+}
+
+.hero-title {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 1.25rem;
+  color: var(--hx-color-text, #1a1a1a);
+}
+
+.hero-accent {
+  color: var(--hx-color-primary, #0066cc);
+}
+
+.hero-subtitle {
+  font-size: 1.15rem;
+  color: var(--hx-color-text-secondary, #555);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Sections ────────────────────────────────────────────────────────── */
+.section {
+  padding: 4rem 0;
+}
+
+.section-alt {
+  background: var(--hx-color-surface-hover, #f9fafb);
+}
+
+.section-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.section-subtitle {
+  color: var(--hx-color-text-secondary, #555);
+  margin-bottom: 2.5rem;
+}
+
+/* ── Feature grid ────────────────────────────────────────────────────── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.feature-card {
+  height: 100%;
+}
+
+/* ── Demo grid ───────────────────────────────────────────────────────── */
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+}
+
+/* ── Ecosystem grid ──────────────────────────────────────────────────── */
+.ecosystem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.ecosystem-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1.25rem;
+  border: 1px solid var(--hx-color-border, #e5e7eb);
+  border-radius: var(--hx-radius-md, 0.5rem);
+  background: var(--hx-color-surface, #fff);
+  color: var(--hx-color-text, #1a1a1a);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ecosystem-link:hover {
+  border-color: var(--hx-color-primary, #0066cc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hx-color-primary, #0066cc) 15%, transparent);
+  text-decoration: none;
+}
+.ecosystem-link strong {
+  font-size: 0.95rem;
+}
+.ecosystem-link span {
+  font-size: 0.82rem;
+  color: var(--hx-color-text-secondary, #666);
+}
+
+/* ── Guide grid ──────────────────────────────────────────────────────── */
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+}
+
+/* ── Code block ──────────────────────────────────────────────────────── */
+.code-block {
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  background: var(--hx-color-surface-hover, #f5f5f5);
+  border-radius: var(--hx-radius-sm, 0.375rem);
+  padding: 1rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+.footer {
+  padding: 2rem 0;
+  border-top: 1px solid var(--hx-color-border, #e5e7eb);
+  text-align: center;
+  color: var(--hx-color-text-secondary, #666);
+  font-size: 0.875rem;
+}
+
+/* ── Dark mode ───────────────────────────────────────────────────────── */
+:root[data-theme='dark'],
+.dark {
+  color-scheme: dark;
+  --hx-color-surface: #0f0f11;
+  --hx-color-surface-hover: #1c1c20;
+  --hx-color-text: #f0f0f0;
+  --hx-color-text-secondary: #a0a0ab;
+  --hx-color-border: #2e2e35;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .navbar-links {
+    display: none;
+  }
+
+  .hero {
+    padding: 3rem 0 2.5rem;
+  }
 }
 `,
   );
