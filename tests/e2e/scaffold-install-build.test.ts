@@ -58,6 +58,7 @@ const FRAMEWORKS: FrameworkTestEntry[] = [
   { framework: 'lit-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'preact-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'stencil', hasBuild: true, buildOutputDir: 'www' },
+  { framework: 'ember', hasBuild: true, buildOutputDir: 'dist' },
   // vanilla is pure HTML -- no install or build needed
 ];
 

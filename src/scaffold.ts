@@ -483,11 +483,14 @@ async function writePackageJson(
   options: ProjectOptions,
   template: AnyTemplateConfig,
 ): Promise<void> {
+  // Ember uses CommonJS tooling (ember-cli-build.js, config/environment.js) —
+  // setting "type": "module" would cause ReferenceError: require is not defined.
+  const useEsm = options.framework !== 'ember';
   const pkg = {
     name: options.name,
     version: '0.1.0',
     private: true,
-    type: 'module',
+    ...(useEsm ? { type: 'module' } : {}),
     scripts: getScripts(options),
     dependencies: {
       ...template.dependencies,
