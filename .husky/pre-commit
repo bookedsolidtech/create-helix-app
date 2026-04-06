@@ -1,10 +1,27 @@
-# Run gitleaks secret scan on staged files (graceful degradation if not installed)
+#!/usr/bin/env sh
+
+# ── Resolve main repo root (handles git worktrees) ───────────────────────────
+# In a worktree, --git-common-dir returns an absolute path to the main .git dir.
+# In the main repo, it returns the relative string ".git".
+GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+case "$GIT_COMMON_DIR" in
+  /*)
+    # Absolute path → we are inside a worktree; main root is one level up
+    MAIN_ROOT="$(dirname "$GIT_COMMON_DIR")"
+    ;;
+  *)
+    MAIN_ROOT="$(git rev-parse --show-toplevel)"
+    ;;
+esac
+
+# ── Secret scanning with gitleaks ────────────────────────────────────────────
 if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks protect --staged --config .gitleaks.toml --redact --exit-code 1
+  gitleaks protect --staged --config "$MAIN_ROOT/.gitleaks.toml" --redact --exit-code 1
 else
   echo "⚠️  gitleaks not installed — skipping local secret scan."
   echo "   Install it to enable pre-commit secret scanning:"
   echo "   https://github.com/gitleaks/gitleaks#installing"
 fi
 
-pnpm exec lint-staged
+# ── Run lint-staged (from main root where node_modules lives) ─────────────────
+cd "$MAIN_ROOT" && pnpm exec lint-staged

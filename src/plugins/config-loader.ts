@@ -1,17 +1,14 @@
-/**
- * Config loader — reads `.helixrc.json` from a project root and extracts
- * hook configuration that can be fed into the `HookManager`.
- */
-
-import fs from 'node:fs';
+import fsExtra from 'fs-extra';
+import nodeFs from 'node:fs';
 import path from 'node:path';
 import type { HookFn } from './hooks.js';
+import type { HelixRc, HookLifecycle } from '../types.js';
+
+// ── Types from the simplified hook schema (used by src/__tests__) ─────────────
 
 /** Shape of a single hook entry inside `.helixrc.json`. */
 export interface HelixRcHookEntry {
-  /** The hook name, e.g. "beforeScaffold" or "afterScaffold". */
   name: string;
-  /** Absolute or relative path to a JS/TS module that default-exports a HookFn. */
   handler: string;
 }
 
@@ -21,71 +18,108 @@ export interface HelixRcConfig {
   [key: string]: unknown;
 }
 
-/** A resolved hook ready to be registered with HookManager. */
-export interface ResolvedHook {
-  name: string;
-  fn: HookFn;
-}
-
 /**
- * Read and parse `.helixrc.json` from `projectRoot`.
- *
- * @returns The parsed config, or `null` when the file does not exist.
- * @throws  `SyntaxError` when the file exists but contains invalid JSON.
+ * Read and parse `.helixrc.json` from `projectRoot` using synchronous fs.
+ * Returns the parsed config, or `null` when the file does not exist.
+ * Throws `SyntaxError` when the file contains invalid JSON.
  */
 export function readHelixRc(projectRoot: string): HelixRcConfig | null {
   const filePath = path.join(projectRoot, '.helixrc.json');
   let raw: string;
   try {
-    raw = fs.readFileSync(filePath, 'utf8');
+    raw = nodeFs.readFileSync(filePath, 'utf8');
   } catch {
     return null;
   }
-  // Let SyntaxError propagate so callers can surface the problem to users.
   return JSON.parse(raw) as HelixRcConfig;
 }
 
-/**
- * Load hook functions declared in `.helixrc.json` under `projectRoot`.
- *
- * Each `hooks[].handler` path is resolved relative to `projectRoot` and
- * dynamically imported.  Handlers that fail to load are silently skipped
- * (the error is passed to the optional `onError` callback).
- *
- * @param projectRoot - Directory that contains `.helixrc.json`.
- * @param onError     - Optional callback invoked when a handler cannot be loaded.
- * @returns Array of `{ name, fn }` pairs ready for `HookManager.register()`.
- */
-export async function loadHelixRcHooks(
-  projectRoot: string,
-  onError?: (entry: HelixRcHookEntry, err: unknown) => void,
-): Promise<ResolvedHook[]> {
-  const config = readHelixRc(projectRoot);
-  if (!config || !Array.isArray(config.hooks) || config.hooks.length === 0) {
+export interface LoadedHook {
+  lifecycle: HookLifecycle;
+  hook: HookFn;
+  source: string;
+}
+
+const VALID_LIFECYCLES: HookLifecycle[] = [
+  'pre-scaffold',
+  'post-scaffold',
+  'pre-write',
+  'post-write',
+];
+
+export async function loadHelixRcHooks(projectRoot: string): Promise<LoadedHook[]> {
+  const rcPath = path.join(projectRoot, '.helixrc.json');
+
+  const exists = await fsExtra.pathExists(rcPath);
+  if (!exists) {
     return [];
   }
 
-  const resolved: ResolvedHook[] = [];
-
-  for (const entry of config.hooks) {
-    if (!entry.name || !entry.handler) {
-      continue;
-    }
-
-    const handlerPath = path.isAbsolute(entry.handler)
-      ? entry.handler
-      : path.resolve(projectRoot, entry.handler);
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const mod = await import(handlerPath);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const fn = (mod.default ?? mod) as HookFn;
-      resolved.push({ name: entry.name, fn });
-    } catch (err) {
-      onError?.(entry, err);
-    }
+  let rc: unknown;
+  try {
+    rc = await fsExtra.readJson(rcPath);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to parse .helixrc.json at ${rcPath}: ${msg}`);
   }
 
-  return resolved;
+  if (typeof rc !== 'object' || rc === null) {
+    throw new Error(`.helixrc.json must be a JSON object. Found: ${JSON.stringify(rc)}`);
+  }
+
+  const helixRc = rc as HelixRc;
+  if (!helixRc.hooks) {
+    return [];
+  }
+
+  if (typeof helixRc.hooks !== 'object' || helixRc.hooks === null) {
+    throw new Error(`.helixrc.json "hooks" must be an object`);
+  }
+
+  const loaded: LoadedHook[] = [];
+
+  for (const lifecycle of VALID_LIFECYCLES) {
+    const hookPath = helixRc.hooks[lifecycle];
+    if (!hookPath) continue;
+
+    if (typeof hookPath !== 'string') {
+      throw new Error(
+        `.helixrc.json hooks["${lifecycle}"] must be a string path, got: ${JSON.stringify(hookPath)}`,
+      );
+    }
+
+    const resolvedPath = path.resolve(projectRoot, hookPath);
+
+    if (!(await fsExtra.pathExists(resolvedPath))) {
+      throw new Error(
+        `Hook file not found: "${resolvedPath}" (from .helixrc.json hooks["${lifecycle}"] = "${hookPath}", project root: "${projectRoot}")`,
+      );
+    }
+
+    let mod: unknown;
+    try {
+      mod = await import(resolvedPath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to load hook file "${resolvedPath}": ${msg}`);
+    }
+
+    const fn = extractDefaultExport(mod);
+    if (typeof fn !== 'function') {
+      throw new Error(
+        `Hook file "${resolvedPath}" must export a default function. Got: ${typeof fn}`,
+      );
+    }
+
+    loaded.push({ lifecycle, hook: fn as HookFn, source: resolvedPath });
+  }
+
+  return loaded;
+}
+
+function extractDefaultExport(mod: unknown): unknown {
+  if (mod !== null && typeof mod === 'object' && 'default' in mod) {
+    return (mod as Record<string, unknown>)['default'];
+  }
+  return mod;
 }

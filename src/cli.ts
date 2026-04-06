@@ -3,16 +3,9 @@ import pc from 'picocolors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { TEMPLATES, COMPONENT_BUNDLES, mergeWithCustomTemplates } from './templates.js';
-import { loadCustomTemplates } from './custom-templates.js';
+import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
 import { scaffoldProject, getDryRunEntries, getLastScaffoldTiming } from './scaffold.js';
-import type {
-  Framework,
-  ComponentBundle,
-  ProjectOptions,
-  AnyTemplateConfig,
-  CustomTemplateConfig,
-} from './types.js';
+import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
 import type { DrupalPreset } from './types.js';
@@ -24,12 +17,11 @@ import {
 } from './validation.js';
 import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
-import { detectOffline } from './network.js';
-import { runDoctor, formatDoctorOutput } from './doctor.js';
-import { showTemplateInfo } from './commands/info.js';
 import { auditDependencies } from './security/dep-audit.js';
 import { checkForUpdate } from './version-check.js';
 import { logger } from './logger.js';
+import { runDoctor, formatDoctorOutput } from './doctor.js';
+import { showTemplateInfo } from './commands/info.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
@@ -133,9 +125,22 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
 
   if (!isQuiet) s.stop(pc.green('Drupal theme scaffolded'));
 
-  const nextSteps = [`Copy ${themeNameStr}/ to your Drupal themes directory`, 'drush cr'];
+  const nextSteps = [
+    `Move ${themeNameStr}/ into your project:`,
+    `  DDEV:  cp -r ${themeNameStr}/ web/themes/custom/`,
+    `  Lando: cp -r ${themeNameStr}/ web/themes/custom/`,
+    `  Other: copy to <drupal-root>/web/themes/custom/`,
+    ``,
+    `Enable the theme:`,
+    `  ddev drush theme:enable ${themeNameStr} && ddev drush cr`,
+    `  lando drush theme:enable ${themeNameStr} && lando drush cr`,
+    ``,
+    `Standalone testing (no existing Drupal install needed):`,
+    `  cd ${themeNameStr}/docker && docker compose up -d`,
+    `  See README.md for full instructions`,
+  ].join('\n');
 
-  if (!isQuiet) p.note(nextSteps.join('\n'), 'Next steps');
+  if (!isQuiet) p.note(nextSteps, 'Next steps');
 
   console.log();
   console.log(pc.dim('  Theme:     ') + pc.cyan(themeNameStr));
@@ -189,19 +194,6 @@ export function runListCommand(isJson: boolean, configFile?: string | null): voi
   console.log('');
 }
 
-interface ScaffoldTimingJson {
-  totalMs: number;
-  phases: {
-    validationMs: number;
-    templateResolutionMs: number;
-    fileGenerationMs: number;
-    fileWritingMs: number;
-  };
-  fileCount: number;
-  bytesWritten: number;
-  dependencyCount: number;
-}
-
 interface ScaffoldJsonResult {
   success: boolean;
   project?: {
@@ -216,7 +208,18 @@ interface ScaffoldJsonResult {
   };
   files?: string[];
   dryRun?: boolean;
-  timing?: ScaffoldTimingJson;
+  timing?: {
+    totalMs: number;
+    fileCount: number;
+    bytesWritten: number;
+    dependencyCount: number;
+    phases: {
+      validationMs: number;
+      templateResolutionMs: number;
+      fileGenerationMs: number;
+      fileWritingMs: number;
+    };
+  };
   error?: string;
 }
 
@@ -234,24 +237,15 @@ export async function runJsonScaffold(
     tokensFlag: boolean;
     bundlesFromFlag: ComponentBundle[] | null;
     outputDirArg: string | null;
-    customTemplates?: CustomTemplateConfig[];
   },
 ): Promise<void> {
-  const mergedTemplates =
-    opts.customTemplates && opts.customTemplates.length > 0
-      ? mergeWithCustomTemplates(opts.customTemplates)
-      : TEMPLATES;
-  const validIds = mergedTemplates.map((t) => t.id);
+  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
 
-  // Built-in templates also require the hardened validateFramework type guard.
-  // Custom templates bypass the Framework union check since their IDs are arbitrary strings.
-  const isBuiltIn = validateFramework(templateArg);
-  const isCustom = !isBuiltIn && validIds.includes(templateArg);
-
-  if (!isBuiltIn && !isCustom) {
+  // Use both the template list check and the hardened validateFramework type guard
+  if (!validFrameworks.includes(templateArg as Framework) || !validateFramework(templateArg)) {
     const result: ScaffoldJsonResult = {
       success: false,
-      error: `Invalid template: "${templateArg}". Valid options: ${validIds.join(', ')}`,
+      error: `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
     };
     console.log(JSON.stringify(result, null, 2));
     process.exit(1);
@@ -278,8 +272,6 @@ export async function runJsonScaffold(
     dryRun: opts.isDryRun,
     force: opts.isForce,
     verbose: opts.isVerbose,
-    customTemplates:
-      opts.customTemplates && opts.customTemplates.length > 0 ? opts.customTemplates : undefined,
   };
 
   try {
@@ -307,21 +299,22 @@ export async function runJsonScaffold(
       },
       files,
       dryRun: opts.isDryRun,
-      timing:
-        timing !== null
-          ? {
-              totalMs: Math.round(timing.totalMs),
-              phases: {
-                validationMs: Math.round(timing.phases.validationMs),
-                templateResolutionMs: Math.round(timing.phases.templateResolutionMs),
-                fileGenerationMs: Math.round(timing.phases.fileGenerationMs),
-                fileWritingMs: Math.round(timing.phases.fileWritingMs),
-              },
+      ...(timing !== null
+        ? {
+            timing: {
+              totalMs: timing.totalMs,
               fileCount: timing.fileCount,
               bytesWritten: timing.bytesWritten,
               dependencyCount: timing.dependencyCount,
-            }
-          : undefined,
+              phases: {
+                validationMs: timing.phases.validationMs,
+                templateResolutionMs: timing.phases.templateResolutionMs,
+                fileGenerationMs: timing.phases.fileGenerationMs,
+                fileWritingMs: timing.phases.fileWritingMs,
+              },
+            },
+          }
+        : {}),
     };
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {
@@ -354,10 +347,6 @@ async function collectFiles(dir: string): Promise<string[]> {
 export async function runCLI(): Promise<void> {
   const argv = process.argv.slice(2);
 
-  // Fire offline detection as early as possible so the probe runs in parallel
-  // with argument parsing, config loading, and other synchronous startup work.
-  const offlineDetectPromise = detectOffline(500);
-
   let parsed: ReturnType<typeof parseArgs>;
   try {
     parsed = parseArgs(argv);
@@ -385,8 +374,6 @@ export async function runCLI(): Promise<void> {
     isDrupal,
     noConfig,
     verbose: isVerboseFromArgs,
-    skipAudit: isSkipAudit,
-    offline: isOfflineFlag,
     template: templateArgRaw,
     preset: presetArgFromCli,
     bundles: bundlesFromFlagRaw,
@@ -397,17 +384,17 @@ export async function runCLI(): Promise<void> {
     tokens: tokensFlagRaw,
     explicitFlags,
     projectName,
-    profile: profileArg,
+    skipAudit,
   } = parsed;
 
   // Load config file and environment variables
   // Precedence: CLI flags > env vars > .helixrc.json > defaults
   let helixConfigResult: ReturnType<typeof loadConfig>;
   try {
-    helixConfigResult = loadConfig(noConfig, profileArg ?? undefined);
+    helixConfigResult = loadConfig(noConfig);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(message);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(msg);
     process.exit(1);
   }
   const { config: helixConfig } = helixConfigResult;
@@ -416,14 +403,6 @@ export async function runCLI(): Promise<void> {
 
   const templateArg = templateArgRaw ?? envVars.template ?? cfgDefaults.template ?? null;
   const bundlesFromFlag = bundlesFromFlagRaw ?? envVars.bundles ?? cfgDefaults.bundles ?? null;
-
-  // Load custom templates from templateDir (env var takes precedence over config file)
-  const templateDirResolved = envVars.templateDir ?? helixConfig.templateDir ?? null;
-  const customTemplates: CustomTemplateConfig[] =
-    templateDirResolved !== null ? loadCustomTemplates(templateDirResolved) : [];
-  // Merge built-ins with custom templates for display in TUI and validation
-  const allTemplates: AnyTemplateConfig[] =
-    customTemplates.length > 0 ? mergeWithCustomTemplates(customTemplates) : TEMPLATES;
   const typescriptFlag = explicitFlags.typescript
     ? typescriptFlagRaw
     : (envVars.typescript ?? cfgDefaults.typescript ?? true);
@@ -439,18 +418,12 @@ export async function runCLI(): Promise<void> {
   const presetArg = presetArgFromCli ?? envVars.preset ?? null;
   const outputDirArg = outputDirFromArgs ?? envVars.outputDir ?? null;
   const isVerbose = isVerboseFromArgs || (envVars.verbose ?? false);
+  const isNoInstall = isNoInstallFromArgs || (envVars.offline ?? false);
 
-  // Determine offline state: --offline flag or HELIX_OFFLINE env var short-circuits
-  // the probe (no need to wait for a result we'll ignore). Otherwise await the
-  // already-in-flight detectOffline promise that was started at the top of runCLI.
-  const isOfflineFlagResolved = isOfflineFlag || (envVars.offline ?? false);
-  const detectedOffline = isOfflineFlagResolved ? false : await offlineDetectPromise;
-  const isOffline = isOfflineFlagResolved || detectedOffline;
-
-  const isNoInstall = isNoInstallFromArgs || isOffline;
+  // Start version check in background (non-blocking); display after prompts
   const updateCheckPromise: Promise<string | null> =
-    !parsed.json && !isOffline
-      ? checkForUpdate({ offline: isOffline, json: parsed.json })
+    !isJson && !isNoInstall
+      ? checkForUpdate({ offline: isNoInstall, json: isJson })
       : Promise.resolve(null);
 
   if (showVersion) {
@@ -470,7 +443,7 @@ export async function runCLI(): Promise<void> {
   }
 
   if (subcommand === 'doctor') {
-    const result = await runDoctor(HELIX_VERSION, { offline: isOffline });
+    const result = await runDoctor(HELIX_VERSION);
     if (isJson) {
       console.log(JSON.stringify(result, null, 2));
     } else {
@@ -481,12 +454,15 @@ export async function runCLI(): Promise<void> {
 
   if (subcommand === 'upgrade') {
     const { runUpgrade } = await import('./commands/upgrade.js');
-    await runUpgrade(process.cwd(), { dryRun: isDryRun, offline: isOffline });
+    await runUpgrade(process.cwd(), { dryRun: isDryRun });
     process.exit(0);
   }
 
   if (subcommand === 'config') {
-    if (subcommandArg === 'list-profiles') {
+    if (subcommandArg === 'validate') {
+      const { runConfigValidateCommand } = await import('./commands/config-validate.js');
+      runConfigValidateCommand(process.cwd());
+    } else if (subcommandArg === 'list-profiles') {
       const profiles = listProfiles();
       if (profiles.length === 0) {
         console.log('No profiles defined in .helixrc.json');
@@ -495,10 +471,13 @@ export async function runCLI(): Promise<void> {
           console.log(name);
         }
       }
-      process.exit(0);
+    } else {
+      console.error(
+        `Unknown config subcommand: "${subcommandArg ?? ''}". Usage: create-helix config validate`,
+      );
+      process.exit(1);
     }
-    console.error(`Unknown config subcommand: "${subcommandArg ?? ''}". Available: list-profiles`);
-    process.exit(1);
+    process.exit(0);
   }
 
   if (showHelp) {
@@ -517,8 +496,6 @@ export async function runCLI(): Promise<void> {
     --quiet, -q             Suppress banner, spinners, and decorative output (CI-friendly)
     --verbose               Show detailed scaffolding output (files created, config used)
     --json                  Output scaffold result as JSON (suppresses all TUI output)
-    --skip-audit            Skip dependency vulnerability and license audit
-    --offline               Run in offline mode (skip network checks, use cached registry data)
     --version, -v           Print version and exit
     --help, -h              Show this help message and exit
 
@@ -561,18 +538,6 @@ ${presetList}
     HELIX_OFFLINE=<bool>      Skip dependency installation (offline mode)
 
     Precedence: CLI flags > env vars > .helixrc.json > defaults
-
-  Plugins & Hooks:
-    Define hooks in .helixrc.json under a "hooks" key to run scripts at lifecycle events:
-      { "hooks": { "pre-scaffold": "node scripts/pre.js", "post-scaffold": "npm run sync" } }
-
-    Available hook events:
-      pre-scaffold    Runs before project directory and files are created
-      post-scaffold   Runs after all files are written and dependencies installed
-      pre-write       Runs before each file is written
-      post-write      Runs after each file is written
-
-    Plugin discovery: helix-plugin-* packages in node_modules are auto-loaded as plugins.
 
   Examples:
     create-helix my-app                          # Interactive mode
@@ -640,7 +605,6 @@ ${presetList}
       tokensFlag,
       bundlesFromFlag,
       outputDirArg,
-      customTemplates: customTemplates.length > 0 ? customTemplates : undefined,
     });
     return;
   }
@@ -664,10 +628,10 @@ ${presetList}
           ? Promise.resolve(templateArg as Framework)
           : p.select({
               message: 'Which framework?',
-              options: allTemplates.map((t) => ({
+              options: TEMPLATES.map((t) => ({
                 value: t.id as Framework,
                 label: t.color(t.name),
-                hint: 'isCustom' in t ? `[custom] ${t.hint}` : t.hint,
+                hint: t.hint,
               })),
             }),
 
@@ -748,36 +712,11 @@ ${presetList}
     dryRun: isDryRun,
     force: isForce,
     verbose: isVerbose,
-    customTemplates: customTemplates.length > 0 ? customTemplates : undefined,
   };
 
-  const template = allTemplates.find((t) => t.id === options.framework);
+  const template = TEMPLATES.find((t) => t.id === options.framework);
 
   const s = p.spinner();
-
-  // ── Dependency audit (before writing package.json) ────────────────────────
-  if (!isSkipAudit && !isDryRun && template !== undefined) {
-    if (!isQuiet) s.start('Auditing dependencies...');
-    const auditResult = await auditDependencies(template.dependencies);
-    if (!isQuiet) {
-      if (auditResult.networkError) {
-        s.stop(pc.yellow('Dependency audit skipped (network unavailable)'));
-      } else {
-        s.stop(pc.green('Dependencies audited'));
-      }
-    }
-
-    if (!auditResult.networkError) {
-      for (const vuln of auditResult.vulnerabilities) {
-        const msg = `${vuln.package}@${vuln.version} has ${String(vuln.count)} ${vuln.severity} ${vuln.count === 1 ? 'vulnerability' : 'vulnerabilities'}`;
-        if (!isQuiet) p.log.warn(`⚠ ${msg}`);
-      }
-      for (const lic of auditResult.licenseIssues) {
-        const msg = `${lic.package}@${lic.version} uses non-standard license: ${lic.license}`;
-        if (!isQuiet) p.log.warn(`⚠ ${msg}`);
-      }
-    }
-  }
 
   if (isDryRun) {
     if (!isQuiet) s.start('Collecting files (dry run)...');
@@ -792,38 +731,19 @@ ${presetList}
   await scaffoldProject(options);
   if (!isQuiet) s.stop(pc.green('Project scaffolded'));
 
-  // Show timing summary after scaffold completes
-  const scaffoldTiming = getLastScaffoldTiming();
-  if (scaffoldTiming !== null && !isQuiet) {
-    const formattedBytes =
-      scaffoldTiming.bytesWritten < 1024
-        ? `${scaffoldTiming.bytesWritten} B`
-        : scaffoldTiming.bytesWritten < 1024 * 1024
-          ? `${(scaffoldTiming.bytesWritten / 1024).toFixed(1)} KB`
-          : `${(scaffoldTiming.bytesWritten / (1024 * 1024)).toFixed(1)} MB`;
-    console.log(
-      pc.dim('  Performance: ') +
-        pc.white(`${scaffoldTiming.totalMs.toFixed(0)}ms`) +
-        pc.dim(
-          ` · ${scaffoldTiming.fileCount} files · ${formattedBytes} · ${scaffoldTiming.dependencyCount} deps`,
-        ),
-    );
-    if (isVerbose) {
-      console.log(pc.dim('  ┌─ Per-phase timing:'));
-      console.log(
-        pc.dim(`  │  validation:          ${scaffoldTiming.phases.validationMs.toFixed(1)}ms`),
-      );
-      console.log(
-        pc.dim(
-          `  │  template resolution: ${scaffoldTiming.phases.templateResolutionMs.toFixed(1)}ms`,
-        ),
-      );
-      console.log(
-        pc.dim(`  │  file generation:     ${scaffoldTiming.phases.fileGenerationMs.toFixed(1)}ms`),
-      );
-      console.log(
-        pc.dim(`  └─ file writing:        ${scaffoldTiming.phases.fileWritingMs.toFixed(1)}ms`),
-      );
+  // ── Dependency audit ─────────────────────────────────────────────────────
+  if (!skipAudit) {
+    const templateDeps = template?.dependencies ?? {};
+    const auditResult = await auditDependencies(templateDeps);
+    if (!auditResult.networkError) {
+      for (const v of auditResult.vulnerabilities) {
+        p.log.warn(
+          `${v.package}@${v.version} has ${v.count} ${v.severity} vulnerability/vulnerabilities`,
+        );
+      }
+      for (const l of auditResult.licenseIssues) {
+        p.log.warn(`${l.package}@${l.version} uses a non-standard license: ${l.license}`);
+      }
     }
   }
 
@@ -870,12 +790,7 @@ ${presetList}
 
   console.log();
   console.log(pc.dim('  Project:    ') + pc.cyan(project.name as string));
-  /* istanbul ignore next -- fallback when template id is not found in allTemplates (only reachable with malformed custom template IDs) */
-  const frameworkLabel =
-    template !== undefined
-      ? template.color(template.name) + ('isCustom' in template ? pc.dim(' [custom]') : '')
-      : String(project.framework);
-  console.log(pc.dim('  Framework:  ') + frameworkLabel);
+  console.log(pc.dim('  Framework:  ') + (template?.color(template.name) ?? project.framework));
   console.log(pc.dim('  Directory:  ') + pc.white(options.directory));
   if (!isQuiet) {
     console.log(pc.dim('  TypeScript: ') + (options.typescript ? pc.green('yes') : pc.dim('no')));
@@ -902,9 +817,33 @@ ${presetList}
   }
   console.log();
 
-  const updateWarning = await updateCheckPromise;
-  if (updateWarning !== null && !isQuiet) {
-    logger.warn(updateWarning);
+  // ── Scaffold timing display ──────────────────────────────────────────────
+  if (!isQuiet) {
+    const scaffoldTiming = getLastScaffoldTiming();
+    if (scaffoldTiming !== null) {
+      const { totalMs, fileCount, bytesWritten, phases } = scaffoldTiming;
+      let sizeStr: string;
+      if (bytesWritten >= 1024 * 1024) {
+        sizeStr = `${(bytesWritten / (1024 * 1024)).toFixed(2)} MB`;
+      } else if (bytesWritten >= 1024) {
+        sizeStr = `${(bytesWritten / 1024).toFixed(2)} KB`;
+      } else {
+        sizeStr = `${bytesWritten} B`;
+      }
+      console.log(pc.dim(`  Performance: ${totalMs}ms · ${fileCount} files · ${sizeStr}`));
+      if (isVerbose) {
+        console.log(pc.dim('  Per-phase timing:'));
+        console.log(pc.dim(`    validation: ${phases.validationMs}ms`));
+        console.log(pc.dim(`    template resolution: ${phases.templateResolutionMs}ms`));
+        console.log(pc.dim(`    file generation: ${phases.fileGenerationMs}ms`));
+        console.log(pc.dim(`    file writing: ${phases.fileWritingMs}ms`));
+      }
+    }
+  }
+
+  const updateMsg = await updateCheckPromise;
+  if (updateMsg && !isQuiet) {
+    logger.warn(updateMsg);
   }
 
   if (!isQuiet) p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX.'));

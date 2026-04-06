@@ -1,2 +1,15 @@
 #!/usr/bin/env sh
-pnpm run verify
+
+# ── Resolve main repo root (handles git worktrees) ───────────────────────────
+GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+case "$GIT_COMMON_DIR" in
+  /*)
+    MAIN_ROOT="$(dirname "$GIT_COMMON_DIR")"
+    ;;
+  *)
+    MAIN_ROOT="$(git rev-parse --show-toplevel)"
+    ;;
+esac
+
+# ── Run verify from main root ────────────────────────────────────────────────
+cd "$MAIN_ROOT" && pnpm run verify

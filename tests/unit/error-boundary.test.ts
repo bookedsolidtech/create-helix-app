@@ -95,14 +95,16 @@ describe('error boundary — Vue frameworks', () => {
   it('scaffolds ErrorBoundary.vue for vue-nuxt', async () => {
     const opts = makeOptions({ name: 'vue-nuxt-eb', framework: 'vue-nuxt' });
     await scaffoldProject(opts);
-    const ebPath = path.join(opts.directory, 'src', 'components', 'ErrorBoundary.vue');
+    // vue-nuxt uses Nuxt 4 app/ directory convention
+    const ebPath = path.join(opts.directory, 'app', 'components', 'ErrorBoundary.vue');
     expect(await fs.pathExists(ebPath)).toBe(true);
   });
 
   it('ErrorBoundary.vue contains onErrorCaptured for vue-nuxt', async () => {
     const opts = makeOptions({ name: 'vue-nuxt-eb-oec', framework: 'vue-nuxt' });
     await scaffoldProject(opts);
-    const ebPath = path.join(opts.directory, 'src', 'components', 'ErrorBoundary.vue');
+    // vue-nuxt uses Nuxt 4 app/ directory convention
+    const ebPath = path.join(opts.directory, 'app', 'components', 'ErrorBoundary.vue');
     const content = await fs.readFile(ebPath, 'utf-8');
     expect(content).toContain('onErrorCaptured');
   });

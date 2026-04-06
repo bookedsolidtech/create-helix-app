@@ -276,7 +276,7 @@ describe('doctor checks', () => {
       const result = checkWritePermissions();
 
       expect(result.status).toBe('fail');
-      expect(result.message).toBe('not writable (EACCES)');
+      expect(result.message).toBe('not writable');
     });
 
     it('checks cwd with W_OK flag', () => {

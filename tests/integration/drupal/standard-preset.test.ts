@@ -1,20 +1,20 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
-import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText } from '../setup.js';
 
 const ROOT = makeTmpRoot('drupal-standard');
 
-// standard preset: 7 SDCs
+// standard preset: 7 SDCs with groups
 const STANDARD_SDCS = [
-  'node-teaser',
-  'views-grid',
-  'hero-banner',
-  'site-header',
-  'site-footer',
-  'breadcrumb',
-  'search-form',
-];
+  { name: 'node-teaser', group: 'node' },
+  { name: 'content-grid', group: 'views' },
+  { name: 'site-header', group: 'block' },
+  { name: 'site-footer', group: 'block' },
+  { name: 'breadcrumb', group: 'block' },
+  { name: 'search-form', group: 'block' },
+  { name: 'hero-banner', group: 'block' },
+] as const;
 
 afterAll(async () => {
   await removeTempDir(ROOT);
@@ -27,60 +27,46 @@ describe('drupal standard preset integration', () => {
     await assertFilesExist(dir, [
       'test_standard.info.yml',
       'test_standard.libraries.yml',
-      'helixui.libraries.yml',
+      'test_standard.theme',
       'package.json',
       'composer.json',
-      'src/behaviors/standard-behaviors.js',
+      'css/style.css',
+      'js/behaviors.js',
+      'docker/docker-compose.yml',
     ]);
   });
 
-  it('theme info YAML is valid Drupal 10/11 format', async () => {
+  it('theme info YAML is valid Drupal 11 format with SDC path declaration', async () => {
     const dir = path.join(ROOT, 'std-info');
     await scaffoldDrupalTheme({ themeName: 'test_std_info', directory: dir, preset: 'standard' });
     const info = await readText(dir, 'test_std_info.info.yml');
     expect(info).toContain('core_version_requirement: ^10 || ^11');
     expect(info).toContain('type: theme');
     expect(info).toContain('standard');
+    expect(info).toContain('components:');
+    expect(info).toContain("path: 'components'");
   });
 
-  it('helixui.libraries.yml has CDN provider entries', async () => {
+  it('{themeName}.libraries.yml has global and helix-overrides entries', async () => {
     const dir = path.join(ROOT, 'std-libs');
     await scaffoldDrupalTheme({ themeName: 'test_std_libs', directory: dir, preset: 'standard' });
-    const libs = await readText(dir, 'helixui.libraries.yml');
-    expect(libs).toContain('provider: cdn');
-    expect(libs).toContain('helixui.base:');
+    const libs = await readText(dir, 'test_std_libs.libraries.yml');
+    expect(libs).toContain('global:');
+    expect(libs).toContain('css/style.css');
+    expect(libs).toContain('helix-overrides:');
   });
 
-  it('helixui.libraries.yml contains all standard SDC entries', async () => {
-    const dir = path.join(ROOT, 'std-sdc-libs');
-    await scaffoldDrupalTheme({
-      themeName: 'test_std_sdc_libs',
-      directory: dir,
-      preset: 'standard',
-    });
-    const libs = await readText(dir, 'helixui.libraries.yml');
-    for (const sdc of STANDARD_SDCS) {
-      expect(libs).toContain(`helixui.${sdc}:`);
-    }
-  });
-
-  it('creates exactly 7 SDC component directories', async () => {
+  it('creates all 7 standard SDC component directories in correct groups', async () => {
     const dir = path.join(ROOT, 'std-count');
     await scaffoldDrupalTheme({ themeName: 'test_std_count', directory: dir, preset: 'standard' });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
-    expect(sdcDirs).toHaveLength(7);
-  });
-
-  it('all 7 standard SDC directories are present', async () => {
-    const dir = path.join(ROOT, 'std-sdcs');
-    await scaffoldDrupalTheme({ themeName: 'test_std_sdcs', directory: dir, preset: 'standard' });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
     for (const sdc of STANDARD_SDCS) {
-      expect(sdcDirs).toContain(sdc);
+      await assertFilesExist(dir, [
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+      ]);
     }
   });
 
-  it('each SDC directory contains .component.yml and .twig files', async () => {
+  it('each SDC directory contains .component.yml, .twig, and .css files', async () => {
     const dir = path.join(ROOT, 'std-sdc-files');
     await scaffoldDrupalTheme({
       themeName: 'test_std_sdc_files',
@@ -89,17 +75,29 @@ describe('drupal standard preset integration', () => {
     });
     for (const sdc of STANDARD_SDCS) {
       await assertFilesExist(dir, [
-        `src/components/${sdc}/${sdc}.component.yml`,
-        `src/components/${sdc}/${sdc}.twig`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.twig`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.css`,
       ]);
     }
   });
 
-  it('component.yml references the theme library', async () => {
-    const dir = path.join(ROOT, 'std-yml-ref');
+  it('component.yml has SDC schema, status experimental, and group field', async () => {
+    const dir = path.join(ROOT, 'std-yml');
     await scaffoldDrupalTheme({ themeName: 'my_theme', directory: dir, preset: 'standard' });
-    const yml = await readText(dir, 'src/components/node-teaser/node-teaser.component.yml');
-    expect(yml).toContain('my_theme/helixui.node-teaser');
+    const yml = await readText(dir, 'components/node/node-teaser/node-teaser.component.yml');
+    expect(yml).toContain('$schema:');
+    expect(yml).toContain('status: experimental');
+    expect(yml).toContain('group:');
+    expect(yml).toContain('Node Display');
+  });
+
+  it('node-teaser twig uses attach_library and hx-card', async () => {
+    const dir = path.join(ROOT, 'std-twig');
+    await scaffoldDrupalTheme({ themeName: 'test_twig', directory: dir, preset: 'standard' });
+    const twig = await readText(dir, 'components/node/node-teaser/node-teaser.twig');
+    expect(twig).toContain("attach_library('helixui/hx-card')");
+    expect(twig).toContain('<hx-card');
   });
 
   it('composer.json has type drupal-theme', async () => {
@@ -113,14 +111,48 @@ describe('drupal standard preset integration', () => {
     expect(composer).toContain('"type": "drupal-theme"');
   });
 
-  it('behaviors file uses once() pattern', async () => {
+  it('behaviors file uses once() pattern and Drupal.behaviors', async () => {
     const dir = path.join(ROOT, 'std-behaviors');
     await scaffoldDrupalTheme({
       themeName: 'test_std_behaviors',
       directory: dir,
       preset: 'standard',
     });
-    const behaviors = await readText(dir, 'src/behaviors/standard-behaviors.js');
+    const behaviors = await readText(dir, 'js/behaviors.js');
     expect(behaviors).toContain("once('");
+    expect(behaviors).toContain('Drupal.behaviors');
+  });
+
+  it('generates template overrides for SDCs with templateOverride', async () => {
+    const dir = path.join(ROOT, 'std-templates');
+    await scaffoldDrupalTheme({ themeName: 'test_tmpl', directory: dir, preset: 'standard' });
+    await assertFilesExist(dir, [
+      'templates/node/node--article--teaser.html.twig',
+      'templates/block/block--system-branding-block.html.twig',
+      'templates/views/views-view--content.html.twig',
+    ]);
+  });
+
+  it('template override includes the SDC', async () => {
+    const dir = path.join(ROOT, 'std-tmpl-content');
+    await scaffoldDrupalTheme({ themeName: 'my_theme', directory: dir, preset: 'standard' });
+    const tpl = await readText(dir, 'templates/node/node--article--teaser.html.twig');
+    expect(tpl).toContain("include('my_theme:node-teaser')");
+  });
+
+  it('docker-compose.yml references drupal:11-apache and the theme', async () => {
+    const dir = path.join(ROOT, 'std-docker');
+    await scaffoldDrupalTheme({ themeName: 'my_std_theme', directory: dir, preset: 'standard' });
+    const compose = await readText(dir, 'docker/docker-compose.yml');
+    expect(compose).toContain('drupal:11-apache');
+    expect(compose).toContain('my_std_theme');
+  });
+
+  it('{themeName}.theme contains PHP preprocess stubs', async () => {
+    const dir = path.join(ROOT, 'std-theme-php');
+    await scaffoldDrupalTheme({ themeName: 'test_theme', directory: dir, preset: 'standard' });
+    const php = await readText(dir, 'test_theme.theme');
+    expect(php).toContain('<?php');
+    expect(php).toContain('function test_theme_preprocess_');
   });
 });

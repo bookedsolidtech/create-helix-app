@@ -1,6 +1,6 @@
 {
   "name": "create-helix",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Scaffold a new project with HELiX web components — TUI-powered CLI",
   "type": "module",
   "exports": {
@@ -11,7 +11,8 @@
     "create-helix": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "assets"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/add-shebang.mjs",
@@ -28,14 +29,14 @@
     "bench:ci": "vitest bench --reporter=json --outputFile=bench-results.json && node scripts/bench-ci.mjs",
     "bench:update-baselines": "vitest bench --reporter=json --outputFile=bench-results.json && node scripts/update-baselines.mjs",
     "verify": "pnpm run lint && pnpm run format:check && pnpm run type-check",
-    "preflight": "pnpm run verify && pnpm run test",
+    "preflight": "bash scripts/preflight.sh",
     "license-check": "npx license-checker --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD' --summary",
     "sbom": "cyclonedx-npm --output-format JSON --output-file sbom.json",
     "prepare": "husky",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "node scripts/block-local-publish.mjs && pnpm run build"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.0",
@@ -70,7 +71,7 @@
     ]
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": "^20.0.0 || ^22.0.0 || ^24.0.0",
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.15.9",

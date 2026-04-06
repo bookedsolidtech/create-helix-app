@@ -1,7 +1,19 @@
-import { VALID_FRAMEWORKS, VALID_PRESETS } from './validation.js';
-
-/** Derived from the canonical VALID_FRAMEWORKS array in validation.ts. */
-export type Framework = (typeof VALID_FRAMEWORKS)[number];
+export type Framework =
+  | 'react-next'
+  | 'react-vite'
+  | 'remix'
+  | 'vue-nuxt'
+  | 'vue-vite'
+  | 'solid-vite'
+  | 'qwik-vite'
+  | 'svelte-kit'
+  | 'angular'
+  | 'astro'
+  | 'vanilla'
+  | 'lit-vite'
+  | 'preact-vite'
+  | 'stencil'
+  | 'ember';
 
 export type ComponentBundle =
   | 'all'
@@ -56,8 +68,6 @@ export interface ProjectOptions {
   dryRun?: boolean;
   force?: boolean;
   verbose?: boolean;
-  /** Custom templates loaded from templateDir — used by scaffold for dependency lookup. */
-  customTemplates?: AnyTemplateConfig[];
 }
 
 export interface ComponentBundleConfig {
@@ -67,14 +77,29 @@ export interface ComponentBundleConfig {
   components: string[];
 }
 
-/** Derived from the canonical VALID_PRESETS array in validation.ts. */
-export type DrupalPreset = (typeof VALID_PRESETS)[number];
+export type DrupalPreset = 'standard' | 'blog' | 'healthcare' | 'intranet' | 'ecommerce';
+
+export type SDCGroup =
+  | 'block'
+  | 'node'
+  | 'views'
+  | 'paragraph'
+  | 'navigation'
+  | 'form'
+  | 'dashboard';
+
+export interface SDCDefinition {
+  name: string;
+  group: SDCGroup;
+  helixComponents: string[];
+  templateOverride?: string;
+}
 
 export interface PresetConfig {
   id: DrupalPreset;
   name: string;
   description: string;
-  sdcList: string[];
+  sdcList: SDCDefinition[];
   dependencies: Record<string, string>;
   templateVars: Record<string, string>;
   architectureNotes: string;
@@ -86,24 +111,26 @@ export interface DrupalOptions {
   preset: DrupalPreset;
 }
 
-/**
- * Per-phase timing data collected during scaffold operations.
- * All durations are in milliseconds.
- */
-export interface ScaffoldPhaseTiming {
-  validationMs: number;
-  templateResolutionMs: number;
-  fileGenerationMs: number;
-  fileWritingMs: number;
+// ---------------------------------------------------------------------------
+// Plugin Hook System Types — re-exported from plugins/hooks for external use
+// ---------------------------------------------------------------------------
+
+export type HookLifecycle = 'pre-scaffold' | 'post-scaffold' | 'pre-write' | 'post-write';
+
+export type { HookContext, HookFn } from './plugins/hooks.js';
+
+export interface HelixRcHooks {
+  'pre-scaffold'?: string;
+  'post-scaffold'?: string;
+  'pre-write'?: string;
+  'post-write'?: string;
 }
 
-/**
- * Full timing summary produced after a scaffold run.
- */
-export interface ScaffoldTiming {
-  totalMs: number;
-  phases: ScaffoldPhaseTiming;
-  fileCount: number;
-  bytesWritten: number;
-  dependencyCount: number;
+export interface HelixRc {
+  hooks?: HelixRcHooks;
+}
+
+export interface PluginModule {
+  hooks?: Partial<Record<HookLifecycle, import('./plugins/hooks.js').HookFn>>;
+  name?: string;
 }

@@ -24,6 +24,16 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', '*.js', '*.mjs', 'src/__tests__/', 'tests/'],
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'coverage/',
+      '*.js',
+      '*.mjs',
+      '*.config.ts',
+      'src/__tests__/',
+      'tests/',
+      'test-drupal-scaffold.ts',
+    ],
   },
 );

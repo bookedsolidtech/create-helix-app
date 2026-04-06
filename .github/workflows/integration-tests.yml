@@ -25,5 +25,6 @@ jobs:
           node-version: 20
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       - name: Run integration tests
-        run: pnpm run test -- --reporter=verbose --testPathPattern=tests/integration
+        run: pnpm run test -- tests/integration

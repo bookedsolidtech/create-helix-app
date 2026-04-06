@@ -1,0 +1,171 @@
+# ============================================================================
+# Local CI — Quality gates for nektos/act
+# ============================================================================
+# Mirrors the core quality gates from ci.yml but avoids GitHub-specific actions
+# (pnpm/action-setup, actions/setup-node) that break in act due to PATH
+# corruption and missing API context.
+#
+# Usage: ./scripts/act-ci.sh [--job <job-name>] [--list]
+# Jobs: lint, format, type-check, build, test, test-full, quality-gates
+# ============================================================================
+
+name: Local CI
+
+on:
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+          pnpm install --frozen-lockfile
+      - name: Run ESLint
+        run: pnpm run lint
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+          pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm run format:check
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+          pnpm install --frozen-lockfile
+      - name: Run TypeScript strict check
+        run: pnpm run type-check
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+          pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+          pnpm install --frozen-lockfile
+      - name: Run tests
+        run: pnpm run test
+
+  # -- Full suite test with Node version matrix (mirrors ci-matrix.yml) ---
+  test-full:
+    name: Test Full (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ env.ACT_MATRIX_TESTS == 'true' || env.ACT_FULL_TESTS == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node ${{ matrix.node-version }} via nvm
+        run: |
+          if [ "${{ matrix.node-version }}" != "" ]; then
+            export NVM_DIR="$HOME/.nvm"
+            if [ ! -d "$NVM_DIR" ]; then
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+            fi
+            . "$NVM_DIR/nvm.sh"
+            nvm install ${{ matrix.node-version }}
+            nvm use ${{ matrix.node-version }}
+            echo "Node version: $(node --version)"
+          fi
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+          pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Run tests
+        run: pnpm run test
+
+  # -- Aggregate gate --------------------------------------------------------
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    needs: [lint, format, type-check, build, test, test-full]
+    if: always()
+    steps:
+      - name: Check all gates
+        run: |
+          echo "Lint:       ${{ needs.lint.result }}"
+          echo "Format:     ${{ needs.format.result }}"
+          echo "Type Check: ${{ needs.type-check.result }}"
+          echo "Build:      ${{ needs.build.result }}"
+          echo "Test:       ${{ needs.test.result }}"
+          echo "Test Full:  ${{ needs.test-full.result }}"
+
+          FAIL=0
+          for gate in lint format type-check build test; do
+            case "$gate" in
+              lint)       result="${{ needs.lint.result }}" ;;
+              format)     result="${{ needs.format.result }}" ;;
+              type-check) result="${{ needs.type-check.result }}" ;;
+              build)      result="${{ needs.build.result }}" ;;
+              test)       result="${{ needs.test.result }}" ;;
+            esac
+            if [[ "$result" != "success" ]]; then
+              echo "FAILED: $gate ($result)"
+              FAIL=1
+            fi
+          done
+
+          # test-full is optional (only runs with ACT_MATRIX_TESTS or ACT_FULL_TESTS)
+          # Fail if it ran and failed, skip if it was skipped
+          FULL_RESULT="${{ needs.test-full.result }}"
+          if [[ "$FULL_RESULT" == "failure" ]]; then
+            echo "FAILED: test-full ($FULL_RESULT)"
+            FAIL=1
+          elif [[ "$FULL_RESULT" == "skipped" ]]; then
+            echo "SKIPPED: test-full (not requested)"
+          fi
+
+          if [[ "$FAIL" -eq 1 ]]; then
+            echo ""
+            echo "One or more quality gates failed"
+            exit 1
+          fi
+
+          echo ""
+          echo "All quality gates passed!"

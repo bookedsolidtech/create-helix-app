@@ -3,9 +3,6 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { validateDirectory } from '../validation.js';
-import { withRetry } from '../retry.js';
-import { readRegistryCache, writeRegistryCache } from '../network.js';
-import { logger } from '../logger.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
@@ -29,19 +26,7 @@ function readPackageJson(dir: string): PackageJson | null {
   try {
     const raw = fs.readFileSync(pkgPath, 'utf-8');
     return JSON.parse(raw) as PackageJson;
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      logger.debug(`package.json not found at "${pkgPath}"`);
-    } else if (err instanceof SyntaxError) {
-      logger.warn(
-        `package.json at "${pkgPath}" contains invalid JSON — unable to read dependencies`,
-      );
-    } else {
-      logger.warn(
-        `Could not read package.json at "${pkgPath}" (${code ?? (err instanceof Error ? err.message : String(err))})`,
-      );
-    }
+  } catch {
     return null;
   }
 }
@@ -52,39 +37,25 @@ function isHelixDep(name: string): boolean {
 
 /**
  * Fetches the latest published version of a single npm package.
- * Retries up to 3 times with exponential backoff on transient network errors.
- * Returns undefined when the package cannot be resolved after all attempts.
+ * Returns undefined on any error (network failure, package not found, etc.).
  */
 async function fetchPackageVersion(packageName: string): Promise<string | undefined> {
   if (versionCache.has(packageName)) {
     return versionCache.get(packageName);
   }
   try {
-    return await withRetry(
-      async () => {
-        // Scoped packages like @helix/core require %2F encoding of the slash
-        const encodedName = packageName.startsWith('@')
-          ? packageName.replace('/', '%2F')
-          : packageName;
-        const url = `https://registry.npmjs.org/${encodedName}/latest`;
-        const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-        if (!response.ok) {
-          throw new Error(`npm registry returned ${response.status} for ${packageName}`);
-        }
-        const data = (await response.json()) as { version?: string };
-        const version = data.version;
-        if (version !== undefined) {
-          versionCache.set(packageName, version);
-        }
-        return version;
-      },
-      { maxRetries: 3 },
-    );
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    logger.warn(
-      `Unable to fetch latest version for "${packageName}" from npm registry — ${detail}. Check your internet connection.`,
-    );
+    // Scoped packages like @helix/core require %2F encoding of the slash
+    const encodedName = packageName.startsWith('@') ? packageName.replace('/', '%2F') : packageName;
+    const url = `https://registry.npmjs.org/${encodedName}/latest`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return undefined;
+    const data = (await response.json()) as { version?: string };
+    const version = data.version;
+    if (version !== undefined) {
+      versionCache.set(packageName, version);
+    }
+    return version;
+  } catch {
     return undefined;
   }
 }
@@ -147,7 +118,6 @@ export function getInstalledVersions(dir: string): Record<string, string> {
 
 export interface UpgradeOptions {
   dryRun?: boolean;
-  offline?: boolean;
 }
 
 export interface UpgradePlan {
@@ -185,7 +155,7 @@ export function buildUpgradePlan(
  * writes updated versions back to package.json.
  */
 export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Promise<void> {
-  const { dryRun = false, offline = false } = options;
+  const { dryRun = false } = options;
 
   // SECURITY: Validate the directory path before reading any files.
   // This prevents path traversal attacks when the directory argument is
@@ -207,49 +177,20 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
 
   const installed = getInstalledVersions(dir);
 
-  let latestVersions: Record<string, string>;
+  // Query the npm registry for the latest versions of all installed HELiX packages
+  const s = p.spinner();
+  s.start('Fetching latest versions from npm registry…');
+  const latestVersions = await fetchLatestVersions(Object.keys(installed));
+  s.stop('Fetched latest versions');
 
-  if (offline) {
-    // Offline: skip registry fetch, use cached versions if available
-    const s = p.spinner();
-    s.start('Loading cached registry data…');
-    const cache = readRegistryCache();
-    s.stop('Loaded cached registry data');
-
-    if (cache !== null) {
-      latestVersions = cache.packages;
-      p.log.warn(
-        pc.yellow('Offline mode.') +
-          ' ' +
-          pc.dim('Using cached registry data from ' + new Date(cache.updatedAt).toLocaleString()),
-      );
-    } else {
-      latestVersions = {};
-      p.log.warn(
-        pc.yellow('Offline mode — no cache found.') +
-          ' ' +
-          pc.dim('Showing installed versions only — upgrade check skipped.'),
-      );
-    }
-  } else {
-    // Online: query the npm registry for the latest versions of all installed HELiX packages
-    const s = p.spinner();
-    s.start('Fetching latest versions from npm registry…');
-    latestVersions = await fetchLatestVersions(Object.keys(installed));
-    s.stop('Fetched latest versions');
-
-    const fetchedCount = Object.keys(latestVersions).length;
-    const totalCount = Object.keys(installed).length;
-    if (totalCount > 0 && fetchedCount === 0) {
-      p.log.warn(
-        pc.yellow('Could not reach npm registry.') +
-          ' ' +
-          pc.dim('Showing installed versions only — upgrade check skipped.'),
-      );
-    } else if (fetchedCount > 0) {
-      // Write successful fetch to registry cache for future offline use
-      writeRegistryCache(latestVersions);
-    }
+  const fetchedCount = Object.keys(latestVersions).length;
+  const totalCount = Object.keys(installed).length;
+  if (totalCount > 0 && fetchedCount === 0) {
+    p.log.warn(
+      pc.yellow('Could not reach npm registry.') +
+        ' ' +
+        pc.dim('Showing installed versions only — upgrade check skipped.'),
+    );
   }
 
   const plan = buildUpgradePlan(installed, latestVersions);

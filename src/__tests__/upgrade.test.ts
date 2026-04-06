@@ -51,7 +51,12 @@ vi.mock('../logger.js', () => ({
 }));
 
 import fs from 'node:fs';
-import { detectHelixProject, getInstalledVersions, runUpgrade, clearVersionCache } from '../commands/upgrade.js';
+import {
+  detectHelixProject,
+  getInstalledVersions,
+  runUpgrade,
+  clearVersionCache,
+} from '../commands/upgrade.js';
 
 // ---------------------------------------------------------------------------
 // detectHelixProject
@@ -91,7 +96,7 @@ describe('detectHelixProject', () => {
 
   it('returns false when package.json has no helix dependencies', () => {
     const pkg = JSON.stringify({
-      dependencies: { react: '^18.0.0', 'lodash': '^4.0.0' },
+      dependencies: { react: '^18.0.0', lodash: '^4.0.0' },
     });
     vi.mocked(fs.readFileSync).mockReturnValue(pkg as never);
 
@@ -353,10 +358,7 @@ describe('runUpgrade — network failure (all fetches fail)', () => {
       throw new Error(`process.exit(${String(_code)})`);
     });
     // Stub fetch to always fail
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new Error('Network error')),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
     // Simulate a helix project
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({ dependencies: { '@helix/core': '^1.0.0' } }) as never,

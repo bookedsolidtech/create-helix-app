@@ -1,29 +1,26 @@
 import type { PresetConfig } from '../types.js';
 
-export function generateLibrariesYml(themeName: string, preset: PresetConfig): string {
-  const sdcEntries = preset.sdcList
-    .map(
-      (sdc) =>
-        `helixui.${sdc}:\n  version: VERSION\n  provider: cdn\n  dependencies:\n    - ${themeName}/helixui.base`,
-    )
-    .join('\n\n');
-
-  return `# HELiX UI component libraries for Drupal
-# Generated from preset: ${preset.id}
-# SDCs: ${preset.sdcList.join(', ')}
-
-helixui.base:
+/**
+ * Generates {themeName}.libraries.yml content.
+ *
+ * SDCs load their own HELiX component assets via attach_library() calls in
+ * their Twig templates. This file only declares global theme-level CSS.
+ */
+export function generateThemeLibraries(themeName: string, _preset: PresetConfig): string {
+  return `global:
   version: VERSION
-  provider: cdn
   css:
     theme:
-      https://unpkg.com/@helixui/tokens/dist/index.css: {}
-  js:
-    https://unpkg.com/@helixui/library/dist/index.js: {}
+      css/style.css: {}
   dependencies:
     - core/drupal
-    - core/once
 
-${sdcEntries}
+helix-overrides:
+  version: VERSION
+  css:
+    theme:
+      css/helix-overrides.css: {}
+  dependencies:
+    - ${themeName}/global
 `;
 }

@@ -114,7 +114,7 @@ describe('getTemplate', () => {
     const t = getTemplate('react-next');
     expect(t).toBeDefined();
     expect(t!.id).toBe('react-next');
-    expect(t!.name).toBe('React + Next.js 15');
+    expect(t!.name).toBe('React + Next.js 16');
   });
 
   it('returns undefined for an unknown id', () => {

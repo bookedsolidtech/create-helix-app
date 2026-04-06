@@ -28,3 +28,8 @@ PE-REVIEW.md
 
 # Temp files
 test-scaffold.ts
+.pnpm-store
+.act-results.json
+
+# Session context (not committed)
+@RESTART.md

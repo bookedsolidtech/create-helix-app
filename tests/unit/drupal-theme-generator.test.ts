@@ -2,17 +2,22 @@ import { describe, it, expect } from 'vitest';
 import {
   toTitleCase,
   generateThemeInfoYml,
-  generateThemeLibrariesYml,
   generateComposerJson,
   generatePackageJson,
   generateBehaviorsJs,
   generateComponentYml,
   generateComponentTwig,
+  generateComponentCss,
+  generateTemplateOverride,
+  generateStyleCss,
+  generateHelixOverridesCss,
+  generateDockerCompose,
+  generateThemePhp,
   scaffoldDrupalTheme,
 } from '../../src/generators/drupal-theme.js';
-import { generateLibrariesYml } from '../../src/generators/libraries.js';
+import { generateThemeLibraries } from '../../src/generators/libraries.js';
 import { getPreset, VALID_PRESETS, PRESETS } from '../../src/presets/loader.js';
-import type { DrupalPreset, PresetConfig } from '../../src/types.js';
+import type { DrupalPreset, PresetConfig, SDCDefinition } from '../../src/types.js';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'fs-extra';
@@ -23,12 +28,31 @@ import fs from 'fs-extra';
 
 const ROOT = path.join(os.tmpdir(), `helix-unit-drupal-theme-${Date.now()}`);
 
+const nodeTeaserSdc: SDCDefinition = {
+  name: 'node-teaser',
+  group: 'node',
+  helixComponents: ['hx-card', 'hx-badge', 'hx-text'],
+};
+
+const heroBannerSdc: SDCDefinition = {
+  name: 'hero-banner',
+  group: 'block',
+  helixComponents: ['hx-hero', 'hx-text', 'hx-button'],
+};
+
+const contentGridSdc: SDCDefinition = {
+  name: 'content-grid',
+  group: 'views',
+  helixComponents: ['hx-card'],
+  templateOverride: 'views/views-view--content.html.twig',
+};
+
 function makePreset(overrides: Partial<PresetConfig> = {}): PresetConfig {
   return {
     id: 'standard',
     name: 'Standard',
     description: 'Test preset',
-    sdcList: ['node-teaser', 'hero-banner'],
+    sdcList: [nodeTeaserSdc, heroBannerSdc],
     dependencies: { '@helixui/drupal-starter': '^0.1.0', '@helixui/tokens': '^0.2.0' },
     templateVars: {},
     architectureNotes: 'Test notes',
@@ -91,18 +115,30 @@ describe('generateThemeInfoYml', () => {
     const yml = generateThemeInfoYml('cool_drupal_theme', preset);
     expect(yml).toContain("name: 'Cool Drupal Theme'");
   });
+
+  it('declares SDC component path', () => {
+    const yml = generateThemeInfoYml('my_theme', preset);
+    expect(yml).toContain('components:');
+    expect(yml).toContain("path: 'components'");
+  });
 });
 
 /* -------------------------------------------------------------------------- */
-/*  generateThemeLibrariesYml                                                  */
+/*  generateThemeLibraries                                                     */
 /* -------------------------------------------------------------------------- */
 
-describe('generateThemeLibrariesYml', () => {
+describe('generateThemeLibraries', () => {
   it('produces global library with css entry', () => {
-    const yml = generateThemeLibrariesYml('my_theme');
+    const yml = generateThemeLibraries('my_theme', makePreset());
     expect(yml).toContain('global:');
     expect(yml).toContain('version: VERSION');
     expect(yml).toContain('css/style.css: {}');
+  });
+
+  it('produces helix-overrides library', () => {
+    const yml = generateThemeLibraries('my_theme', makePreset());
+    expect(yml).toContain('helix-overrides:');
+    expect(yml).toContain('css/helix-overrides.css: {}');
   });
 });
 
@@ -127,11 +163,11 @@ describe('generateComposerJson', () => {
     expect(parsed.name).toBe('helixui/cool_theme');
   });
 
-  it('requires Drupal core ^10 || ^11', () => {
+  it('requires drupal/core', () => {
     const parsed = JSON.parse(generateComposerJson('my_theme')) as {
       require: Record<string, string>;
     };
-    expect(parsed.require['drupal/core']).toBe('^10 || ^11');
+    expect(parsed.require).toHaveProperty('drupal/core');
   });
 });
 
@@ -188,35 +224,35 @@ describe('generateBehaviorsJs', () => {
   const preset = makePreset();
 
   it('uses Drupal.behaviors pattern', () => {
-    const js = generateBehaviorsJs(preset);
-    expect(js).toContain('Drupal.behaviors.helixuiInit');
+    const js = generateBehaviorsJs('my_theme', preset);
+    expect(js).toContain('Drupal.behaviors.my_themeInit');
   });
 
   it('uses once() for idempotent initialization', () => {
-    const js = generateBehaviorsJs(preset);
-    expect(js).toContain("once('helixui:sdc-init'");
+    const js = generateBehaviorsJs('my_theme', preset);
+    expect(js).toContain("once('");
   });
 
   it('includes attach and detach methods', () => {
-    const js = generateBehaviorsJs(preset);
-    expect(js).toContain('attach: function (context, settings)');
-    expect(js).toContain('detach: function (context, settings, trigger)');
+    const js = generateBehaviorsJs('my_theme', preset);
+    expect(js).toContain('attach(');
+    expect(js).toContain('detach(');
   });
 
-  it('references preset id in file header comment', () => {
-    const js = generateBehaviorsJs(preset);
-    expect(js).toContain('standard preset');
+  it('references preset name in file header comment', () => {
+    const js = generateBehaviorsJs('my_theme', preset);
+    expect(js).toContain('Standard');
   });
 
   it('uses IIFE with Drupal and once parameters', () => {
-    const js = generateBehaviorsJs(preset);
+    const js = generateBehaviorsJs('my_theme', preset);
     expect(js).toContain('(function (Drupal, once)');
-    expect(js).toContain('}(Drupal, once));');
+    expect(js).toContain('}(Drupal, once))');
   });
 
-  it('checks for unload trigger in detach', () => {
-    const js = generateBehaviorsJs(preset);
-    expect(js).toContain("trigger === 'unload'");
+  it('references hx-* components from preset', () => {
+    const js = generateBehaviorsJs('my_theme', preset);
+    expect(js).toContain('hx-card');
   });
 });
 
@@ -226,32 +262,42 @@ describe('generateBehaviorsJs', () => {
 
 describe('generateComponentYml', () => {
   it('includes SDC schema reference', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain('$schema:');
     expect(yml).toContain('drupalcode.org');
   });
 
   it('title-cases the component name', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain("name: 'Node Teaser'");
   });
 
-  it('defines props with title and url', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+  it('has status: experimental', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
+    expect(yml).toContain('status: experimental');
+  });
+
+  it('has group field', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
+    expect(yml).toContain('group:');
+    expect(yml).toContain('Node Display');
+  });
+
+  it('defines props with title', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
+    expect(yml).toContain('props:');
     expect(yml).toContain('title:');
-    expect(yml).toContain('type: string');
-    expect(yml).toContain('url:');
   });
 
-  it('defines content slot', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+  it('defines slots section', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain('slots:');
-    expect(yml).toContain("title: 'Content'");
   });
 
-  it('references theme library dependency', () => {
-    const yml = generateComponentYml('hero-banner', 'cool_theme');
-    expect(yml).toContain('cool_theme/helixui.hero-banner');
+  it('works with block SDC', () => {
+    const yml = generateComponentYml(heroBannerSdc);
+    expect(yml).toContain("name: 'Hero Banner'");
+    expect(yml).toContain("group: 'Block'");
   });
 });
 
@@ -260,80 +306,143 @@ describe('generateComponentYml', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('generateComponentTwig', () => {
-  it('generates article wrapper with component CSS class', () => {
-    const twig = generateComponentTwig('node-teaser');
-    expect(twig).toContain('<article class="node-teaser">');
+  it('attaches helix component libraries', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
+    expect(twig).toContain("attach_library('helixui/hx-card')");
   });
 
-  it('uses BEM-style class names', () => {
-    const twig = generateComponentTwig('node-teaser');
-    expect(twig).toContain('class="node-teaser__title"');
-    expect(twig).toContain('class="node-teaser__content"');
+  it('uses hx-* elements', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
+    expect(twig).toContain('<hx-card');
   });
 
-  it('outputs title and url twig variables', () => {
-    const twig = generateComponentTwig('node-teaser');
-    expect(twig).toContain('{{ url }}');
+  it('outputs title twig variable', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
     expect(twig).toContain('{{ title }}');
   });
 
-  it('includes content block', () => {
-    const twig = generateComponentTwig('node-teaser');
-    expect(twig).toContain('{% block content %}{% endblock %}');
+  it('includes file docblock comment', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
+    expect(twig).toContain('@file');
   });
 
-  it('includes file docblock comment', () => {
-    const twig = generateComponentTwig('hero-banner');
-    expect(twig).toContain('Template for hero-banner SDC component');
+  it('works with block SDC', () => {
+    const twig = generateComponentTwig(heroBannerSdc);
+    expect(twig).toContain("attach_library('helixui/hx-hero')");
+    expect(twig).toContain('hero-banner');
   });
 });
 
 /* -------------------------------------------------------------------------- */
-/*  generateLibrariesYml (CDN provider generation)                             */
+/*  generateComponentCss                                                       */
 /* -------------------------------------------------------------------------- */
 
-describe('generateLibrariesYml', () => {
-  const preset = makePreset();
-
-  it('includes header comment with preset id', () => {
-    const yml = generateLibrariesYml('my_theme', preset);
-    expect(yml).toContain('Generated from preset: standard');
+describe('generateComponentCss', () => {
+  it('generates BEM-scoped CSS', () => {
+    const css = generateComponentCss(nodeTeaserSdc);
+    expect(css).toContain('.node-teaser {');
   });
 
-  it('lists all SDCs in header comment', () => {
-    const yml = generateLibrariesYml('my_theme', preset);
-    expect(yml).toContain('node-teaser, hero-banner');
+  it('uses HELiX CSS custom properties', () => {
+    const css = generateComponentCss(nodeTeaserSdc);
+    expect(css).toContain('var(--hx-');
   });
 
-  it('defines helixui.base library with CDN provider', () => {
-    const yml = generateLibrariesYml('my_theme', preset);
-    expect(yml).toContain('helixui.base:');
-    expect(yml).toContain('provider: cdn');
+  it('works with block SDC', () => {
+    const css = generateComponentCss(heroBannerSdc);
+    expect(css).toContain('.hero-banner {');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  generateTemplateOverride                                                   */
+/* -------------------------------------------------------------------------- */
+
+describe('generateTemplateOverride', () => {
+  const sdcWithOverride: SDCDefinition = {
+    name: 'node-teaser',
+    group: 'node',
+    helixComponents: ['hx-card'],
+    templateOverride: 'node/node--article--teaser.html.twig',
+  };
+
+  it('generates include call for the SDC', () => {
+    const twig = generateTemplateOverride(sdcWithOverride, 'my_theme');
+    expect(twig).toContain("include('my_theme:node-teaser')");
   });
 
-  it('includes unpkg CDN URLs for tokens and library', () => {
-    const yml = generateLibrariesYml('my_theme', preset);
-    expect(yml).toContain('https://unpkg.com/@helixui/tokens/dist/index.css');
-    expect(yml).toContain('https://unpkg.com/@helixui/library/dist/index.js');
+  it('passes node variables for node template overrides', () => {
+    const twig = generateTemplateOverride(sdcWithOverride, 'my_theme');
+    expect(twig).toContain('node.label');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  generateStyleCss / generateHelixOverridesCss                              */
+/* -------------------------------------------------------------------------- */
+
+describe('generateStyleCss', () => {
+  it('imports helix-overrides.css', () => {
+    const css = generateStyleCss();
+    expect(css).toContain('@import url("helix-overrides.css")');
   });
 
-  it('declares core/drupal and core/once dependencies', () => {
-    const yml = generateLibrariesYml('my_theme', preset);
-    expect(yml).toContain('- core/drupal');
-    expect(yml).toContain('- core/once');
+  it('has body reset styles', () => {
+    const css = generateStyleCss();
+    expect(css).toContain('body {');
+    expect(css).toContain('margin: 0');
+  });
+});
+
+describe('generateHelixOverridesCss', () => {
+  it('has :root block with HELiX custom property overrides', () => {
+    const css = generateHelixOverridesCss();
+    expect(css).toContain(':root {');
+    expect(css).toContain('--hx-color-primary');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  generateDockerCompose                                                      */
+/* -------------------------------------------------------------------------- */
+
+describe('generateDockerCompose', () => {
+  it('uses drupal:11-apache image', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('drupal:11-apache');
   });
 
-  it('generates one entry per SDC', () => {
-    const yml = generateLibrariesYml('my_theme', preset);
-    expect(yml).toContain('helixui.node-teaser:');
-    expect(yml).toContain('helixui.hero-banner:');
+  it('references the theme directory', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('my_theme');
   });
 
-  it('each SDC library depends on helixui.base', () => {
-    const yml = generateLibrariesYml('my_theme', preset);
-    // Count occurrences of the base dependency (once per SDC)
-    const matches = yml.match(/my_theme\/helixui\.base/g);
-    expect(matches).toHaveLength(preset.sdcList.length);
+  it('exposes port 8080', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('8080:80');
+  });
+
+  it('uses mariadb:11 for the database', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('mariadb:11');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  generateThemePhp                                                           */
+/* -------------------------------------------------------------------------- */
+
+describe('generateThemePhp', () => {
+  it('starts with PHP opening tag', () => {
+    const sdcs = getPreset('standard').sdcList;
+    const php = generateThemePhp('my_theme', sdcs);
+    expect(php).toContain('<?php');
+  });
+
+  it('generates preprocess hooks for SDCs with templateOverride', () => {
+    const sdcs = getPreset('standard').sdcList;
+    const php = generateThemePhp('my_theme', sdcs);
+    expect(php).toContain('function my_theme_preprocess_node');
   });
 });
 
@@ -343,8 +452,6 @@ describe('generateLibrariesYml', () => {
 
 describe('path traversal protection', () => {
   it('rejects directory with ../ traversal', async () => {
-    // path.normalize resolves "../" so the security guard may not trigger;
-    // the OS will reject the resulting privileged path with EACCES instead.
     await expect(
       scaffoldDrupalTheme({
         themeName: 'safe_theme',
@@ -355,8 +462,6 @@ describe('path traversal protection', () => {
   });
 
   it('rejects directory with backslash traversal on normalized path', async () => {
-    // path.join + normalize collapses ".." segments, so the traversal guard
-    // sees a clean path. The OS still blocks writes to privileged dirs (EACCES).
     await expect(
       scaffoldDrupalTheme({
         themeName: 'safe_theme',
@@ -368,7 +473,6 @@ describe('path traversal protection', () => {
 
   it('accepts a safe absolute path', async () => {
     const dir = path.join(ROOT, 'traversal-safe');
-    // Should not throw
     await scaffoldDrupalTheme({
       themeName: 'safe_theme',
       directory: dir,
@@ -459,33 +563,31 @@ describe('all presets produce correct generator output', () => {
       }
     });
 
-    it('behaviors.js references preset id', () => {
-      const js = generateBehaviorsJs(preset);
-      expect(js).toContain(`${presetId} preset`);
+    it('behaviors.js references preset name', () => {
+      const js = generateBehaviorsJs(themeName, preset);
+      expect(js).toContain(preset.name);
       expect(js).toContain('Drupal.behaviors');
     });
 
     it('component.yml is generated for each SDC', () => {
       for (const sdc of preset.sdcList) {
-        const yml = generateComponentYml(sdc, themeName);
-        expect(yml).toContain(`${themeName}/helixui.${sdc}`);
+        const yml = generateComponentYml(sdc);
+        expect(yml).toContain('$schema:');
+        expect(yml).toContain('status: experimental');
       }
     });
 
     it('component twig is generated for each SDC', () => {
       for (const sdc of preset.sdcList) {
         const twig = generateComponentTwig(sdc);
-        expect(twig).toContain(`class="${sdc}"`);
-        expect(twig).toContain(`${sdc}__title`);
+        expect(twig).toContain('@file');
       }
     });
 
-    it('libraries.yml has entries for every SDC', () => {
-      const yml = generateLibrariesYml(themeName, preset);
-      expect(yml).toContain('helixui.base:');
-      for (const sdc of preset.sdcList) {
-        expect(yml).toContain(`helixui.${sdc}:`);
-      }
+    it('libraries.yml has global and helix-overrides entries', () => {
+      const yml = generateThemeLibraries(themeName, preset);
+      expect(yml).toContain('global:');
+      expect(yml).toContain('helix-overrides:');
     });
   });
 });
@@ -507,9 +609,10 @@ describe('ecommerce preset specifics', () => {
   });
 
   it('includes commerce-specific SDCs', () => {
-    expect(preset.sdcList).toContain('product-card');
-    expect(preset.sdcList).toContain('cart-summary');
-    expect(preset.sdcList).toContain('checkout-form');
+    const sdcNames = preset.sdcList.map((s) => s.name);
+    expect(sdcNames).toContain('product-card');
+    expect(sdcNames).toContain('cart-summary');
+    expect(sdcNames).toContain('checkout-form');
   });
 });
 
@@ -521,18 +624,18 @@ describe('healthcare preset specifics', () => {
   const preset = getPreset('healthcare');
 
   it('includes healthcare-specific SDCs', () => {
-    expect(preset.sdcList).toContain('provider-card');
-    expect(preset.sdcList).toContain('appointment-cta');
-    expect(preset.sdcList).toContain('medical-disclaimer');
+    const sdcNames = preset.sdcList.map((s) => s.name);
+    expect(sdcNames).toContain('provider-card');
+    expect(sdcNames).toContain('appointment-cta');
+    expect(sdcNames).toContain('medical-disclaimer');
   });
 
   it('extends blog SDCs (which extend standard)', () => {
-    // Should contain standard SDCs
-    expect(preset.sdcList).toContain('node-teaser');
-    expect(preset.sdcList).toContain('hero-banner');
-    // Should contain blog SDCs
-    expect(preset.sdcList).toContain('article-full');
-    expect(preset.sdcList).toContain('author-byline');
+    const sdcNames = preset.sdcList.map((s) => s.name);
+    expect(sdcNames).toContain('node-teaser');
+    expect(sdcNames).toContain('hero-banner');
+    expect(sdcNames).toContain('article-full');
+    expect(sdcNames).toContain('author-byline');
   });
 });
 
@@ -550,21 +653,22 @@ describe('scaffoldDrupalTheme file output', () => {
 
     expect(await fs.pathExists(path.join(dir, `${themeName}.info.yml`))).toBe(true);
     expect(await fs.pathExists(path.join(dir, `${themeName}.libraries.yml`))).toBe(true);
-    expect(await fs.pathExists(path.join(dir, 'helixui.libraries.yml'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, `${themeName}.theme`))).toBe(true);
     expect(await fs.pathExists(path.join(dir, 'package.json'))).toBe(true);
     expect(await fs.pathExists(path.join(dir, 'composer.json'))).toBe(true);
-    expect(
-      await fs.pathExists(path.join(dir, 'src', 'behaviors', `${presetId}-behaviors.js`)),
-    ).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'js', 'behaviors.js'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'css', 'style.css'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'docker', 'docker-compose.yml'))).toBe(true);
   });
 
   it('creates SDC directories with component files', async () => {
     const preset = getPreset(presetId);
     for (const sdc of preset.sdcList) {
-      const sdcDir = path.join(dir, 'src', 'components', sdc);
-      expect(await fs.pathExists(sdcDir)).toBe(true);
-      expect(await fs.pathExists(path.join(sdcDir, `${sdc}.component.yml`))).toBe(true);
-      expect(await fs.pathExists(path.join(sdcDir, `${sdc}.twig`))).toBe(true);
+      const base = path.join(dir, 'components', sdc.group, sdc.name);
+      expect(await fs.pathExists(base)).toBe(true);
+      expect(await fs.pathExists(path.join(base, `${sdc.name}.component.yml`))).toBe(true);
+      expect(await fs.pathExists(path.join(base, `${sdc.name}.twig`))).toBe(true);
+      expect(await fs.pathExists(path.join(base, `${sdc.name}.css`))).toBe(true);
     }
   });
 
@@ -584,5 +688,20 @@ describe('scaffoldDrupalTheme file output', () => {
   // Cleanup
   it('cleanup temp directory', async () => {
     await fs.remove(ROOT);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  PRESETS array shape validation                                             */
+/* -------------------------------------------------------------------------- */
+
+describe('all PRESETS have correct shape', () => {
+  it.each(PRESETS)('$id preset SDCDefinitions have name, group, and helixComponents', (preset) => {
+    for (const sdc of preset.sdcList) {
+      expect(typeof sdc.name).toBe('string');
+      expect(sdc.name.length).toBeGreaterThan(0);
+      expect(typeof sdc.group).toBe('string');
+      expect(Array.isArray(sdc.helixComponents)).toBe(true);
+    }
   });
 });

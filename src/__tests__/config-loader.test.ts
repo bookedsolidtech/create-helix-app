@@ -10,8 +10,11 @@ vi.mock('node:fs', () => ({
 }));
 
 import fs from 'node:fs';
-import { readHelixRc, loadHelixRcHooks } from '../plugins/config-loader.js';
+import { readHelixRc } from '../plugins/config-loader.js';
 import type { HelixRcConfig, HelixRcHookEntry } from '../plugins/config-loader.js';
+
+// Note: loadHelixRcHooks uses the lifecycle-based schema (fs-extra) and is
+// tested separately in tests/plugins/config-loader.test.ts
 
 // ---------------------------------------------------------------------------
 // readHelixRc
@@ -74,100 +77,6 @@ describe('readHelixRc', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// loadHelixRcHooks
-// ---------------------------------------------------------------------------
-
-describe('loadHelixRcHooks', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns an empty array when .helixrc.json does not exist', async () => {
-    vi.mocked(fs.readFileSync).mockImplementation(() => {
-      throw new Error('ENOENT');
-    });
-
-    const hooks = await loadHelixRcHooks('/project');
-    expect(hooks).toEqual([]);
-  });
-
-  it('returns an empty array when config has no hooks array', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue('{}' as never);
-
-    const hooks = await loadHelixRcHooks('/project');
-    expect(hooks).toEqual([]);
-  });
-
-  it('returns an empty array when config.hooks is an empty array', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ hooks: [] }) as never);
-
-    const hooks = await loadHelixRcHooks('/project');
-    expect(hooks).toEqual([]);
-  });
-
-  it('skips entries that are missing name or handler', async () => {
-    const config = {
-      hooks: [
-        { name: '', handler: './handler.js' },
-        { name: 'beforeScaffold', handler: '' },
-      ],
-    };
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(config) as never);
-
-    const hooks = await loadHelixRcHooks('/project');
-    expect(hooks).toEqual([]);
-  });
-
-  it('calls onError when a handler module cannot be imported', async () => {
-    const config = {
-      hooks: [{ name: 'beforeScaffold', handler: './nonexistent-handler.js' }],
-    };
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(config) as never);
-
-    const onError = vi.fn();
-    const hooks = await loadHelixRcHooks('/project', onError);
-
-    expect(hooks).toEqual([]);
-    expect(onError).toHaveBeenCalledOnce();
-
-    const [entry, err] = onError.mock.calls[0] as [HelixRcHookEntry, unknown];
-    expect(entry.name).toBe('beforeScaffold');
-    expect(err).toBeInstanceOf(Error);
-  });
-
-  it('continues loading remaining hooks after one fails', async () => {
-    const config = {
-      hooks: [
-        { name: 'bad', handler: './nonexistent.js' },
-        { name: 'also-bad', handler: './also-nonexistent.js' },
-      ],
-    };
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(config) as never);
-
-    const errors: HelixRcHookEntry[] = [];
-    await loadHelixRcHooks('/project', (entry) => {
-      errors.push(entry);
-    });
-
-    expect(errors).toHaveLength(2);
-    expect(errors[0].name).toBe('bad');
-    expect(errors[1].name).toBe('also-bad');
-  });
-
-  it('does not call onError when onError is not provided and a handler fails', async () => {
-    const config = {
-      hooks: [{ name: 'failing', handler: './no-such-module.js' }],
-    };
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(config) as never);
-
-    // Should not throw
-    await expect(loadHelixRcHooks('/project')).resolves.toEqual([]);
-  });
-
-  it('throws a SyntaxError upward when .helixrc.json contains invalid JSON', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue('{ bad json' as never);
-
-    await expect(loadHelixRcHooks('/project')).rejects.toThrow(SyntaxError);
-  });
-});
+// loadHelixRcHooks uses the lifecycle-based schema and fs-extra, tested in
+// tests/plugins/config-loader.test.ts. The HelixRcHookEntry type is exported
+// for use in readHelixRc-based tooling.

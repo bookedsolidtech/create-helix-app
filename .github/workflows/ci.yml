@@ -92,7 +92,7 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -108,8 +108,8 @@ jobs:
         run: |
           if [ -f coverage/coverage-summary.json ]; then
             PCT=$(node -e "const s=require('./coverage/coverage-summary.json');console.log(Math.floor(s.total.lines.pct))")
-            if [ "$PCT" -ge 80 ]; then COLOR="brightgreen"
-            elif [ "$PCT" -ge 60 ]; then COLOR="yellow"
+            if [ "$PCT" -ge 90 ]; then COLOR="brightgreen"
+            elif [ "$PCT" -ge 80 ]; then COLOR="yellow"
             else COLOR="red"
             fi
             echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${PCT}%\",\"color\":\"${COLOR}\"}" > coverage/coverage-badge.json
@@ -124,6 +124,53 @@ jobs:
           path: coverage/
           retention-days: 30
 
+  coverage-enforcement:
+    name: Coverage Enforcement Check
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Verify threshold violations cause non-zero exit
+        run: |
+          # Create a temp config with impossible thresholds (101%) to verify vitest
+          # exits non-zero when coverage falls below configured thresholds.
+          cat > vitest.threshold-check.ts << 'EOF'
+          import { defineConfig } from 'vitest/config';
+          export default defineConfig({
+            test: {
+              include: ['src/__tests__/**/*.test.ts', 'tests/**/*.test.ts'],
+              globals: true,
+              testTimeout: 15000,
+              coverage: {
+                provider: 'v8',
+                include: ['src/**/*.ts'],
+                exclude: ['src/__tests__/**', 'src/index.ts', 'src/cli.ts'],
+                thresholds: {
+                  statements: 101,
+                  branches: 101,
+                  functions: 101,
+                  lines: 101,
+                },
+              },
+            },
+          });
+          EOF
+          if pnpm run test -- --coverage --config vitest.threshold-check.ts; then
+            echo "ERROR: vitest should have exited non-zero with impossible thresholds"
+            rm -f vitest.threshold-check.ts
+            exit 1
+          else
+            echo "PASS: vitest correctly exits non-zero when coverage thresholds are not met"
+            rm -f vitest.threshold-check.ts
+          fi
+
   build:
     name: Build (Node ${{ matrix.node-version }})
     needs: [secret-scan]
@@ -131,7 +178,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -141,20 +188,23 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      - name: Validate package (dry-run publish)
-        run: pnpm publish --dry-run --no-git-checks
+      - name: Validate package (pack dry-run)
+        run: npm pack --dry-run
 
   benchmark:
     name: Performance Benchmarks
     needs: [secret-scan]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - name: Run benchmarks
@@ -228,34 +278,48 @@ jobs:
     name: Quality Gates
     runs-on: ubuntu-latest
     timeout-minutes: 1
-    needs: [secret-scan, lint, format, type-check, test, build, audit, license-check, smoke-test]
+    needs:
+      [
+        secret-scan,
+        lint,
+        format,
+        type-check,
+        test,
+        coverage-enforcement,
+        build,
+        audit,
+        license-check,
+        smoke-test,
+      ]
     if: always()
     steps:
       - name: Check all gates
         run: |
-          echo "Secret Scan:     ${{ needs.secret-scan.result }}"
-          echo "Lint:            ${{ needs.lint.result }}"
-          echo "Format:          ${{ needs.format.result }}"
-          echo "Type Check:      ${{ needs.type-check.result }}"
-          echo "Test:            ${{ needs.test.result }}"
-          echo "Build:           ${{ needs.build.result }}"
-          echo "Audit:           ${{ needs.audit.result }}"
-          echo "License Check:   ${{ needs.license-check.result }}"
-          echo "Smoke Test:      ${{ needs.smoke-test.result }}"
+          echo "Secret Scan:          ${{ needs.secret-scan.result }}"
+          echo "Lint:                 ${{ needs.lint.result }}"
+          echo "Format:               ${{ needs.format.result }}"
+          echo "Type Check:           ${{ needs.type-check.result }}"
+          echo "Test:                 ${{ needs.test.result }}"
+          echo "Coverage Enforcement: ${{ needs.coverage-enforcement.result }}"
+          echo "Build:                ${{ needs.build.result }}"
+          echo "Audit:                ${{ needs.audit.result }}"
+          echo "License Check:        ${{ needs.license-check.result }}"
+          echo "Smoke Test:           ${{ needs.smoke-test.result }}"
 
           FAIL=0
-          for gate in secret-scan lint format type-check test build audit license-check smoke-test; do
+          for gate in secret-scan lint format type-check test coverage-enforcement build audit license-check smoke-test; do
             result="skipped"
             case "$gate" in
-              secret-scan)    result="${{ needs.secret-scan.result }}" ;;
-              lint)           result="${{ needs.lint.result }}" ;;
-              format)         result="${{ needs.format.result }}" ;;
-              type-check)     result="${{ needs.type-check.result }}" ;;
-              test)           result="${{ needs.test.result }}" ;;
-              build)          result="${{ needs.build.result }}" ;;
-              audit)          result="${{ needs.audit.result }}" ;;
-              license-check)  result="${{ needs.license-check.result }}" ;;
-              smoke-test)     result="${{ needs.smoke-test.result }}" ;;
+              secret-scan)          result="${{ needs.secret-scan.result }}" ;;
+              lint)                 result="${{ needs.lint.result }}" ;;
+              format)               result="${{ needs.format.result }}" ;;
+              type-check)           result="${{ needs.type-check.result }}" ;;
+              test)                 result="${{ needs.test.result }}" ;;
+              coverage-enforcement) result="${{ needs.coverage-enforcement.result }}" ;;
+              build)                result="${{ needs.build.result }}" ;;
+              audit)                result="${{ needs.audit.result }}" ;;
+              license-check)        result="${{ needs.license-check.result }}" ;;
+              smoke-test)           result="${{ needs.smoke-test.result }}" ;;
             esac
             if [[ "$result" != "success" ]]; then
               echo "::error::Gate '$gate' did not succeed: $result"

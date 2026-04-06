@@ -2,8 +2,6 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import https from 'node:https';
-import { withRetry, HelixError } from './retry.js';
-import { logger } from './logger.js';
 
 export interface CheckResult {
   name: string;
@@ -20,10 +18,7 @@ export interface DoctorResult {
 function runCommand(cmd: string): string | null {
   try {
     return execSync(cmd, { stdio: 'pipe', timeout: 5000 }).toString().trim();
-  } catch (err) {
-    logger.debug(`Command failed: ${cmd}`, {
-      error: err instanceof Error ? err.message : String(err),
-    });
+  } catch {
     return null;
   }
 }
@@ -99,10 +94,8 @@ export function checkDiskSpace(): CheckResult {
     const freeBytes = os.freemem();
     const freeGb = (freeBytes / (1024 * 1024 * 1024)).toFixed(1);
     return { name: 'Disk space', status: 'ok', message: `~${freeGb} GB available (RAM free)` };
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    logger.debug('Disk space check failed', { error: detail });
-    return { name: 'Disk space', status: 'warn', message: `unable to determine (${detail})` };
+  } catch {
+    return { name: 'Disk space', status: 'warn', message: 'unable to determine' };
   }
 }
 
@@ -110,55 +103,28 @@ export function checkWritePermissions(): CheckResult {
   try {
     fs.accessSync(process.cwd(), fs.constants.W_OK);
     return { name: 'Write permissions', status: 'ok', message: 'OK' };
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    logger.debug('Write permissions check failed', { error: detail });
-    return { name: 'Write permissions', status: 'fail', message: `not writable (${detail})` };
+  } catch {
+    return { name: 'Write permissions', status: 'fail', message: 'not writable' };
   }
 }
 
-/**
- * Probes npmjs.org reachability with up to 3 retry attempts using exponential
- * backoff. Returns 'warn' (rather than throwing) after all retries are
- * exhausted so the doctor report can still complete.
- */
-export async function checkNetwork(offline = false): Promise<CheckResult> {
-  if (offline) {
-    return { name: 'Network', status: 'warn', message: 'skipped - offline' };
-  }
-
-  const probe = (): Promise<void> =>
-    new Promise<void>((resolve, reject) => {
-      const req = https.get('https://registry.npmjs.org/', { timeout: 5000 }, (res) => {
-        res.destroy();
-        resolve();
-      });
-      req.on('error', (err) => {
-        reject(err);
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('npmjs.org timed out'));
-      });
+export function checkNetwork(): Promise<CheckResult> {
+  return new Promise((resolve) => {
+    const req = https.get('https://registry.npmjs.org/', { timeout: 5000 }, (res) => {
+      res.destroy();
+      resolve({ name: 'Network', status: 'ok', message: 'npmjs.org reachable' });
     });
-
-  try {
-    await withRetry(probe, { maxRetries: 3 });
-    return { name: 'Network', status: 'ok', message: 'npmjs.org reachable' };
-  } catch (err) {
-    // Preserve specific messages from the last failed attempt (e.g. "npmjs.org timed out")
-    // when they are surfaced via HelixError's cause chain.
-    const lastCause = err instanceof HelixError ? err.cause : err;
-    const specificMsg =
-      lastCause instanceof Error && lastCause.message ? lastCause.message : 'npmjs.org unreachable';
-    return { name: 'Network', status: 'warn', message: specificMsg };
-  }
+    req.on('error', () => {
+      resolve({ name: 'Network', status: 'warn', message: 'npmjs.org unreachable' });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ name: 'Network', status: 'warn', message: 'npmjs.org timed out' });
+    });
+  });
 }
 
-export async function runDoctor(
-  version: string,
-  options: { offline?: boolean } = {},
-): Promise<DoctorResult> {
+export async function runDoctor(version: string): Promise<DoctorResult> {
   const checks: CheckResult[] = [];
 
   checks.push(checkNodeVersion());
@@ -166,7 +132,7 @@ export async function runDoctor(
   checks.push(checkGit());
   checks.push(checkDiskSpace());
   checks.push(checkWritePermissions());
-  checks.push(await checkNetwork(options.offline ?? false));
+  checks.push(await checkNetwork());
 
   const allPassed = checks.every((c) => c.status === 'ok');
 

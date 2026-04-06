@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://create-helix.dev/config-schema.json",
+  "title": "HELiX Config",
+  "description": "Configuration schema for .helixrc.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "defaults": {
+      "type": "object",
+      "description": "Default values applied to all scaffolding commands",
+      "additionalProperties": false,
+      "properties": {
+        "template": {
+          "type": "string",
+          "description": "Default framework template",
+          "enum": [
+            "react-next",
+            "react-vite",
+            "remix",
+            "vue-nuxt",
+            "vue-vite",
+            "solid-vite",
+            "qwik-vite",
+            "svelte-kit",
+            "angular",
+            "astro",
+            "vanilla",
+            "lit-vite",
+            "preact-vite",
+            "stencil",
+            "ember"
+          ]
+        },
+        "typescript": {
+          "type": "boolean",
+          "description": "Enable TypeScript (default: true)"
+        },
+        "eslint": {
+          "type": "boolean",
+          "description": "Include ESLint + Prettier (default: true)"
+        },
+        "darkMode": {
+          "type": "boolean",
+          "description": "Enable dark mode support (default: true)"
+        },
+        "tokens": {
+          "type": "boolean",
+          "description": "Include HELiX design tokens (default: true)"
+        },
+        "bundles": {
+          "type": "array",
+          "description": "Component bundles to include by default",
+          "items": {
+            "type": "string",
+            "enum": ["all", "core", "forms", "navigation", "data-display", "feedback", "layout"]
+          }
+        }
+      }
+    }
+  }
+}

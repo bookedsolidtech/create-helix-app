@@ -1,1 +1,14 @@
-pnpm exec commitlint --edit "$1"
+#!/usr/bin/env sh
+
+# ── Resolve main repo root (handles git worktrees) ───────────────────────────
+GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+case "$GIT_COMMON_DIR" in
+  /*)
+    MAIN_ROOT="$(dirname "$GIT_COMMON_DIR")"
+    ;;
+  *)
+    MAIN_ROOT="$(git rev-parse --show-toplevel)"
+    ;;
+esac
+
+cd "$MAIN_ROOT" && pnpm exec commitlint --edit "$1"

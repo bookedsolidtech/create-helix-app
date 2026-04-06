@@ -1,6 +1,7 @@
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
 import type { Framework, ComponentBundle, DrupalPreset } from './types.js';
-import { isValidPreset, VALID_PRESETS } from './presets/loader.js';
+import { isValidPreset } from './presets/loader.js';
+import { HelixError, ErrorCode } from './errors.js';
 
 export interface ParsedArgs {
   // Subcommands
@@ -19,9 +20,6 @@ export interface ParsedArgs {
   isDrupal: boolean;
   noConfig: boolean;
   verbose: boolean;
-  skipAudit: boolean;
-  offline: boolean;
-  profile: string | null;
 
   // Template options
   template: Framework | null;
@@ -43,6 +41,15 @@ export interface ParsedArgs {
     tokens: boolean;
   };
 
+  // Audit
+  skipAudit: boolean;
+
+  // Offline mode
+  offline: boolean;
+
+  // Profile
+  profile: string | null;
+
   // Meta
   showVersion: boolean;
   showHelp: boolean;
@@ -59,9 +66,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   // Subcommand arg (for 'info' and 'config' commands)
   const subcommandArg =
-    subcommand === 'info' || subcommand === 'config'
-      ? (argv.find((a) => !a.startsWith('--') && a !== subcommand) ?? null)
-      : null;
+    subcommand === 'info'
+      ? (argv.find((a) => !a.startsWith('--') && a !== 'info') ?? null)
+      : subcommand === 'config'
+        ? (argv.find((a) => !a.startsWith('--') && a !== 'config') ?? null)
+        : null;
 
   // Project name: first arg if not a flag and not a subcommand
   const projectName =
@@ -83,10 +92,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const skipAudit = argv.includes('--skip-audit');
   const offline = argv.includes('--offline');
 
-  // --profile
-  const profileArgIndex = argv.indexOf('--profile');
-  const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
-
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
   const eslint = !argv.includes('--no-eslint');
@@ -107,7 +112,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
 
   if (templateStr !== null && !validFrameworks.includes(templateStr as Framework)) {
-    throw new Error(
+    throw new HelixError(
+      ErrorCode.INVALID_TEMPLATE,
       `Invalid template: "${templateStr}". Valid options: ${validFrameworks.join(', ')}`,
     );
   }
@@ -118,7 +124,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const presetStr = presetArgIndex !== -1 ? (argv[presetArgIndex + 1] ?? null) : null;
 
   if (presetStr !== null && !isValidPreset(presetStr)) {
-    throw new Error(`Invalid preset: "${presetStr}". Valid presets: ${VALID_PRESETS.join(', ')}`);
+    throw new HelixError(
+      ErrorCode.INVALID_PRESET,
+      `Invalid preset: "${presetStr}". Valid presets: standard, blog, healthcare, intranet`,
+    );
   }
   const preset = presetStr as DrupalPreset | null;
 
@@ -132,7 +141,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const requested = bundlesStr.split(',').map((s) => s.trim()) as ComponentBundle[];
     const invalid = requested.filter((b) => !validBundles.includes(b));
     if (invalid.length > 0) {
-      throw new Error(
+      throw new HelixError(
+        ErrorCode.INVALID_BUNDLE,
         `Invalid bundle(s): ${invalid.map((b) => `"${b}"`).join(', ')}. Valid options: ${validBundles.join(', ')}`,
       );
     }
@@ -143,6 +153,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const outputDirArgIndex =
     argv.indexOf('--output-dir') !== -1 ? argv.indexOf('--output-dir') : argv.indexOf('-o');
   const outputDir = outputDirArgIndex !== -1 ? (argv[outputDirArgIndex + 1] ?? null) : null;
+
+  // --profile
+  const profileArgIndex = argv.indexOf('--profile');
+  const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
 
   return {
     subcommand,
@@ -156,9 +170,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     isDrupal,
     noConfig,
     verbose,
-    skipAudit,
-    offline,
-    profile,
     template,
     preset,
     bundles,
@@ -168,6 +179,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
     darkMode,
     tokens,
     explicitFlags,
+    skipAudit,
+    offline,
+    profile,
     showVersion,
     showHelp,
   };

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { PRESETS, getPreset, isValidPreset, VALID_PRESETS } from '../presets/loader.js';
 
+// Helper: check if an sdcList contains an SDC by name
+function hasSdc(sdcList: { name: string }[], name: string): boolean {
+  return sdcList.some((s) => s.name === name);
+}
+
 describe('preset loader', () => {
   it('has 5 presets', () => {
     expect(PRESETS).toHaveLength(5);
@@ -28,55 +33,64 @@ describe('preset loader', () => {
   it('returns preset by id', () => {
     const preset = getPreset('healthcare');
     expect(preset.id).toBe('healthcare');
-    expect(preset.sdcList).toContain('provider-card');
-    expect(preset.sdcList).toContain('appointment-cta');
+    expect(hasSdc(preset.sdcList, 'provider-card')).toBe(true);
+    expect(hasSdc(preset.sdcList, 'appointment-cta')).toBe(true);
+  });
+
+  it('SDCDefinition entries have name, group, and helixComponents', () => {
+    const standard = getPreset('standard');
+    for (const sdc of standard.sdcList) {
+      expect(typeof sdc.name).toBe('string');
+      expect(sdc.name.length).toBeGreaterThan(0);
+      expect(typeof sdc.group).toBe('string');
+      expect(Array.isArray(sdc.helixComponents)).toBe(true);
+    }
   });
 
   it('healthcare preset includes blog SDCs', () => {
     const healthcare = getPreset('healthcare');
-    // Healthcare builds on blog which builds on standard
-    expect(healthcare.sdcList).toContain('node-teaser');
-    expect(healthcare.sdcList).toContain('article-full');
-    expect(healthcare.sdcList).toContain('provider-card');
+    expect(hasSdc(healthcare.sdcList, 'node-teaser')).toBe(true);
+    expect(hasSdc(healthcare.sdcList, 'article-full')).toBe(true);
+    expect(hasSdc(healthcare.sdcList, 'provider-card')).toBe(true);
   });
 
   it('healthcare preset includes condition-tag and medical-disclaimer', () => {
     const healthcare = getPreset('healthcare');
-    expect(healthcare.sdcList).toContain('condition-tag');
-    expect(healthcare.sdcList).toContain('medical-disclaimer');
+    expect(hasSdc(healthcare.sdcList, 'condition-tag')).toBe(true);
+    expect(hasSdc(healthcare.sdcList, 'medical-disclaimer')).toBe(true);
   });
 
   it('intranet preset includes standard SDCs', () => {
     const intranet = getPreset('intranet');
-    expect(intranet.sdcList).toContain('node-teaser');
-    expect(intranet.sdcList).toContain('dashboard-card');
+    expect(hasSdc(intranet.sdcList, 'node-teaser')).toBe(true);
+    expect(hasSdc(intranet.sdcList, 'dashboard-card')).toBe(true);
   });
 
   it('intranet preset includes all intranet-specific SDCs', () => {
     const intranet = getPreset('intranet');
-    expect(intranet.sdcList).toContain('notification-banner');
-    expect(intranet.sdcList).toContain('data-table-view');
-    expect(intranet.sdcList).toContain('user-profile');
+    expect(hasSdc(intranet.sdcList, 'notification-banner')).toBe(true);
+    expect(hasSdc(intranet.sdcList, 'data-table-view')).toBe(true);
+    expect(hasSdc(intranet.sdcList, 'user-profile')).toBe(true);
   });
 
   it('blog preset includes standard + blog SDCs', () => {
     const blog = getPreset('blog');
-    expect(blog.sdcList).toContain('node-teaser');
-    expect(blog.sdcList).toContain('article-full');
-    expect(blog.sdcList).toContain('author-byline');
-    expect(blog.sdcList).toContain('tag-cloud');
-    expect(blog.sdcList).toContain('newsletter-signup');
+    expect(hasSdc(blog.sdcList, 'node-teaser')).toBe(true);
+    expect(hasSdc(blog.sdcList, 'article-full')).toBe(true);
+    expect(hasSdc(blog.sdcList, 'author-byline')).toBe(true);
+    expect(hasSdc(blog.sdcList, 'tag-cloud')).toBe(true);
+    expect(hasSdc(blog.sdcList, 'newsletter-signup')).toBe(true);
   });
 
   it('standard preset has correct base SDCs', () => {
     const standard = getPreset('standard');
-    expect(standard.sdcList).toContain('node-teaser');
-    expect(standard.sdcList).toContain('views-grid');
-    expect(standard.sdcList).toContain('hero-banner');
-    expect(standard.sdcList).toContain('site-header');
-    expect(standard.sdcList).toContain('site-footer');
-    expect(standard.sdcList).toContain('breadcrumb');
-    expect(standard.sdcList).toContain('search-form');
+    expect(hasSdc(standard.sdcList, 'node-teaser')).toBe(true);
+    expect(hasSdc(standard.sdcList, 'content-grid')).toBe(true);
+    expect(hasSdc(standard.sdcList, 'hero-banner')).toBe(true);
+    expect(hasSdc(standard.sdcList, 'site-header')).toBe(true);
+    expect(hasSdc(standard.sdcList, 'site-footer')).toBe(true);
+    expect(hasSdc(standard.sdcList, 'breadcrumb')).toBe(true);
+    expect(hasSdc(standard.sdcList, 'search-form')).toBe(true);
   });
 
   it('all presets have @helixui/drupal-starter dependency', () => {
@@ -93,15 +107,15 @@ describe('preset loader', () => {
 
   it('ecommerce preset includes standard + ecommerce-specific SDCs', () => {
     const ecommerce = getPreset('ecommerce');
-    expect(ecommerce.sdcList).toContain('node-teaser');
-    expect(ecommerce.sdcList).toContain('product-card');
-    expect(ecommerce.sdcList).toContain('product-grid');
-    expect(ecommerce.sdcList).toContain('price-display');
-    expect(ecommerce.sdcList).toContain('cart-summary');
-    expect(ecommerce.sdcList).toContain('checkout-form');
-    expect(ecommerce.sdcList).toContain('category-nav');
-    expect(ecommerce.sdcList).toContain('search-filters');
-    expect(ecommerce.sdcList).toContain('review-stars');
+    expect(hasSdc(ecommerce.sdcList, 'node-teaser')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'product-card')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'product-grid')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'price-display')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'cart-summary')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'checkout-form')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'category-nav')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'search-filters')).toBe(true);
+    expect(hasSdc(ecommerce.sdcList, 'review-stars')).toBe(true);
   });
 
   it('ecommerce preset has @helixui/commerce dependency', () => {
@@ -118,5 +132,25 @@ describe('preset loader', () => {
       expect(typeof preset.architectureNotes).toBe('string');
       expect(preset.architectureNotes.length).toBeGreaterThan(0);
     }
+  });
+
+  it('node-teaser SDC has correct group and helixComponents', () => {
+    const standard = getPreset('standard');
+    const nodeTeaserSdc = standard.sdcList.find((s) => s.name === 'node-teaser');
+    expect(nodeTeaserSdc).toBeDefined();
+    expect(nodeTeaserSdc?.group).toBe('node');
+    expect(nodeTeaserSdc?.helixComponents).toContain('hx-card');
+  });
+
+  it('site-header SDC has block group', () => {
+    const standard = getPreset('standard');
+    const siteHeader = standard.sdcList.find((s) => s.name === 'site-header');
+    expect(siteHeader?.group).toBe('block');
+  });
+
+  it('content-grid SDC has views group', () => {
+    const standard = getPreset('standard');
+    const contentGrid = standard.sdcList.find((s) => s.name === 'content-grid');
+    expect(contentGrid?.group).toBe('views');
   });
 });
