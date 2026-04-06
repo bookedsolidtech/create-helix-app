@@ -4,3 +4,4 @@ coverage/
 *.tgz
 pnpm-lock.yaml
 .pnpm-store
+.mcp.json

@@ -59,11 +59,27 @@ export interface ComponentBundleConfig {
 
 export type DrupalPreset = 'standard' | 'blog' | 'healthcare' | 'intranet' | 'ecommerce';
 
+export type SDCGroup =
+  | 'block'
+  | 'node'
+  | 'views'
+  | 'paragraph'
+  | 'navigation'
+  | 'form'
+  | 'dashboard';
+
+export interface SDCDefinition {
+  name: string;
+  group: SDCGroup;
+  helixComponents: string[];
+  templateOverride?: string;
+}
+
 export interface PresetConfig {
   id: DrupalPreset;
   name: string;
   description: string;
-  sdcList: string[];
+  sdcList: SDCDefinition[];
   dependencies: Record<string, string>;
   templateVars: Record<string, string>;
   architectureNotes: string;

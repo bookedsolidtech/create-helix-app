@@ -19,13 +19,13 @@ describe('drupal theme scaffolding', () => {
       preset: 'healthcare',
     });
 
-    expect(fs.existsSync(path.join(dir, 'helixui.libraries.yml'))).toBe(true);
-    expect(fs.existsSync(path.join(dir, 'src', 'components'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'test_healthcare.info.yml'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'test_healthcare.libraries.yml'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'package.json'))).toBe(true);
   });
 
-  it('helixui.libraries.yml contains provider: cdn', async () => {
+  it('libraries.yml has global CSS entry', async () => {
     const dir = path.join(TMP, 'standard-theme');
     await scaffoldDrupalTheme({
       themeName: 'test_standard',
@@ -33,11 +33,12 @@ describe('drupal theme scaffolding', () => {
       preset: 'standard',
     });
 
-    const librariesYml = fs.readFileSync(path.join(dir, 'helixui.libraries.yml'), 'utf-8');
-    expect(librariesYml).toContain('provider: cdn');
+    const librariesYml = fs.readFileSync(path.join(dir, 'test_standard.libraries.yml'), 'utf-8');
+    expect(librariesYml).toContain('global:');
+    expect(librariesYml).toContain('css/style.css');
   });
 
-  it('helixui.libraries.yml contains all preset SDC entries', async () => {
+  it('libraries.yml has helix-overrides entry', async () => {
     const dir = path.join(TMP, 'standard-sdc-check');
     await scaffoldDrupalTheme({
       themeName: 'test_sdc_entries',
@@ -45,10 +46,9 @@ describe('drupal theme scaffolding', () => {
       preset: 'standard',
     });
 
-    const librariesYml = fs.readFileSync(path.join(dir, 'helixui.libraries.yml'), 'utf-8');
-    expect(librariesYml).toContain('helixui.node-teaser:');
-    expect(librariesYml).toContain('helixui.hero-banner:');
-    expect(librariesYml).toContain('helixui.base:');
+    const librariesYml = fs.readFileSync(path.join(dir, 'test_sdc_entries.libraries.yml'), 'utf-8');
+    expect(librariesYml).toContain('helix-overrides:');
+    expect(librariesYml).toContain('css/helix-overrides.css');
   });
 
   it('behaviors use once() pattern', async () => {
@@ -59,15 +59,12 @@ describe('drupal theme scaffolding', () => {
       preset: 'blog',
     });
 
-    const behaviorsDir = path.join(dir, 'src', 'behaviors');
-    const files = fs.readdirSync(behaviorsDir);
-    expect(files.length).toBeGreaterThan(0);
-
-    const behaviorContent = fs.readFileSync(path.join(behaviorsDir, files[0]!), 'utf-8');
+    const behaviorContent = fs.readFileSync(path.join(dir, 'js', 'behaviors.js'), 'utf-8');
     expect(behaviorContent).toContain("once('");
+    expect(behaviorContent).toContain('Drupal.behaviors');
   });
 
-  it('behavior file is named after the preset', async () => {
+  it('behavior file is at js/behaviors.js', async () => {
     const dir = path.join(TMP, 'intranet-behaviors');
     await scaffoldDrupalTheme({
       themeName: 'test_intranet_behaviors',
@@ -75,9 +72,7 @@ describe('drupal theme scaffolding', () => {
       preset: 'intranet',
     });
 
-    const behaviorsDir = path.join(dir, 'src', 'behaviors');
-    const files = fs.readdirSync(behaviorsDir);
-    expect(files).toContain('intranet-behaviors.js');
+    expect(fs.existsSync(path.join(dir, 'js', 'behaviors.js'))).toBe(true);
   });
 
   it('package.json contains @helixui/drupal-starter', async () => {
@@ -108,7 +103,7 @@ describe('drupal theme scaffolding', () => {
     expect(pkg.dependencies).toHaveProperty('@helixui/tokens');
   });
 
-  it('each preset SDC has a component directory', async () => {
+  it('each preset SDC has a component directory in the correct group', async () => {
     const dir = path.join(TMP, 'sdc-check');
     await scaffoldDrupalTheme({
       themeName: 'test_sdc',
@@ -116,18 +111,19 @@ describe('drupal theme scaffolding', () => {
       preset: 'standard',
     });
 
-    const componentsDir = path.join(dir, 'src', 'components');
-    const sdcDirs = fs.readdirSync(componentsDir);
-    expect(sdcDirs).toContain('node-teaser');
-    expect(sdcDirs).toContain('hero-banner');
-    expect(sdcDirs).toContain('views-grid');
-    expect(sdcDirs).toContain('site-header');
-    expect(sdcDirs).toContain('site-footer');
-    expect(sdcDirs).toContain('breadcrumb');
-    expect(sdcDirs).toContain('search-form');
+    // node group
+    expect(fs.existsSync(path.join(dir, 'components', 'node', 'node-teaser'))).toBe(true);
+    // views group
+    expect(fs.existsSync(path.join(dir, 'components', 'views', 'content-grid'))).toBe(true);
+    // block group
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'site-header'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'site-footer'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'breadcrumb'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'search-form'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'hero-banner'))).toBe(true);
   });
 
-  it('each SDC directory contains .component.yml and .twig files', async () => {
+  it('each SDC directory contains .component.yml, .twig, and .css files', async () => {
     const dir = path.join(TMP, 'sdc-files');
     await scaffoldDrupalTheme({
       themeName: 'test_sdc_files',
@@ -135,12 +131,13 @@ describe('drupal theme scaffolding', () => {
       preset: 'standard',
     });
 
-    const sdcDir = path.join(dir, 'src', 'components', 'node-teaser');
+    const sdcDir = path.join(dir, 'components', 'node', 'node-teaser');
     expect(fs.existsSync(path.join(sdcDir, 'node-teaser.component.yml'))).toBe(true);
     expect(fs.existsSync(path.join(sdcDir, 'node-teaser.twig'))).toBe(true);
+    expect(fs.existsSync(path.join(sdcDir, 'node-teaser.css'))).toBe(true);
   });
 
-  it('component.yml references theme library', async () => {
+  it('component.yml has schema and status: experimental', async () => {
     const dir = path.join(TMP, 'sdc-yml');
     await scaffoldDrupalTheme({
       themeName: 'my_theme',
@@ -149,10 +146,12 @@ describe('drupal theme scaffolding', () => {
     });
 
     const yml = fs.readFileSync(
-      path.join(dir, 'src', 'components', 'node-teaser', 'node-teaser.component.yml'),
+      path.join(dir, 'components', 'node', 'node-teaser', 'node-teaser.component.yml'),
       'utf-8',
     );
-    expect(yml).toContain('my_theme/helixui.node-teaser');
+    expect(yml).toContain('$schema:');
+    expect(yml).toContain('status: experimental');
+    expect(yml).toContain('group:');
   });
 
   it('composer.json has type drupal-theme', async () => {
@@ -180,6 +179,7 @@ describe('drupal theme scaffolding', () => {
     const infoYml = fs.readFileSync(path.join(dir, 'test_info.info.yml'), 'utf-8');
     expect(infoYml).toContain('healthcare');
     expect(infoYml).toContain('core_version_requirement: ^10 || ^11');
+    expect(infoYml).toContain("path: 'components'");
   });
 
   it('healthcare preset SDCs are all present as component directories', async () => {
@@ -190,14 +190,12 @@ describe('drupal theme scaffolding', () => {
       preset: 'healthcare',
     });
 
-    const componentsDir = path.join(dir, 'src', 'components');
-    const sdcDirs = fs.readdirSync(componentsDir);
-    expect(sdcDirs).toContain('provider-card');
-    expect(sdcDirs).toContain('appointment-cta');
-    expect(sdcDirs).toContain('condition-tag');
-    expect(sdcDirs).toContain('medical-disclaimer');
+    expect(fs.existsSync(path.join(dir, 'components', 'node', 'provider-card'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'appointment-cta'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'condition-tag'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'block', 'medical-disclaimer'))).toBe(true);
     // Also includes blog and standard SDCs
-    expect(sdcDirs).toContain('article-full');
-    expect(sdcDirs).toContain('node-teaser');
+    expect(fs.existsSync(path.join(dir, 'components', 'node', 'article-full'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'components', 'node', 'node-teaser'))).toBe(true);
   });
 });
