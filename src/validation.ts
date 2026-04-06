@@ -1,5 +1,3 @@
-import type { Framework, DrupalPreset } from './types.js';
-
 const RESERVED_NAMES = new Set([
   'node_modules',
   'favicon.ico',
@@ -8,8 +6,8 @@ const RESERVED_NAMES = new Set([
   'prototype',
 ]);
 
-/** Known valid framework IDs — kept in sync with the Framework union type. */
-const VALID_FRAMEWORKS: Framework[] = [
+/** Canonical list of valid framework IDs. The Framework type in types.ts derives from this. */
+export const VALID_FRAMEWORKS = [
   'react-next',
   'react-vite',
   'remix',
@@ -24,10 +22,22 @@ const VALID_FRAMEWORKS: Framework[] = [
   'lit-vite',
   'preact-vite',
   'stencil',
-];
+  'ember',
+] as const;
 
-/** Known valid Drupal preset IDs — kept in sync with the DrupalPreset union type. */
-const VALID_PRESETS: DrupalPreset[] = ['standard', 'blog', 'healthcare', 'intranet', 'ecommerce'];
+/** Canonical list of valid Drupal preset IDs. The DrupalPreset type in types.ts derives from this. */
+export const VALID_PRESETS = ['standard', 'blog', 'healthcare', 'intranet', 'ecommerce'] as const;
+
+/** Canonical list of valid component bundle IDs. */
+export const VALID_BUNDLES = [
+  'all',
+  'core',
+  'forms',
+  'navigation',
+  'data-display',
+  'feedback',
+  'layout',
+] as const;
 
 /**
  * Validates a project name for npm compatibility and filesystem safety.
@@ -89,15 +99,15 @@ export function validateDirectory(dir: string): string | undefined {
 /**
  * Type guard: returns true when `fw` is a known Framework ID.
  */
-export function validateFramework(fw: string): fw is Framework {
-  return VALID_FRAMEWORKS.includes(fw as Framework);
+export function validateFramework(fw: string): fw is (typeof VALID_FRAMEWORKS)[number] {
+  return (VALID_FRAMEWORKS as readonly string[]).includes(fw);
 }
 
 /**
  * Type guard: returns true when `preset` is a known DrupalPreset ID.
  */
-export function validatePreset(preset: string): preset is DrupalPreset {
-  return VALID_PRESETS.includes(preset as DrupalPreset);
+export function validatePreset(preset: string): preset is (typeof VALID_PRESETS)[number] {
+  return (VALID_PRESETS as readonly string[]).includes(preset);
 }
 
 /**

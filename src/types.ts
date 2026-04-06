@@ -112,28 +112,12 @@ export interface DrupalOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Plugin Hook System Types
+// Plugin Hook System Types — re-exported from plugins/hooks for external use
 // ---------------------------------------------------------------------------
 
 export type HookLifecycle = 'pre-scaffold' | 'post-scaffold' | 'pre-write' | 'post-write';
 
-export interface HookContext {
-  projectName: string;
-  template: string;
-  outputDir: string;
-  files: Record<string, string>;
-  options: ProjectOptions;
-}
-
-export type HookFn = (
-  context: HookContext,
-) => HookContext | undefined | Promise<HookContext | undefined>;
-
-export interface HookConfig {
-  lifecycle: HookLifecycle;
-  hook: HookFn;
-  pluginName?: string;
-}
+export type { HookContext, HookFn } from './plugins/hooks.js';
 
 export interface HelixRcHooks {
   'pre-scaffold'?: string;
@@ -147,6 +131,6 @@ export interface HelixRc {
 }
 
 export interface PluginModule {
-  hooks?: Partial<Record<HookLifecycle, HookFn>>;
+  hooks?: Partial<Record<HookLifecycle, import('./plugins/hooks.js').HookFn>>;
   name?: string;
 }

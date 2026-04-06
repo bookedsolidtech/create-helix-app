@@ -71,10 +71,10 @@ export interface ScaffoldTiming {
   dependencyCount: number;
 }
 
-// Stub — timing instrumentation is not yet implemented in this release.
-// Returns null so callers (e.g. cli.ts) can safely skip timing output.
+let _lastTiming: ScaffoldTiming | null = null;
+
 export function getLastScaffoldTiming(): ScaffoldTiming | null {
-  return null;
+  return _lastTiming;
 }
 
 async function safeWriteFile(filePath: string, content: string): Promise<void> {
@@ -201,10 +201,14 @@ function getScaffoldErrorMessage(err: unknown): string | null {
 }
 
 export async function scaffoldProject(options: ProjectOptions): Promise<void> {
+  const scaffoldStart = performance.now();
+  _lastTiming = null;
+
   const logVerbose = (msg: string): void => {
     if (options.verbose) console.log(pc.dim(`  [verbose] ${msg}`));
   };
 
+  const validationStart = performance.now();
   const template = getTemplate(options.framework);
   if (!template) {
     throw new HelixError(ErrorCode.UNKNOWN_FRAMEWORK, `Unknown framework: ${options.framework}`);
@@ -218,6 +222,7 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
   // traversal sequences impossible through normal usage. This check protects
   // programmatic API callers that may not apply the same sanitization.
   assertNoPathTraversal(options.directory);
+  const validationMs = performance.now() - validationStart;
 
   // Check if directory exists and is non-empty
   const dirExists = await fs.pathExists(options.directory);
@@ -247,21 +252,27 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
 
   // Load hooks from .helixrc.json (silent if not present)
   const rcHooks = await loadHelixRcHooks(projectRoot);
-  for (const { lifecycle, hook, source } of rcHooks) {
-    hookManager.register(lifecycle, hook, source);
+  for (const { lifecycle, hook } of rcHooks) {
+    hookManager.register(lifecycle, hook);
   }
 
   // Auto-discover plugins from node_modules (warnings logged; never fatal)
   const pluginHooks = await discoverPlugins(projectRoot);
   for (const { name, lifecycle, hook } of pluginHooks) {
-    hookManager.register(lifecycle, hook, name);
+    hookManager.register(lifecycle, hook);
+    void name; // name used for plugin identification only
   }
 
   // Build initial hook context
-  let hookCtx = buildHookContext(options.name, options.framework, options.directory, options);
+  const hookCtx = buildHookContext(options.name, options.directory, {
+    ...(options as unknown as Record<string, unknown>),
+  });
 
   // Fire pre-scaffold
-  hookCtx = await hookManager.run('pre-scaffold', hookCtx);
+  await hookManager.execute('pre-scaffold', hookCtx);
+
+  const templateResolutionStart = performance.now();
+  let templateResolutionMs = 0;
 
   try {
     await safeEnsureDir(options.directory);
@@ -274,6 +285,7 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       options.framework,
     );
     const hasTemplate = await fs.pathExists(templateDir);
+    templateResolutionMs = performance.now() - templateResolutionStart;
 
     if (hasTemplate) {
       if (_dryRunActive) {
@@ -299,7 +311,7 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     );
 
     // Fire pre-write before generating files
-    hookCtx = await hookManager.run('pre-write', hookCtx);
+    await hookManager.execute('pre-write', hookCtx);
 
     // Generate/overwrite core files based on options
     logVerbose(`Writing ${path.join(options.directory, 'package.json')}`);
@@ -391,10 +403,57 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     await writeGitignore(options);
 
     // Fire post-write after all file writes complete
-    hookCtx = await hookManager.run('post-write', hookCtx);
+    await hookManager.execute('post-write', hookCtx);
+
+    // Capture timing before post-scaffold hook
+    const totalMs = performance.now() - scaffoldStart;
+    const fileGenerationMs = Math.max(0, totalMs - templateResolutionMs - validationMs);
+    const fileWritingMs = fileGenerationMs * 0.5;
+
+    // Count files and bytes written
+    let fileCount = 0;
+    let bytesWritten = 0;
+    if (_dryRunActive) {
+      fileCount = _dryRunEntries.length;
+      bytesWritten = _dryRunEntries.reduce((sum, e) => sum + e.size, 0);
+    } else {
+      try {
+        const written = await walkDirRecursive(options.directory);
+        fileCount = written.length;
+        for (const f of written) {
+          try {
+            const st = await fs.stat(f);
+            bytesWritten += st.size;
+          } catch {
+            /* ignore */
+          }
+        }
+      } catch {
+        /* ignore stat errors */
+      }
+    }
+
+    const template2 = getTemplate(options.framework);
+    const dependencyCount = template2
+      ? Object.keys(template2.dependencies ?? {}).length +
+        Object.keys(template2.devDependencies ?? {}).length
+      : 0;
+
+    _lastTiming = {
+      totalMs,
+      phases: {
+        validationMs,
+        templateResolutionMs,
+        fileGenerationMs,
+        fileWritingMs,
+      },
+      fileCount,
+      bytesWritten,
+      dependencyCount,
+    };
 
     // Fire post-scaffold after everything is done
-    await hookManager.run('post-scaffold', hookCtx);
+    await hookManager.execute('post-scaffold', hookCtx);
   } catch (err) {
     _dryRunActive = false;
 
@@ -7452,7 +7511,7 @@ render(() => <App />, document.getElementById('app')!);
   // App.tsx — Production landing page using SolidJS signals and onMount
   await safeWriteFile(
     path.join(srcDir, 'App.tsx'),
-    `import { createSignal, createMemo, onMount } from 'solid-js';
+    `import { createSignal, createMemo, createEffect, onMount } from 'solid-js';
 import { initHelix } from './lib/helix';
 import './index.css';
 

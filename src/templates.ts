@@ -165,6 +165,7 @@ export const TEMPLATES: TemplateConfig[] = [
     },
     devDependencies: {
       '@sveltejs/adapter-auto': '^6.0.0',
+      '@sveltejs/vite-plugin-svelte': '^5.0.0',
       vite: '^6.4.0',
       typescript: '^5.7.0',
     },
