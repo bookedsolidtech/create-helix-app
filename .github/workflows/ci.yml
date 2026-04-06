@@ -189,7 +189,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - name: Validate package (pack dry-run)
-        run: pnpm pack --dry-run
+        run: npm pack --dry-run
 
   smoke-test:
     name: Smoke Test
