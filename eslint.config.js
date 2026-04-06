@@ -30,6 +30,7 @@ export default tseslint.config(
       'coverage/',
       '*.js',
       '*.mjs',
+      '*.config.ts',
       'src/__tests__/',
       'tests/',
       'test-drupal-scaffold.ts',

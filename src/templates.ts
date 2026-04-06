@@ -1,6 +1,11 @@
 // @design-system-approved: CLI-001 Terminal colors (picocolors), not CSS values
 import pc from 'picocolors';
-import type { TemplateConfig, ComponentBundleConfig } from './types.js';
+import type {
+  TemplateConfig,
+  ComponentBundleConfig,
+  AnyTemplateConfig,
+  CustomTemplateConfig,
+} from './types.js';
 
 export const TEMPLATES: TemplateConfig[] = [
   {
@@ -160,6 +165,7 @@ export const TEMPLATES: TemplateConfig[] = [
     },
     devDependencies: {
       '@sveltejs/adapter-auto': '^6.0.0',
+      '@sveltejs/vite-plugin-svelte': '^5.0.0',
       vite: '^6.4.0',
       typescript: '^5.7.0',
     },
@@ -412,6 +418,33 @@ export const COMPONENT_BUNDLES: ComponentBundleConfig[] = [
 
 export function getTemplate(id: string): TemplateConfig | undefined {
   return TEMPLATES.find((t) => t.id === id);
+}
+
+/**
+ * Merges built-in templates with custom templates loaded from a templateDir.
+ *
+ * Rules:
+ * - If a custom template has the same ID as a built-in, the custom version wins.
+ * - New custom templates (no matching built-in ID) are appended after all built-ins.
+ *
+ * @param customs - Custom template definitions loaded from templateDir.
+ * @returns Merged array with built-ins first (minus overrides), then new customs.
+ */
+export function mergeWithCustomTemplates(customs: CustomTemplateConfig[]): AnyTemplateConfig[] {
+  const result: AnyTemplateConfig[] = [...TEMPLATES];
+
+  for (const custom of customs) {
+    const existingIndex = result.findIndex((t) => t.id === custom.id);
+    if (existingIndex >= 0) {
+      // Custom template overrides built-in with same ID
+      result[existingIndex] = custom;
+    } else {
+      // New custom template — append after built-ins
+      result.push(custom);
+    }
+  }
+
+  return result;
 }
 
 export function getComponentsForBundles(bundles: string[]): string[] {

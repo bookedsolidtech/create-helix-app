@@ -41,6 +41,15 @@ export interface ParsedArgs {
     tokens: boolean;
   };
 
+  // Audit
+  skipAudit: boolean;
+
+  // Offline mode
+  offline: boolean;
+
+  // Profile
+  profile: string | null;
+
   // Meta
   showVersion: boolean;
   showHelp: boolean;
@@ -80,6 +89,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const isDrupal = argv.includes('--drupal');
   const noConfig = argv.includes('--no-config');
   const verbose = argv.includes('--verbose');
+  const skipAudit = argv.includes('--skip-audit');
+  const offline = argv.includes('--offline');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -143,6 +154,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     argv.indexOf('--output-dir') !== -1 ? argv.indexOf('--output-dir') : argv.indexOf('-o');
   const outputDir = outputDirArgIndex !== -1 ? (argv[outputDirArgIndex + 1] ?? null) : null;
 
+  // --profile
+  const profileArgIndex = argv.indexOf('--profile');
+  const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
+
   return {
     subcommand,
     subcommandArg,
@@ -164,6 +179,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
     darkMode,
     tokens,
     explicitFlags,
+    skipAudit,
+    offline,
+    profile,
     showVersion,
     showHelp,
   };

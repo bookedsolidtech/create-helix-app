@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
-import { scaffoldProject, getDryRunEntries } from './scaffold.js';
+import { scaffoldProject, getDryRunEntries, getLastScaffoldTiming } from './scaffold.js';
 import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
@@ -16,7 +16,10 @@ import {
   validateDirectory,
 } from './validation.js';
 import { parseArgs } from './args.js';
-import { loadConfig, readEnvVars } from './config.js';
+import { loadConfig, listProfiles, readEnvVars } from './config.js';
+import { auditDependencies } from './security/dep-audit.js';
+import { checkForUpdate } from './version-check.js';
+import { logger } from './logger.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
 
@@ -72,6 +75,7 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
   const themeName = await p.text({
     message: 'Drupal theme machine name',
     placeholder: 'my-helix-theme',
+    /* istanbul ignore next -- validate callback is never invoked when @clack/prompts is mocked */
     validate(value) {
       if (!value) return 'Theme name is required';
       // SECURITY: Whitelist-only validation — enforces a valid Drupal machine
@@ -204,6 +208,18 @@ interface ScaffoldJsonResult {
   };
   files?: string[];
   dryRun?: boolean;
+  timing?: {
+    totalMs: number;
+    fileCount: number;
+    bytesWritten: number;
+    dependencyCount: number;
+    phases: {
+      validationMs: number;
+      templateResolutionMs: number;
+      fileGenerationMs: number;
+      fileWritingMs: number;
+    };
+  };
   error?: string;
 }
 
@@ -268,6 +284,7 @@ export async function runJsonScaffold(
       files = await collectFiles(directory);
     }
 
+    const timing = getLastScaffoldTiming();
     const result: ScaffoldJsonResult = {
       success: true,
       project: {
@@ -282,6 +299,22 @@ export async function runJsonScaffold(
       },
       files,
       dryRun: opts.isDryRun,
+      ...(timing !== null
+        ? {
+            timing: {
+              totalMs: timing.totalMs,
+              fileCount: timing.fileCount,
+              bytesWritten: timing.bytesWritten,
+              dependencyCount: timing.dependencyCount,
+              phases: {
+                validationMs: timing.phases.validationMs,
+                templateResolutionMs: timing.phases.templateResolutionMs,
+                fileGenerationMs: timing.phases.fileGenerationMs,
+                fileWritingMs: timing.phases.fileWritingMs,
+              },
+            },
+          }
+        : {}),
     };
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {
@@ -351,11 +384,20 @@ export async function runCLI(): Promise<void> {
     tokens: tokensFlagRaw,
     explicitFlags,
     projectName,
+    skipAudit,
   } = parsed;
 
   // Load config file and environment variables
   // Precedence: CLI flags > env vars > .helixrc.json > defaults
-  const { config: helixConfig } = loadConfig(noConfig);
+  let helixConfigResult: ReturnType<typeof loadConfig>;
+  try {
+    helixConfigResult = loadConfig(noConfig);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(msg);
+    process.exit(1);
+  }
+  const { config: helixConfig } = helixConfigResult;
   const cfgDefaults = helixConfig.defaults ?? {};
   const envVars = readEnvVars();
 
@@ -377,6 +419,12 @@ export async function runCLI(): Promise<void> {
   const outputDirArg = outputDirFromArgs ?? envVars.outputDir ?? null;
   const isVerbose = isVerboseFromArgs || (envVars.verbose ?? false);
   const isNoInstall = isNoInstallFromArgs || (envVars.offline ?? false);
+
+  // Start version check in background (non-blocking); display after prompts
+  const updateCheckPromise: Promise<string | null> =
+    !isJson && !isNoInstall
+      ? checkForUpdate({ offline: isNoInstall, json: isJson })
+      : Promise.resolve(null);
 
   if (showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
@@ -412,8 +460,17 @@ export async function runCLI(): Promise<void> {
 
   if (subcommand === 'config') {
     if (subcommandArg === 'validate') {
-      const { runConfigValidate } = await import('./commands/config-validate.js');
-      runConfigValidate({ json: isJson });
+      const { runConfigValidateCommand } = await import('./commands/config-validate.js');
+      runConfigValidateCommand(process.cwd());
+    } else if (subcommandArg === 'list-profiles') {
+      const profiles = listProfiles();
+      if (profiles.length === 0) {
+        console.log('No profiles defined in .helixrc.json');
+      } else {
+        for (const name of profiles) {
+          console.log(name);
+        }
+      }
     } else {
       console.error(
         `Unknown config subcommand: "${subcommandArg ?? ''}". Usage: create-helix config validate`,
@@ -674,6 +731,22 @@ ${presetList}
   await scaffoldProject(options);
   if (!isQuiet) s.stop(pc.green('Project scaffolded'));
 
+  // ── Dependency audit ─────────────────────────────────────────────────────
+  if (!skipAudit) {
+    const templateDeps = template?.dependencies ?? {};
+    const auditResult = await auditDependencies(templateDeps);
+    if (!auditResult.networkError) {
+      for (const v of auditResult.vulnerabilities) {
+        p.log.warn(
+          `${v.package}@${v.version} has ${v.count} ${v.severity} vulnerability/vulnerabilities`,
+        );
+      }
+      for (const l of auditResult.licenseIssues) {
+        p.log.warn(`${l.package}@${l.version} uses a non-standard license: ${l.license}`);
+      }
+    }
+  }
+
   if (isNoInstall) {
     console.log(pc.dim('  Skipping dependency installation. Run `npm install` when ready.'));
   }
@@ -743,6 +816,35 @@ ${presetList}
     );
   }
   console.log();
+
+  // ── Scaffold timing display ──────────────────────────────────────────────
+  if (!isQuiet) {
+    const scaffoldTiming = getLastScaffoldTiming();
+    if (scaffoldTiming !== null) {
+      const { totalMs, fileCount, bytesWritten, phases } = scaffoldTiming;
+      let sizeStr: string;
+      if (bytesWritten >= 1024 * 1024) {
+        sizeStr = `${(bytesWritten / (1024 * 1024)).toFixed(2)} MB`;
+      } else if (bytesWritten >= 1024) {
+        sizeStr = `${(bytesWritten / 1024).toFixed(2)} KB`;
+      } else {
+        sizeStr = `${bytesWritten} B`;
+      }
+      console.log(pc.dim(`  Performance: ${totalMs}ms · ${fileCount} files · ${sizeStr}`));
+      if (isVerbose) {
+        console.log(pc.dim('  Per-phase timing:'));
+        console.log(pc.dim(`    validation: ${phases.validationMs}ms`));
+        console.log(pc.dim(`    template resolution: ${phases.templateResolutionMs}ms`));
+        console.log(pc.dim(`    file generation: ${phases.fileGenerationMs}ms`));
+        console.log(pc.dim(`    file writing: ${phases.fileWritingMs}ms`));
+      }
+    }
+  }
+
+  const updateMsg = await updateCheckPromise;
+  if (updateMsg && !isQuiet) {
+    logger.warn(updateMsg);
+  }
 
   if (!isQuiet) p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX.'));
 }

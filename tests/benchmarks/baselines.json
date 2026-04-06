@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "description": "Baseline benchmark results for create-helix scaffold performance.",
+    "generated": "2026-03-26",
+    "vitest": "3.x",
+    "node": "v20.x",
+    "note": "Values are mean iteration times in milliseconds. CI warns (does not fail) if any benchmark regresses >20% from these baselines. Regenerate with: pnpm run bench:update-baselines"
+  },
+  "benchmarks": {
+    "scaffold time per framework > scaffold react-next": { "meanMs": 10 },
+    "scaffold time per framework > scaffold react-vite": { "meanMs": 10 },
+    "scaffold time per framework > scaffold remix": { "meanMs": 12 },
+    "scaffold time per framework > scaffold vue-nuxt": { "meanMs": 10 },
+    "scaffold time per framework > scaffold vue-vite": { "meanMs": 10 },
+    "scaffold time per framework > scaffold solid-vite": { "meanMs": 10 },
+    "scaffold time per framework > scaffold qwik-vite": { "meanMs": 10 },
+    "scaffold time per framework > scaffold svelte-kit": { "meanMs": 10 },
+    "scaffold time per framework > scaffold angular": { "meanMs": 10 },
+    "scaffold time per framework > scaffold astro": { "meanMs": 3 },
+    "scaffold time per framework > scaffold vanilla": { "meanMs": 2 },
+    "scaffold time per framework > scaffold lit-vite": { "meanMs": 3 },
+    "scaffold time per framework > scaffold preact-vite": { "meanMs": 3 },
+    "scaffold time per framework > scaffold stencil": { "meanMs": 2 },
+    "scaffold time per framework > scaffold ember": { "meanMs": 2 },
+    "template resolution time > resolve template by id (all 15 frameworks)": { "meanMs": 0.001 },
+    "template resolution time > resolve single template — react-next": { "meanMs": 0.0001 },
+    "template resolution time > resolve unknown template (returns undefined)": { "meanMs": 0.0001 },
+    "validation time > validate 1000 project names (mixed valid/invalid)": { "meanMs": 0.1 },
+    "validation time > validate 500 valid project names": { "meanMs": 0.05 },
+    "validation time > validate 500 invalid project names": { "meanMs": 0.03 },
+    "validation time > validate single valid name (baseline micro)": { "meanMs": 0.0002 },
+    "config file parsing time > parse config from a temp .helixrc.json file (100 iterations)": {
+      "meanMs": 3
+    },
+    "config file parsing time > parse config with profile selection (100 iterations)": {
+      "meanMs": 3
+    },
+    "config file parsing time > parse config — noConfig path (no filesystem access)": {
+      "meanMs": 0.01
+    },
+    "config file parsing time > JSON.parse of full config string (baseline)": { "meanMs": 2 }
+  }
+}

@@ -1,6 +1,38 @@
-import fs from 'fs-extra';
+import fsExtra from 'fs-extra';
+import nodeFs from 'node:fs';
 import path from 'node:path';
-import type { HelixRc, HookFn, HookLifecycle } from '../types.js';
+import type { HookFn } from './hooks.js';
+import type { HelixRc, HookLifecycle } from '../types.js';
+
+// ── Types from the simplified hook schema (used by src/__tests__) ─────────────
+
+/** Shape of a single hook entry inside `.helixrc.json`. */
+export interface HelixRcHookEntry {
+  name: string;
+  handler: string;
+}
+
+/** Shape of the `.helixrc.json` file. */
+export interface HelixRcConfig {
+  hooks?: HelixRcHookEntry[];
+  [key: string]: unknown;
+}
+
+/**
+ * Read and parse `.helixrc.json` from `projectRoot` using synchronous fs.
+ * Returns the parsed config, or `null` when the file does not exist.
+ * Throws `SyntaxError` when the file contains invalid JSON.
+ */
+export function readHelixRc(projectRoot: string): HelixRcConfig | null {
+  const filePath = path.join(projectRoot, '.helixrc.json');
+  let raw: string;
+  try {
+    raw = nodeFs.readFileSync(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+  return JSON.parse(raw) as HelixRcConfig;
+}
 
 export interface LoadedHook {
   lifecycle: HookLifecycle;
@@ -18,14 +50,14 @@ const VALID_LIFECYCLES: HookLifecycle[] = [
 export async function loadHelixRcHooks(projectRoot: string): Promise<LoadedHook[]> {
   const rcPath = path.join(projectRoot, '.helixrc.json');
 
-  const exists = await fs.pathExists(rcPath);
+  const exists = await fsExtra.pathExists(rcPath);
   if (!exists) {
     return [];
   }
 
   let rc: unknown;
   try {
-    rc = await fs.readJson(rcPath);
+    rc = await fsExtra.readJson(rcPath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`Failed to parse .helixrc.json at ${rcPath}: ${msg}`);
@@ -58,7 +90,7 @@ export async function loadHelixRcHooks(projectRoot: string): Promise<LoadedHook[
 
     const resolvedPath = path.resolve(projectRoot, hookPath);
 
-    if (!(await fs.pathExists(resolvedPath))) {
+    if (!(await fsExtra.pathExists(resolvedPath))) {
       throw new Error(
         `Hook file not found: "${resolvedPath}" (from .helixrc.json hooks["${lifecycle}"] = "${hookPath}", project root: "${projectRoot}")`,
       );
