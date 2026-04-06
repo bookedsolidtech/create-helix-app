@@ -242,6 +242,7 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.magenta,
     dependencies: {
       preact: '^10.26.0',
+      '@preact/signals': '^1.3.0',
       '@helixui/library': '^1.0.0',
       '@helixui/tokens': '^0.3.0',
     },

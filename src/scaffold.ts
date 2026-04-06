@@ -3975,46 +3975,223 @@ render(<App />, document.getElementById('app')!);
 `,
   );
 
-  // src/app.tsx — Preact component
+  // helix.d.ts — Preact JSX type declarations for HELiX custom elements
+  await safeWriteFile(
+    path.join(srcDir, 'helix.d.ts'),
+    `/**
+ * JSX type declarations for HELiX web components (Preact).
+ *
+ * This allows TypeScript to understand hx-* elements in Preact JSX without
+ * errors. Preact uses its own JSX namespace rooted at preact.JSX rather than
+ * React.JSX, so we augment that namespace directly.
+ *
+ * For fully type-safe wrappers (typed props, events), generate wrapper
+ * components from the Custom Elements Manifest using @lit/react or equivalent.
+ */
+import { JSX } from 'preact';
+
+type HxElement = JSX.HTMLAttributes<HTMLElement> & Record<string, unknown>;
+
+declare module 'preact' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'hx-accordion': HxElement;
+      'hx-accordion-item': HxElement;
+      'hx-alert': HxElement;
+      'hx-avatar': HxElement;
+      'hx-badge': HxElement;
+      'hx-banner': HxElement;
+      'hx-breadcrumb': HxElement;
+      'hx-button': HxElement;
+      'hx-button-group': HxElement;
+      'hx-card': HxElement;
+      'hx-carousel': HxElement;
+      'hx-checkbox': HxElement;
+      'hx-checkbox-group': HxElement;
+      'hx-code-snippet': HxElement;
+      'hx-color-picker': HxElement;
+      'hx-combobox': HxElement;
+      'hx-counter': HxElement;
+      'hx-data-table': HxElement;
+      'hx-date-picker': HxElement;
+      'hx-dialog': HxElement;
+      'hx-divider': HxElement;
+      'hx-drawer': HxElement;
+      'hx-dropdown': HxElement;
+      'hx-field': HxElement;
+      'hx-field-label': HxElement;
+      'hx-file-upload': HxElement;
+      'hx-grid': HxElement;
+      'hx-icon': HxElement;
+      'hx-icon-button': HxElement;
+      'hx-menu': HxElement;
+      'hx-menu-item': HxElement;
+      'hx-meter': HxElement;
+      'hx-nav': HxElement;
+      'hx-pagination': HxElement;
+      'hx-popover': HxElement;
+      'hx-progress-bar': HxElement;
+      'hx-progress-ring': HxElement;
+      'hx-radio-group': HxElement;
+      'hx-rating': HxElement;
+      'hx-select': HxElement;
+      'hx-skeleton': HxElement;
+      'hx-slider': HxElement;
+      'hx-spinner': HxElement;
+      'hx-split-button': HxElement;
+      'hx-split-panel': HxElement;
+      'hx-stat': HxElement;
+      'hx-status-indicator': HxElement;
+      'hx-switch': HxElement;
+      'hx-tab': HxElement;
+      'hx-tab-panel': HxElement;
+      'hx-tabs': HxElement;
+      'hx-tag': HxElement;
+      'hx-text': HxElement;
+      'hx-text-input': HxElement;
+      'hx-textarea': HxElement;
+      'hx-toast': HxElement;
+      'hx-tooltip': HxElement;
+      'hx-tree-item': HxElement;
+      'hx-tree-view': HxElement;
+    }
+  }
+}
+
+export {};
+`,
+  );
+
+  // src/app.tsx — Production landing page with Preact signals
   await safeWriteFile(
     path.join(srcDir, 'app.tsx'),
-    `import { useState } from 'preact/hooks';
+    `import { signal } from '@preact/signals';
+import { useState } from 'preact/hooks';
+
+/** Reactive counter — shared across the component tree via signals */
+const count = signal(0);
 
 export function App() {
-  const [count, setCount] = useState(0);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+  };
 
   return (
-    <div class="container">
-      <h1>HELiX + Preact + Vite</h1>
-      <hx-card>
-        <div slot="header"><h2>Counter Demo</h2></div>
-        <p>Count: {count}</p>
-        <hx-button variant="primary" onClick={() => setCount((c) => c + 1)}>
-          Increment
-        </hx-button>
-        <hx-button
-          variant="secondary"
-          style="margin-left: 0.5rem"
-          onClick={() => setCount(0)}
-        >
-          Reset
-        </hx-button>
-      </hx-card>
+    <div class="app" data-theme={theme}>
+      {/* ── Navigation ───────────────────────────────── */}
+      <header class="navbar">
+        <div class="navbar-inner">
+          <a href="/" class="navbar-brand" aria-label="Home">
+            <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" fill="currentColor">
+              <rect x="2" y="6" width="24" height="4" rx="2" />
+              <rect x="2" y="12" width="16" height="4" rx="2" />
+              <rect x="2" y="18" width="20" height="4" rx="2" />
+            </svg>
+            <span>HELiX</span>
+          </a>
+          <nav class="navbar-links" aria-label="Main navigation">
+            <a href="#components">Components</a>
+            <a href="#signals">Signals</a>
+            <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">
+              GitHub
+            </a>
+          </nav>
+          <hx-icon-button
+            aria-label={\`Switch to \${theme === 'light' ? 'dark' : 'light'} mode\`}
+            onClick={toggleTheme}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </hx-icon-button>
+        </div>
+      </header>
 
-      <hx-card style="margin-top: 1.5rem">
-        <div slot="header">
-          <h2>Preact + Web Components</h2>
-          <hx-badge variant="info">3kB Runtime</hx-badge>
-        </div>
-        <p>Preact is a fast 3kB alternative to React with the same modern API.
-        It renders directly to the DOM with minimal overhead, making it ideal
-        for lightweight web component integration.</p>
-        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="danger" size="sm">Danger</hx-button>
-        </div>
-      </hx-card>
+      {/* ── Hero ─────────────────────────────────────── */}
+      <main class="container">
+        <section class="hero">
+          <hx-badge variant="info" size="lg">3kB Runtime</hx-badge>
+          <h1 class="hero-title">HELiX + Preact + Vite</h1>
+          <p class="hero-subtitle">
+            Enterprise design system meets Preact&rsquo;s ultra-lightweight runtime.
+            Signals-powered reactivity with zero boilerplate.
+          </p>
+          <div class="hero-actions">
+            <hx-button variant="primary" size="lg" onClick={() => count.value++}>
+              Get started
+            </hx-button>
+            <hx-button variant="secondary" size="lg">
+              View docs
+            </hx-button>
+          </div>
+        </section>
+
+        {/* ── Signals counter card ─────────────────── */}
+        <section id="signals">
+          <hx-card>
+            <div slot="header">
+              <h2>Preact Signals Counter</h2>
+              <hx-badge variant="success">Live</hx-badge>
+            </div>
+            <p>
+              The counter below uses <strong>@preact/signals</strong> for fine-grained
+              reactivity — only the text node re-renders when the signal changes.
+            </p>
+            <p class="count-display">Count: <strong>{count}</strong></p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem;">
+              <hx-button variant="primary" onClick={() => count.value++}>
+                Increment
+              </hx-button>
+              <hx-button variant="secondary" onClick={() => count.value--}>
+                Decrement
+              </hx-button>
+              <hx-button variant="danger" onClick={() => { count.value = 0; }}>
+                Reset
+              </hx-button>
+            </div>
+          </hx-card>
+        </section>
+
+        {/* ── Component showcase ───────────────────── */}
+        <section id="components" style="margin-top: 2rem;">
+          <hx-card>
+            <div slot="header">
+              <h2>HELiX Component Showcase</h2>
+            </div>
+
+            <h3>Buttons</h3>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+              <hx-button variant="primary">Primary</hx-button>
+              <hx-button variant="secondary">Secondary</hx-button>
+              <hx-button variant="danger">Danger</hx-button>
+              <hx-button variant="ghost">Ghost</hx-button>
+              <hx-button variant="primary" disabled>Disabled</hx-button>
+            </div>
+
+            <h3>Badges</h3>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+              <hx-badge variant="primary">Primary</hx-badge>
+              <hx-badge variant="success">Success</hx-badge>
+              <hx-badge variant="warning">Warning</hx-badge>
+              <hx-badge variant="danger">Danger</hx-badge>
+              <hx-badge variant="info">Info</hx-badge>
+            </div>
+
+            <h3>Alerts</h3>
+            <hx-alert variant="info" style="margin-bottom: 0.5rem;">
+              Informational alert — use for tips and guidance.
+            </hx-alert>
+            <hx-alert variant="success" style="margin-bottom: 0.5rem;">
+              Success alert — use to confirm completed actions.
+            </hx-alert>
+            <hx-alert variant="warning">
+              Warning alert — use when user attention is required.
+            </hx-alert>
+          </hx-card>
+        </section>
+      </main>
     </div>
   );
 }
