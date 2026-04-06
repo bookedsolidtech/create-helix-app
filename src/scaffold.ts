@@ -35,7 +35,7 @@ export function sanitizeForHtml(input: string): string {
  * because many component libraries (including HELiX) inject scoped styles.
  */
 const CSP_META =
-  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'\">";
+  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'\" />";
 
 // ---------------------------------------------------------------------------
 // Dry-run infrastructure
@@ -81,6 +81,11 @@ async function safeWriteJson(
 async function safeEnsureDir(dirPath: string): Promise<void> {
   if (_dryRunActive) return;
   await fs.ensureDir(dirPath);
+}
+
+async function safeCopyDir(src: string, dest: string): Promise<void> {
+  if (_dryRunActive) return;
+  await fs.copy(src, dest);
 }
 
 async function walkDirRecursive(dir: string): Promise<string[]> {
@@ -776,7 +781,7 @@ async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
   const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
   const publicOgDir = path.join(options.directory, 'public', 'og');
   if (await fs.pathExists(assetsSource)) {
-    await fs.copy(assetsSource, publicOgDir);
+    await safeCopyDir(assetsSource, publicOgDir);
   }
 
   // next.config.ts — Next.js 16 with Turbopack (default bundler)
@@ -3302,7 +3307,7 @@ async function scaffoldAstro(options: ProjectOptions): Promise<void> {
   const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
   const publicOgDir = path.join(options.directory, 'public', 'og');
   if (await fs.pathExists(assetsSource)) {
-    await fs.copy(assetsSource, publicOgDir);
+    await safeCopyDir(assetsSource, publicOgDir);
   }
 
   // astro.config.mjs
@@ -4034,10 +4039,10 @@ import Layout from '../layouts/Layout.astro';
           components automatically.
         </p>
         <pre style="padding:0.75rem;border-radius:0.5rem;font-size:0.8rem;overflow:auto;">/* helix-tokens.css */
-:root {
+:root &#123;
   --hx-color-primary: #0066cc;
   --hx-font-family: 'Inter';
-}</pre>
+&#125;</pre>
       </hx-card>
       <hx-card>
         <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
@@ -4484,7 +4489,7 @@ async function scaffoldVueNuxt(options: ProjectOptions): Promise<void> {
   // Copy brand assets into public/og/
   const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
   if (await fs.pathExists(assetsSource)) {
-    await fs.copy(assetsSource, publicOgDir);
+    await safeCopyDir(assetsSource, publicOgDir);
   }
 
   // nuxt.config.ts — Nuxt 4 with HELiX custom element detection
@@ -6140,7 +6145,7 @@ async function scaffoldPreactVite(options: ProjectOptions): Promise<void> {
   const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
   const publicOgDir = path.join(options.directory, 'public', 'og');
   if (await fs.pathExists(assetsSource)) {
-    await fs.copy(assetsSource, publicOgDir);
+    await safeCopyDir(assetsSource, publicOgDir);
   }
 
   // Override tsconfig for Preact — needs jsx: 'react-jsx' with jsxImportSource
