@@ -85,7 +85,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     const timer = setTimeout(resolve, ms);
 
     if (signal !== undefined) {
-      const onAbort = () => {
+      const onAbort = (): void => {
         clearTimeout(timer);
         reject(new DOMException('Aborted', 'AbortError'));
       };
