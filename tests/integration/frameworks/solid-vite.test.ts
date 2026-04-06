@@ -36,6 +36,8 @@ describe('solid-vite integration', () => {
       'src/main.tsx',
       'src/App.tsx',
       'src/helix-setup.ts',
+      'src/helix.d.ts',
+      'src/lib/helix.ts',
       '.gitignore',
       'README.md',
     ]);
@@ -63,6 +65,33 @@ describe('solid-vite integration', () => {
     const app = await readText(o.directory, 'src/App.tsx');
     expect(app).toContain("from 'solid-js'");
     expect(app).toContain('createSignal');
+  });
+
+  it('App.tsx uses onMount and createMemo', async () => {
+    const o = opts('sv-app-mount');
+    await scaffoldProject(o);
+    const app = await readText(o.directory, 'src/App.tsx');
+    expect(app).toContain('onMount');
+    expect(app).toContain('createMemo');
+    expect(app).toContain('initHelix');
+  });
+
+  it('src/helix.d.ts declares hx-* JSX intrinsic elements for SolidJS', async () => {
+    const o = opts('sv-helix-dts');
+    await scaffoldProject(o);
+    const dts = await readText(o.directory, 'src/helix.d.ts');
+    expect(dts).toContain('IntrinsicElements');
+    expect(dts).toContain('hx-button');
+    expect(dts).toContain('hx-card');
+    expect(dts).toContain("from 'solid-js'");
+  });
+
+  it('src/lib/helix.ts exports initHelix', async () => {
+    const o = opts('sv-helix-lib');
+    await scaffoldProject(o);
+    const lib = await readText(o.directory, 'src/lib/helix.ts');
+    expect(lib).toContain('initHelix');
+    expect(lib).toContain('@helixui/library');
   });
 
   it('package.json has correct solid-vite dependencies', async () => {

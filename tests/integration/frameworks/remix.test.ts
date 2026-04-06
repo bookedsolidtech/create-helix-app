@@ -39,6 +39,8 @@ describe('remix integration', () => {
       'app/routes/_index.tsx',
       'app/styles/globals.css',
       'app/components/helix/wrappers.tsx',
+      'app/components/helix/provider.tsx',
+      'app/helix.d.ts',
       '.gitignore',
       'README.md',
     ]);
@@ -75,6 +77,33 @@ describe('remix integration', () => {
     const index = await readText(o.directory, 'app/routes/_index.tsx');
     expect(index).toContain("from 'react-router'");
     expect(index).toContain('MetaFunction');
+  });
+
+  it('app/components/helix/provider.tsx exports HelixProvider', async () => {
+    const o = opts('remix-provider');
+    await scaffoldProject(o);
+    const provider = await readText(o.directory, 'app/components/helix/provider.tsx');
+    expect(provider).toContain('HelixProvider');
+    expect(provider).toContain("from 'react'");
+    expect(provider).toContain('useEffect');
+  });
+
+  it('app/helix.d.ts declares hx-* JSX intrinsic elements', async () => {
+    const o = opts('remix-helix-dts');
+    await scaffoldProject(o);
+    const dts = await readText(o.directory, 'app/helix.d.ts');
+    expect(dts).toContain('IntrinsicElements');
+    expect(dts).toContain('hx-button');
+    expect(dts).toContain('hx-card');
+  });
+
+  it('app/routes/_index.tsx uses HelixProvider', async () => {
+    const o = opts('remix-index-provider');
+    await scaffoldProject(o);
+    const index = await readText(o.directory, 'app/routes/_index.tsx');
+    expect(index).toContain('HelixProvider');
+    expect(index).toContain('HxButton');
+    expect(index).toContain('HxCard');
   });
 
   it('package.json has correct react-router dependencies', async () => {

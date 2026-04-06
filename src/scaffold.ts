@@ -57,6 +57,26 @@ export function getDryRunEntries(): { path: string; size: number }[] {
   return [..._dryRunEntries];
 }
 
+/** Timing data shape — mirrors the ScaffoldTimingJson interface in cli.ts. */
+export interface ScaffoldTiming {
+  totalMs: number;
+  phases: {
+    validationMs: number;
+    templateResolutionMs: number;
+    fileGenerationMs: number;
+    fileWritingMs: number;
+  };
+  fileCount: number;
+  bytesWritten: number;
+  dependencyCount: number;
+}
+
+// Stub — timing instrumentation is not yet implemented in this release.
+// Returns null so callers (e.g. cli.ts) can safely skip timing output.
+export function getLastScaffoldTiming(): ScaffoldTiming | null {
+  return null;
+}
+
 async function safeWriteFile(filePath: string, content: string): Promise<void> {
   if (_dryRunActive) {
     _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(content, 'utf8') });
@@ -2832,6 +2852,13 @@ async function scaffoldRemix(options: ProjectOptions): Promise<void> {
   await safeEnsureDir(stylesDir);
   await safeEnsureDir(componentsDir);
 
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await safeCopyDir(assetsSource, publicOgDir);
+  }
+
   // vite.config.ts
   await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
@@ -2968,6 +2995,139 @@ export const HxAlert = createComponent({
 `,
   );
 
+  // app/components/helix/provider.tsx — HelixProvider (no 'use client' needed in Remix)
+  await safeWriteFile(
+    path.join(componentsDir, 'provider.tsx'),
+    `/**
+ * HelixProvider — initializes HELiX web components on the client side.
+ *
+ * Web components require client-side JavaScript to register custom elements.
+ * Wrap your app or layout with this provider to ensure HELiX components are
+ * available before rendering.
+ *
+ * In React Router (Remix), components are client-rendered by default, so
+ * no 'use client' directive is needed — unlike Next.js App Router.
+ *
+ * SSR Notes:
+ * - HELiX renders as plain custom elements during SSR (no JS)
+ * - Components upgrade and hydrate when the bundle loads client-side
+ * - For SSR-only routes, guard custom element access with typeof window !== 'undefined'
+ */
+import { useEffect, type ReactNode } from 'react';
+
+interface HelixProviderProps {
+  children: ReactNode;
+  /** Explicit theme — avoids window.matchMedia SSR error from hx-theme */
+  theme?: 'light' | 'dark' | 'system';
+}
+
+export function HelixProvider({ children, theme }: HelixProviderProps) {
+  useEffect(() => {
+    // Dynamic import ensures HELiX only loads on the client
+    import('@helixui/library')
+      .then(() => {
+        if (theme && theme !== 'system') {
+          document.documentElement.setAttribute('data-theme', theme);
+        }
+      })
+      .catch(() => {
+        // Library failed to load — components render as unstyled custom elements
+      });
+  }, [theme]);
+
+  return <>{children}</>;
+}
+`,
+  );
+
+  // app/helix.d.ts — TypeScript JSX declarations for hx-* elements
+  await safeWriteFile(
+    path.join(appDir, 'helix.d.ts'),
+    `/**
+ * JSX type declarations for HELiX web components.
+ *
+ * Allows TypeScript to understand hx-* elements in JSX without errors.
+ * For strict prop typing and event bridging, use the @lit/react wrappers
+ * in app/components/helix/wrappers.tsx instead.
+ */
+import 'react';
+
+type HxElement = React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> &
+  Record<string, unknown>;
+
+declare module 'react' {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    interface IntrinsicElements {
+      'hx-accordion': HxElement;
+      'hx-accordion-item': HxElement;
+      'hx-alert': HxElement;
+      'hx-avatar': HxElement;
+      'hx-badge': HxElement;
+      'hx-banner': HxElement;
+      'hx-breadcrumb': HxElement;
+      'hx-button': HxElement;
+      'hx-button-group': HxElement;
+      'hx-card': HxElement;
+      'hx-carousel': HxElement;
+      'hx-checkbox': HxElement;
+      'hx-checkbox-group': HxElement;
+      'hx-code-snippet': HxElement;
+      'hx-color-picker': HxElement;
+      'hx-combobox': HxElement;
+      'hx-counter': HxElement;
+      'hx-data-table': HxElement;
+      'hx-date-picker': HxElement;
+      'hx-dialog': HxElement;
+      'hx-divider': HxElement;
+      'hx-drawer': HxElement;
+      'hx-dropdown': HxElement;
+      'hx-field': HxElement;
+      'hx-field-label': HxElement;
+      'hx-file-upload': HxElement;
+      'hx-grid': HxElement;
+      'hx-icon': HxElement;
+      'hx-icon-button': HxElement;
+      'hx-menu': HxElement;
+      'hx-menu-item': HxElement;
+      'hx-meter': HxElement;
+      'hx-nav': HxElement;
+      'hx-pagination': HxElement;
+      'hx-popover': HxElement;
+      'hx-progress-bar': HxElement;
+      'hx-progress-ring': HxElement;
+      'hx-radio-group': HxElement;
+      'hx-rating': HxElement;
+      'hx-select': HxElement;
+      'hx-skeleton': HxElement;
+      'hx-slider': HxElement;
+      'hx-spinner': HxElement;
+      'hx-split-button': HxElement;
+      'hx-split-panel': HxElement;
+      'hx-stat': HxElement;
+      'hx-status-indicator': HxElement;
+      'hx-switch': HxElement;
+      'hx-tab': HxElement;
+      'hx-tab-panel': HxElement;
+      'hx-tabs': HxElement;
+      'hx-tag': HxElement;
+      'hx-text': HxElement;
+      'hx-text-input': HxElement;
+      'hx-textarea': HxElement;
+      'hx-theme': HxElement;
+      'hx-toast': HxElement;
+      'hx-tooltip': HxElement;
+      'hx-top-nav': HxElement;
+      'hx-tree-item': HxElement;
+      'hx-tree-view': HxElement;
+    }
+  }
+}
+
+export {};
+`,
+  );
+
   // app/styles/globals.css
   await safeWriteFile(
     path.join(stylesDir, 'globals.css'),
@@ -2994,9 +3154,7 @@ body {
 import type { LinksFunction } from 'react-router';
 import globalsStyles from './styles/globals.css?url';
 
-export const links: LinksFunction = () => [
-  { rel: 'stylesheet', href: globalsStyles },
-];
+export const links: LinksFunction = () => [{ rel: 'stylesheet', href: globalsStyles }];
 
 export default function App() {
   return (
@@ -3018,38 +3176,54 @@ export default function App() {
 `,
   );
 
-  // app/routes/_index.tsx
+  // app/routes/_index.tsx — Production landing page
   await safeWriteFile(
     path.join(routesDir, '_index.tsx'),
     `import type { MetaFunction } from 'react-router';
 import { useState } from 'react';
 import { HxButton, HxCard, HxBadge } from '../components/helix/wrappers';
+import { HelixProvider } from '../components/helix/provider';
 
-export const meta: MetaFunction = () => {
-  return [
-    { title: '${sanitizeForHtml(options.name)}' },
-    { name: 'description', content: 'Built with HELiX + React Router' },
-  ];
-};
+export const meta: MetaFunction = () => [
+  { title: 'HELiX + Remix — ${sanitizeForHtml(options.name)}' },
+  { name: 'description', content: 'HELiX enterprise UI components with React Router v7' },
+];
 
 export default function Index() {
   const [count, setCount] = useState(0);
 
   return (
-    <div className="container">
-      <h1>
-        HELiX + React Router <HxBadge variant="info">SSR Ready</HxBadge>
-      </h1>
-      <HxCard>
-        <div slot="header">
-          <h2>Counter Demo</h2>
-        </div>
-        <p>Count: {count}</p>
-        <HxButton variant="primary" onHxClick={() => setCount((c) => c + 1)}>
-          Increment
-        </HxButton>
-      </HxCard>
-    </div>
+    <HelixProvider>
+      <div className="container">
+        <h1>
+          HELiX + React Router <HxBadge variant="info">SSR Ready</HxBadge>
+        </h1>
+        <HxCard>
+          <div slot="header">
+            <h2>Counter Demo</h2>
+          </div>
+          <p>Count: {count}</p>
+          <HxButton variant="primary" onHxClick={() => setCount((c) => c + 1)}>
+            Increment
+          </HxButton>
+          <HxButton variant="secondary" onHxClick={() => setCount(0)}>
+            Reset
+          </HxButton>
+        </HxCard>
+
+        <HxCard>
+          <div slot="header">
+            <h2>React Router v7 + HELiX</h2>
+            <HxBadge variant="success">v0.4.0</HxBadge>
+          </div>
+          <p>
+            React Router v7 brings full-stack React with SSR, nested routes, and progressive
+            enhancement. HELiX web components integrate natively via @lit/react wrappers for
+            type-safe property and event binding.
+          </p>
+        </HxCard>
+      </div>
+    </HelixProvider>
   );
 }
 `,
@@ -6002,7 +6176,16 @@ export class AppComponent {
 
 async function scaffoldSolidVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
+  const libDir = path.join(srcDir, 'lib');
   await safeEnsureDir(srcDir);
+  await safeEnsureDir(libDir);
+
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await safeCopyDir(assetsSource, publicOgDir);
+  }
 
   // Override tsconfig for Solid.js — needs jsx: 'preserve' so vite-plugin-solid
   // can handle the JSX transformation, plus jsxImportSource for type checking.
@@ -6073,48 +6256,59 @@ render(() => <App />, document.getElementById('app')!);
 `,
   );
 
-  // App.tsx
+  // App.tsx — Production landing page using SolidJS signals and onMount
   await safeWriteFile(
     path.join(srcDir, 'App.tsx'),
-    `import { createSignal, createEffect } from 'solid-js';
+    `import { createSignal, createMemo, onMount } from 'solid-js';
+import { initHelix } from './lib/helix';
+import './index.css';
 
 export default function App() {
   const [count, setCount] = createSignal(0);
+  const doubled = createMemo(() => count() * 2);
 
-  createEffect(() => {
-    // Runs whenever count() changes — fine-grained reactivity
-    console.log('count changed:', count());
+  onMount(async () => {
+    await initHelix();
   });
 
   return (
     <div class="container">
-      <h1>HELiX + Solid.js + Vite</h1>
+      <h1>HELiX + SolidJS + Vite</h1>
+
       <hx-card>
-        <div slot="header"><h2>Counter Demo</h2></div>
-        <p>Count: {count()}</p>
+        <div slot="header">
+          <h2>Reactive Counter</h2>
+        </div>
+        <p>
+          Count: {count()} (doubled: {doubled()})
+        </p>
         <hx-button variant="primary" onClick={() => setCount((c) => c + 1)}>
           Increment
         </hx-button>
-        <hx-button
-          variant="secondary"
-          style="margin-left: 0.5rem"
-          onClick={() => setCount(0)}
-        >
+        <hx-button variant="secondary" style="margin-left: 0.5rem" onClick={() => setCount(0)}>
           Reset
         </hx-button>
       </hx-card>
 
       <hx-card style="margin-top: 1.5rem">
         <div slot="header">
-          <h2>Solid.js + Web Components</h2>
+          <h2>SolidJS + Web Components</h2>
           <hx-badge variant="info">Native Support</hx-badge>
         </div>
-        <p>Solid.js renders directly to the DOM — no virtual DOM — making it
-        ideal for web components. Properties and events bind natively.</p>
+        <p>
+          SolidJS renders directly to the DOM — no virtual DOM — making it ideal for web
+          components. Properties and events bind natively without wrappers.
+        </p>
         <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="danger" size="sm">Danger</hx-button>
+          <hx-button variant="primary" size="sm">
+            Primary
+          </hx-button>
+          <hx-button variant="secondary" size="sm">
+            Secondary
+          </hx-button>
+          <hx-button variant="danger" size="sm">
+            Danger
+          </hx-button>
         </div>
       </hx-card>
     </div>
@@ -6139,6 +6333,116 @@ body {
   max-width: 800px;
   margin: 0 auto;
 }
+`,
+  );
+
+  // src/lib/helix.ts — HELiX initializer for SolidJS
+  await safeWriteFile(
+    path.join(libDir, 'helix.ts'),
+    `/**
+ * HELiX initializer for SolidJS.
+ *
+ * Call initHelix() once in your app entry (e.g. onMount in App.tsx) to
+ * register all HELiX custom elements before they are rendered.
+ *
+ * SolidJS renders directly to the DOM, so web components must be registered
+ * before the first render or during hydration — this async initializer
+ * ensures the library is loaded before components are used.
+ */
+export async function initHelix(): Promise<void> {
+  await import('@helixui/library');
+}
+`,
+  );
+
+  // src/helix.d.ts — TypeScript JSX declarations for hx-* elements (SolidJS)
+  await safeWriteFile(
+    path.join(srcDir, 'helix.d.ts'),
+    `/**
+ * JSX type declarations for HELiX web components in SolidJS.
+ *
+ * SolidJS uses solid-js/types/jsx.d.ts for JSX intrinsic elements.
+ * Augmenting the solid-js JSX namespace lets TypeScript understand
+ * hx-* custom elements without errors.
+ *
+ * For native SolidJS binding patterns:
+ *   - Attributes: <hx-button variant="primary">
+ *   - Properties: <hx-button prop:value={val}>
+ *   - Events: <hx-button on:hx-click={handler}>
+ */
+import type { JSX } from 'solid-js';
+
+type HxElement = JSX.HTMLAttributes<HTMLElement> & Record<string, unknown>;
+
+declare module 'solid-js' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'hx-accordion': HxElement;
+      'hx-accordion-item': HxElement;
+      'hx-alert': HxElement;
+      'hx-avatar': HxElement;
+      'hx-badge': HxElement;
+      'hx-banner': HxElement;
+      'hx-breadcrumb': HxElement;
+      'hx-button': HxElement;
+      'hx-button-group': HxElement;
+      'hx-card': HxElement;
+      'hx-carousel': HxElement;
+      'hx-checkbox': HxElement;
+      'hx-checkbox-group': HxElement;
+      'hx-code-snippet': HxElement;
+      'hx-color-picker': HxElement;
+      'hx-combobox': HxElement;
+      'hx-counter': HxElement;
+      'hx-data-table': HxElement;
+      'hx-date-picker': HxElement;
+      'hx-dialog': HxElement;
+      'hx-divider': HxElement;
+      'hx-drawer': HxElement;
+      'hx-dropdown': HxElement;
+      'hx-field': HxElement;
+      'hx-field-label': HxElement;
+      'hx-file-upload': HxElement;
+      'hx-grid': HxElement;
+      'hx-icon': HxElement;
+      'hx-icon-button': HxElement;
+      'hx-menu': HxElement;
+      'hx-menu-item': HxElement;
+      'hx-meter': HxElement;
+      'hx-nav': HxElement;
+      'hx-pagination': HxElement;
+      'hx-popover': HxElement;
+      'hx-progress-bar': HxElement;
+      'hx-progress-ring': HxElement;
+      'hx-radio-group': HxElement;
+      'hx-rating': HxElement;
+      'hx-select': HxElement;
+      'hx-skeleton': HxElement;
+      'hx-slider': HxElement;
+      'hx-spinner': HxElement;
+      'hx-split-button': HxElement;
+      'hx-split-panel': HxElement;
+      'hx-stat': HxElement;
+      'hx-status-indicator': HxElement;
+      'hx-switch': HxElement;
+      'hx-tab': HxElement;
+      'hx-tab-panel': HxElement;
+      'hx-tabs': HxElement;
+      'hx-tag': HxElement;
+      'hx-text': HxElement;
+      'hx-text-input': HxElement;
+      'hx-textarea': HxElement;
+      'hx-theme': HxElement;
+      'hx-toast': HxElement;
+      'hx-tooltip': HxElement;
+      'hx-top-nav': HxElement;
+      'hx-tree-item': HxElement;
+      'hx-tree-view': HxElement;
+    }
+  }
+}
+
+export {};
 `,
   );
 }
