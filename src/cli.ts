@@ -72,6 +72,7 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
   const themeName = await p.text({
     message: 'Drupal theme machine name',
     placeholder: 'my-helix-theme',
+    /* istanbul ignore next -- validate callback is never invoked when @clack/prompts is mocked */
     validate(value) {
       if (!value) return 'Theme name is required';
       // SECURITY: Whitelist-only validation — enforces a valid Drupal machine

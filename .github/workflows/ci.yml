@@ -191,6 +191,36 @@ jobs:
       - name: Validate package (pack dry-run)
         run: npm pack --dry-run
 
+  benchmark:
+    name: Performance Benchmarks
+    needs: [secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Run benchmarks
+        run: pnpm run bench -- --reporter=json --outputFile=bench-results.json
+        continue-on-error: true
+      - name: Check for regressions (warn only)
+        run: node scripts/bench-ci.mjs
+        continue-on-error: true
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench-results.json
+          retention-days: 30
+
   smoke-test:
     name: Smoke Test
     needs: [build]

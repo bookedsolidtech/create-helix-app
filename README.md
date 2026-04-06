@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/social-card.png" alt="create-helix — Scaffold HELiX projects in seconds" width="600">
+
 # create-helix
 
 [![npm version](https://img.shields.io/npm/v/create-helix)](https://www.npmjs.com/package/create-helix)
