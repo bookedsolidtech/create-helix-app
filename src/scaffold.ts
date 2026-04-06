@@ -4468,11 +4468,26 @@ export default defineConfig({
 async function scaffoldVueNuxt(options: ProjectOptions): Promise<void> {
   const appDir = path.join(options.directory, 'app');
   const pagesDir = path.join(appDir, 'pages');
+  const layoutsDir = path.join(appDir, 'layouts');
+  const componentsDir = path.join(appDir, 'components');
   const pluginsDir = path.join(options.directory, 'plugins');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+
   await safeEnsureDir(pagesDir);
+  await safeEnsureDir(layoutsDir);
+  await safeEnsureDir(componentsDir);
   await safeEnsureDir(pluginsDir);
 
-  // nuxt.config.ts
+  // Generate unique install tracking ID
+  const installId = randomBytes(8).toString('hex');
+
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await fs.copy(assetsSource, publicOgDir);
+  }
+
+  // nuxt.config.ts — Nuxt 4 with HELiX custom element detection
   await safeWriteFile(
     path.join(options.directory, 'nuxt.config.ts'),
     `export default defineNuxtConfig({
@@ -4480,45 +4495,621 @@ async function scaffoldVueNuxt(options: ProjectOptions): Promise<void> {
   devtools: { enabled: true },
   vue: {
     compilerOptions: {
-      // Tell Vue to treat hx-* tags as custom elements
+      // Tell Vue to treat hx-* tags as custom elements (suppresses hydration warnings)
       isCustomElement: (tag: string) => tag.startsWith('hx-'),
     },
   },
-${options.designTokens ? `  css: ['~/helix-tokens.css'],` : ''}
+${options.designTokens ? `  css: ['~/helix-tokens.css'],\n` : ''}\
 });
 `,
   );
 
-  // HELiX plugin (client-only)
+  // HELiX plugin (client-only) — loads web components after hydration
   await safeWriteFile(
     path.join(pluginsDir, 'helix.client.ts'),
-    `export default defineNuxtPlugin(async () => {
+    `/**
+ * HELiX client plugin — registers all web components on the client side.
+ *
+ * The .client suffix tells Nuxt to only run this plugin in the browser,
+ * which is required because web components use browser APIs (customElements).
+ *
+ * Components render as inert HTML during SSR and upgrade to interactive
+ * custom elements once this plugin fires on the client.
+ */
+export default defineNuxtPlugin(async () => {
   await import('@helixui/library');
 });
 `,
   );
 
-  // app.vue
+  // helix.d.ts — TypeScript ambient declarations for hx-* custom elements
+  await safeWriteFile(
+    path.join(options.directory, 'helix.d.ts'),
+    `/**
+ * TypeScript ambient declarations for HELiX web components in Vue templates.
+ *
+ * Vue's compiler treats hx-* tags as custom elements (configured in nuxt.config.ts).
+ * This file tells TypeScript what attributes and events they accept.
+ */
+
+type HxElement = {
+  [key: string]: unknown;
+};
+
+declare module 'vue' {
+  interface GlobalComponents {
+    // intentionally empty — hx-* are handled as custom elements, not Vue components
+  }
+}
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'hx-accordion': HxElement;
+      'hx-accordion-item': HxElement;
+      'hx-alert': HxElement;
+      'hx-avatar': HxElement;
+      'hx-badge': HxElement;
+      'hx-banner': HxElement;
+      'hx-breadcrumb': HxElement;
+      'hx-button': HxElement;
+      'hx-button-group': HxElement;
+      'hx-card': HxElement;
+      'hx-carousel': HxElement;
+      'hx-checkbox': HxElement;
+      'hx-checkbox-group': HxElement;
+      'hx-code-snippet': HxElement;
+      'hx-color-picker': HxElement;
+      'hx-combobox': HxElement;
+      'hx-counter': HxElement;
+      'hx-data-table': HxElement;
+      'hx-date-picker': HxElement;
+      'hx-dialog': HxElement;
+      'hx-divider': HxElement;
+      'hx-drawer': HxElement;
+      'hx-dropdown': HxElement;
+      'hx-field': HxElement;
+      'hx-field-label': HxElement;
+      'hx-file-upload': HxElement;
+      'hx-grid': HxElement;
+      'hx-icon': HxElement;
+      'hx-icon-button': HxElement;
+      'hx-menu': HxElement;
+      'hx-menu-item': HxElement;
+      'hx-meter': HxElement;
+      'hx-nav': HxElement;
+      'hx-pagination': HxElement;
+      'hx-popover': HxElement;
+      'hx-progress-bar': HxElement;
+      'hx-progress-ring': HxElement;
+      'hx-radio-group': HxElement;
+      'hx-rating': HxElement;
+      'hx-select': HxElement;
+      'hx-skeleton': HxElement;
+      'hx-slider': HxElement;
+      'hx-spinner': HxElement;
+      'hx-split-button': HxElement;
+      'hx-split-panel': HxElement;
+      'hx-stat': HxElement;
+      'hx-status-indicator': HxElement;
+      'hx-switch': HxElement;
+      'hx-tab': HxElement;
+      'hx-tab-panel': HxElement;
+      'hx-tabs': HxElement;
+      'hx-tag': HxElement;
+      'hx-text': HxElement;
+      'hx-text-input': HxElement;
+      'hx-textarea': HxElement;
+      'hx-theme': HxElement;
+      'hx-toast': HxElement;
+      'hx-tooltip': HxElement;
+      'hx-top-nav': HxElement;
+      'hx-tree-item': HxElement;
+      'hx-tree-view': HxElement;
+    }
+  }
+}
+
+export {};
+`,
+  );
+
+  // app/app.vue — root with NuxtLayout support
   await safeWriteFile(
     path.join(appDir, 'app.vue'),
     `<template>
-  <NuxtPage />
+  <NuxtLayout>
+    <NuxtPage />
+  </NuxtLayout>
 </template>
 `,
   );
 
-  // index page
+  // app/layouts/default.vue — main layout with nav, footer, and global styles
+  await safeWriteFile(
+    path.join(layoutsDir, 'default.vue'),
+    `<script setup lang="ts">
+// Default layout wraps every page with the site nav and footer.
+</script>
+
+<template>
+  <hx-theme theme="auto">
+    <AppNavbar />
+    <main>
+      <slot />
+    </main>
+    <AppFooter />
+  </hx-theme>
+</template>
+
+<style>
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --hx-page-bg: #0a0a0f;
+  --hx-page-text: #e4e4e7;
+  --hx-page-text-secondary: #a1a1aa;
+  --hx-page-surface: #18181b;
+  --hx-page-surface-raised: #27272a;
+  --hx-page-border: #3f3f46;
+  --hx-page-code-bg: #27272a;
+}
+
+html[data-theme="light"],
+html:not([data-theme]) {
+  --hx-page-bg: #fafafa;
+  --hx-page-text: #18181b;
+  --hx-page-text-secondary: #71717a;
+  --hx-page-surface: #ffffff;
+  --hx-page-surface-raised: #f4f4f5;
+  --hx-page-border: #e4e4e7;
+  --hx-page-code-bg: #f4f4f5;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--hx-page-text);
+  background: var(--hx-page-bg);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+a {
+  color: var(--hx-color-primary-500, #3b82f6);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  color: var(--hx-page-text);
+  letter-spacing: -0.025em;
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--hx-page-code-bg);
+  color: var(--hx-page-text);
+}
+
+pre {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  background: var(--hx-page-code-bg) !important;
+  color: var(--hx-page-text);
+  border: 1px solid var(--hx-page-border);
+}
+
+.hero {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: var(--hx-page-surface);
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+.hero p {
+  font-size: 1.125rem;
+  color: var(--hx-page-text-secondary);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.section {
+  padding: 4rem 0;
+}
+
+.section-header {
+  margin-bottom: 2rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.section-header p {
+  color: var(--hx-page-text-secondary);
+}
+
+.grid-auto {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.grid-3 {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.text-secondary {
+  color: var(--hx-page-text-secondary);
+}
+
+hx-top-nav {
+  --hx-top-nav-bg: var(--hx-page-surface);
+  --hx-top-nav-color: var(--hx-page-text);
+  --hx-top-nav-border-color: var(--hx-page-border);
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+hx-top-nav::part(header) {
+  border-radius: 0;
+}
+
+hx-card {
+  --hx-card-bg: var(--hx-page-surface);
+  --hx-card-color: var(--hx-page-text);
+  --hx-card-border-color: var(--hx-page-border);
+}
+
+hx-card::part(header) {
+  background: var(--hx-page-surface-raised);
+  border-bottom: 1px solid var(--hx-page-border);
+  padding: 0.875rem 1.25rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.promo-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.promo-card {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--hx-page-border);
+  background: var(--hx-page-surface);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
+}
+
+.promo-card-image {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  display: block;
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.promo-card-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card-body h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--hx-page-text);
+}
+
+.promo-card-body p {
+  font-size: 0.9rem;
+  color: var(--hx-page-text-secondary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.promo-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hx-color-primary-500, #3b82f6);
+}
+
+.site-footer {
+  background: var(--hx-page-surface);
+  border-top: 1px solid var(--hx-page-border);
+  padding: 3rem 0 2rem;
+}
+
+.footer-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+}
+
+@media (max-width: 768px) {
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 480px) {
+  .footer-grid { grid-template-columns: 1fr; }
+}
+
+.footer-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--hx-page-text);
+  margin-bottom: 0.75rem;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: 0.5rem;
+}
+
+.footer-links a {
+  color: var(--hx-page-text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+}
+
+.footer-links a:hover {
+  color: var(--hx-page-text);
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-bottom p {
+  margin: 0;
+}
+</style>
+`,
+  );
+
+  // app/components/AppNavbar.vue — sticky nav using hx-top-nav
+  await safeWriteFile(
+    path.join(componentsDir, 'AppNavbar.vue'),
+    `<script setup lang="ts">
+import { ref, onMounted } from 'vue';
+
+const isDark = ref(false);
+
+onMounted(() => {
+  const saved = localStorage.getItem('helix-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  isDark.value = saved ? saved === 'dark' : prefersDark;
+  applyTheme(isDark.value ? 'dark' : 'light');
+});
+
+function applyTheme(theme: 'light' | 'dark') {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.querySelectorAll('hx-theme').forEach((el) => {
+    (el as HTMLElement & { theme: string }).theme = theme;
+  });
+}
+
+function handleThemeChange(e: Event) {
+  const checked = (e as CustomEvent).detail?.checked ?? false;
+  const theme = checked ? 'dark' : 'light';
+  isDark.value = checked;
+  applyTheme(theme);
+  localStorage.setItem('helix-theme', theme);
+}
+</script>
+
+<template>
+  <hx-top-nav sticky label="Main navigation">
+    <div slot="logo">
+      <NuxtLink
+        to="/"
+        style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;"
+      >
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <img src="/og/bs-hx-square.png" alt="HELiX" style="height: 30px; width: 30px; border-radius: 5px;" />
+          <span style="font-weight: 700; font-size: 1.125rem; letter-spacing: -0.025em;">HELiX</span>
+        </div>
+        <span style="opacity: 0.25; font-size: 1.25rem; font-weight: 200;">+</span>
+        <span style="font-weight: 600; font-size: 0.95rem; opacity: 0.9;">Nuxt 4</span>
+      </NuxtLink>
+    </div>
+    <div style="display: flex; gap: 1.5rem; align-items: center; margin-left: 2rem;">
+      <NuxtLink to="/" style="color: inherit; text-decoration: none; font-size: 0.875rem; opacity: 0.8;">Home</NuxtLink>
+      <NuxtLink to="/components" style="color: inherit; text-decoration: none; font-size: 0.875rem; opacity: 0.8;">Components</NuxtLink>
+      <NuxtLink to="/examples/forms" style="color: inherit; text-decoration: none; font-size: 0.875rem; opacity: 0.8;">Forms</NuxtLink>
+    </div>
+    <div slot="actions" style="display: flex; align-items: center; gap: 0.75rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="font-size: 0.8rem;">Dark</span>
+        <hx-switch size="sm" :checked="isDark" @hx-change="handleThemeChange" />
+      </div>
+      <a
+        href="https://github.com/bookedsolidtech"
+        target="_blank"
+        rel="noopener noreferrer"
+        style="color: inherit; display: flex; align-items: center; opacity: 0.7;"
+        title="Booked Solid on GitHub"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+        </svg>
+      </a>
+      <a
+        href="https://bookedsolid.tech"
+        target="_blank"
+        rel="noopener noreferrer"
+        style="display: flex; align-items: center;"
+        title="Booked Solid Technology"
+      >
+        <img
+          src="https://bookedsolid.tech/logos/bs-bs-software-square.png?utm_source=create-helix&utm_medium=scaffold&utm_id=${installId}"
+          alt="Booked Solid"
+          style="height: 28px; width: 28px; border-radius: 4px;"
+        />
+      </a>
+    </div>
+  </hx-top-nav>
+</template>
+`,
+  );
+
+  // app/components/AppFooter.vue — site footer
+  await safeWriteFile(
+    path.join(componentsDir, 'AppFooter.vue'),
+    `<script setup lang="ts">
+const year = new Date().getFullYear();
+</script>
+
+<template>
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <img src="/og/bs-hx-square.png" alt="HELiX" style="height: 32px; width: 32px; border-radius: 4px;" />
+            <span style="font-weight: 700; font-size: 1.125rem;">HELiX</span>
+          </div>
+          <p class="text-secondary" style="font-size: 0.85rem; line-height: 1.6; max-width: 280px;">
+            Enterprise web components built on Lit 3. Accessible, themeable, and framework-agnostic.
+          </p>
+        </div>
+        <div>
+          <h4 class="footer-heading">Product</h4>
+          <ul class="footer-links">
+            <li><NuxtLink to="/components">Components</NuxtLink></li>
+            <li><NuxtLink to="/examples/forms">Forms</NuxtLink></li>
+            <li><NuxtLink to="/">Documentation</NuxtLink></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-heading">Ecosystem</h4>
+          <ul class="footer-links">
+            <li><a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI</a></li>
+            <li><a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">HELiXiR</a></li>
+            <li><a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer">Discord-Ops</a></li>
+            <li><a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-heading">Legal</h4>
+          <ul class="footer-links">
+            <li><a href="https://bookedsolid.tech/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></li>
+            <li><a href="https://bookedsolid.tech/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a></li>
+            <li><a href="https://bookedsolid.tech/about" target="_blank" rel="noopener noreferrer">About</a></li>
+          </ul>
+        </div>
+      </div>
+      <hx-divider style="margin: 2rem 0 1.5rem;" />
+      <div class="footer-bottom">
+        <p class="text-secondary" style="font-size: 0.8rem;">
+          &copy; {{ year }} Booked Solid Technology, a d/b/a of Clarity House LLC. All rights reserved.
+          Built with <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX</a> and
+          <a href="https://nuxt.com" target="_blank" rel="noopener noreferrer">Nuxt 4</a>.
+        </p>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+          <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer" class="text-secondary" style="display: flex;" title="GitHub">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+          <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center;" title="Booked Solid Technology">
+            <img src="/og/bs-bs-software-square.png" alt="BS" style="height: 20px; width: 20px; border-radius: 3px; opacity: 0.7;" />
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</template>
+`,
+  );
+
+  // app/pages/index.vue — production landing page
   await safeWriteFile(
     path.join(pagesDir, 'index.vue'),
     `<script setup lang="ts">
 import { ref } from 'vue';
+
+useHead({
+  title: '${sanitizeForHtml(options.name)} \u2014 Built with HELiX',
+  meta: [{ name: 'description', content: 'Enterprise web components for Vue and Nuxt 4.' }],
+});
 
 const name = ref('');
 const submitted = ref(false);
 
 function handleSubmit() {
   submitted.value = true;
-  setTimeout(() => { submitted.value = false; }, 3000);
+  setTimeout(() => {
+    submitted.value = false;
+  }, 3000);
 }
 
 function handleInput(e: Event) {
@@ -4528,50 +5119,475 @@ function handleInput(e: Event) {
 </script>
 
 <template>
-  <div class="container">
-    <h1>HELiX + Nuxt 4</h1>
-    <p>Full-stack Vue with SSR. Web components auto-hydrate on the client.</p>
-
-    <hx-card>
-      <div slot="header"><h2>Interactive Form</h2></div>
-      <hx-text-input
-        label="Your name"
-        placeholder="Enter your name"
-        :value="name"
-        @hx-input="handleInput"
-      />
-      <hx-button variant="primary" style="margin-top: 1rem" @hx-click="handleSubmit">
-        Say Hello
-      </hx-button>
-      <hx-alert v-if="submitted" variant="success" open style="margin-top: 1rem">
-        Hello, {{ name || 'World' }}!
-      </hx-alert>
-    </hx-card>
-
-    <hx-card style="margin-top: 1.5rem">
-      <div slot="header"><h2>Component Showcase</h2></div>
-      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <hx-button variant="primary">Primary</hx-button>
-        <hx-button variant="secondary">Secondary</hx-button>
-        <hx-button variant="danger">Danger</hx-button>
-        <hx-badge variant="info">Badge</hx-badge>
-        <hx-badge variant="success">Success</hx-badge>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>HELiX + Nuxt 4</h1>
+      <p>
+        Enterprise-grade web components running natively in Vue.
+        75+ accessible, themeable components with Shadow DOM encapsulation.
+      </p>
+      <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+        <hx-button variant="primary" size="lg">
+          <NuxtLink to="/examples/forms" style="color: inherit; text-decoration: none;">
+            See Forms Demo
+          </NuxtLink>
+        </hx-button>
+        <hx-button variant="secondary" size="lg">
+          <NuxtLink to="/components" style="color: inherit; text-decoration: none;">
+            Browse Components
+          </NuxtLink>
+        </hx-button>
       </div>
-    </hx-card>
-  </div>
-</template>
+      <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1.5rem; flex-wrap: wrap;">
+        <hx-tag>Lit 3</hx-tag>
+        <hx-tag>Shadow DOM</hx-tag>
+        <hx-tag>WCAG 2.1 AA</hx-tag>
+        <hx-tag>SSR-Safe</hx-tag>
+        <hx-tag>Vue 3</hx-tag>
+        <hx-tag>Nuxt 4</hx-tag>
+      </div>
+    </div>
+  </section>
 
-<style scoped>
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
+  <!-- Component Showcase -->
+  <section class="container section">
+    <div class="section-header">
+      <h2>Component Showcase</h2>
+      <p>A sampling of HELiX components \u2014 all rendered as native web components via Shadow DOM.</p>
+    </div>
+
+    <div class="grid-auto">
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Interactive Input</h3>
+          <hx-badge variant="info">Forms</hx-badge>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <hx-text-input
+            label="Your name"
+            placeholder="Enter your name"
+            :value="name"
+            @hx-input="handleInput"
+          />
+          <hx-button variant="primary" @hx-click="handleSubmit">Say Hello</hx-button>
+          <hx-alert v-if="submitted" variant="success" open>
+            Hello, {{ name || 'World' }}! HELiX components are working.
+          </hx-alert>
+        </div>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Button Variants</h3>
+          <hx-badge variant="success">Actions</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom: 1rem;">All button styles respond to the active theme.</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        </div>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Data Display</h3>
+          <hx-badge variant="warning">Metrics</hx-badge>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>Build Status</span>
+            <hx-badge variant="success">Passing</hx-badge>
+          </div>
+          <hx-progress-bar :value="87" :max="100" />
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <hx-tag>v1.1.2</hx-tag>
+            <hx-tag>stable</hx-tag>
+            <hx-tag>MIT</hx-tag>
+          </div>
+        </div>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Avatars &amp; Badges</h3>
+          <hx-badge variant="danger">Identity</hx-badge>
+        </div>
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+          <hx-avatar size="sm">AB</hx-avatar>
+          <hx-avatar size="md">CD</hx-avatar>
+          <hx-avatar size="lg">EF</hx-avatar>
+          <hx-divider vertical style="height: 2rem;" />
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Danger</hx-badge>
+        </div>
+      </hx-card>
+    </div>
+  </section>
+
+  <!-- Tabbed Patterns -->
+  <section class="container section" style="border-top: 1px solid var(--hx-page-border);">
+    <hx-tabs>
+      <hx-tab slot="nav">Vue Patterns</hx-tab>
+      <hx-tab slot="nav">Theming</hx-tab>
+      <hx-tab slot="nav">Event Handling</hx-tab>
+
+      <hx-tab-panel>
+        <div style="padding: 1.5rem 0;">
+          <hx-card>
+            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">Using HELiX in Nuxt 4</h3>
+              <hx-badge variant="info">Architecture</hx-badge>
+            </div>
+            <ul style="line-height: 2; padding-left: 1.5rem;">
+              <li><strong>SSR rendering</strong> outputs hx-* as inert HTML \u2014 zero JS shipped to server</li>
+              <li><strong>Client hydration</strong> upgrades components via <code>plugins/helix.client.ts</code></li>
+              <li><strong>isCustomElement</strong> in nuxt.config.ts suppresses Vue hydration warnings</li>
+              <li><strong>NuxtLayout</strong> wraps every page with the shared nav and footer</li>
+              <li><strong>hx-theme</strong> in the layout injects CSS tokens for light/dark/high-contrast</li>
+            </ul>
+          </hx-card>
+        </div>
+      </hx-tab-panel>
+
+      <hx-tab-panel>
+        <div style="padding: 1.5rem 0;">
+          <hx-card>
+            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">CSS Custom Properties</h3>
+              <hx-badge variant="success">Tokens</hx-badge>
+            </div>
+            <p style="margin-bottom: 1rem;">
+              HELiX uses a three-tier token system: primitive, semantic, and component.
+            </p>
+            <pre style="padding: 1rem; border-radius: 0.5rem; font-size: 0.85rem; overflow: auto;">/* helix-tokens.css */
+:root {
+  --hx-color-primary: #0066cc;
+  --hx-color-success: #22c55e;
 }
-</style>
+
+hx-button::part(button) {
+  font-weight: 600;
+}</pre>
+          </hx-card>
+        </div>
+      </hx-tab-panel>
+
+      <hx-tab-panel>
+        <div style="padding: 1.5rem 0;">
+          <hx-card>
+            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">Vue Event Handling</h3>
+              <hx-badge variant="warning">Events</hx-badge>
+            </div>
+            <pre style="padding: 1rem; border-radius: 0.5rem; font-size: 0.85rem; overflow: auto;">&lt;!-- Direct @event binding (Vue handles hx-* custom events) --&gt;
+&lt;hx-button @hx-click="handleClick"&gt;Click me&lt;/hx-button&gt;
+&lt;hx-text-input @hx-input="handleInput" /&gt;
+
+&lt;!-- Access CustomEvent detail --&gt;
+function handleInput(e: Event) {
+  const detail = (e as CustomEvent).detail;
+  value.value = detail?.value ?? '';
+}</pre>
+          </hx-card>
+        </div>
+      </hx-tab-panel>
+    </hx-tabs>
+  </section>
+
+  <!-- Ecosystem Promos -->
+  <section class="container section" style="border-top: 1px solid var(--hx-page-border);">
+    <div class="section-header">
+      <h2>The Booked Solid Ecosystem</h2>
+      <p>Enterprise-grade tools for modern web development and AI-powered workflows.</p>
+    </div>
+    <div class="promo-grid">
+      <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/helixui.png" alt="HELiX UI" class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>HELiX UI</h3>
+          <p>80+ enterprise web components built on Lit 3. Shadow DOM encapsulation, healthcare-first accessibility, and W3C DTCG design tokens.</p>
+          <span class="promo-card-cta">Explore HELiX UI &rarr;</span>
+        </div>
+      </a>
+      <a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/helixir.png" alt="HELiXiR" class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>HELiXiR</h3>
+          <p>MCP server for any CEM-compliant web component library. Connect to Claude, Cursor, or any MCP client.</p>
+          <span class="promo-card-cta">Explore HELiXiR &rarr;</span>
+        </div>
+      </a>
+      <a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/discord-ops.png" alt="Discord-Ops" class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>Discord-Ops</h3>
+          <p>Agency-grade Discord MCP server for AI agents. 45 tools, 23 message templates, multi-guild routing.</p>
+          <span class="promo-card-cta">Explore Discord-Ops &rarr;</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- Getting Started -->
+  <section class="container section" style="border-top: 1px solid var(--hx-page-border); padding-bottom: 5rem;">
+    <div class="section-header">
+      <h2>Getting Started</h2>
+      <p>Your project is ready. Here are the key files and next steps.</p>
+    </div>
+
+    <div class="grid-3">
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Key Files</h3>
+          <hx-badge variant="info">Reference</hx-badge>
+        </div>
+        <ul style="line-height: 2; padding-left: 1.5rem;">
+          <li><code>plugins/helix.client.ts</code> \u2014 HELiX initializer</li>
+          <li><code>app/layouts/default.vue</code> \u2014 Nav &amp; footer layout</li>
+          <li><code>app/components/AppNavbar.vue</code> \u2014 Top navigation</li>
+          <li><code>app/components/AppFooter.vue</code> \u2014 Site footer</li>
+          <li><code>helix.d.ts</code> \u2014 TypeScript declarations</li>
+          <li><code>helix-tokens.css</code> \u2014 Design token overrides</li>
+        </ul>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Commands</h3>
+          <hx-badge variant="success">CLI</hx-badge>
+        </div>
+        <ul style="line-height: 2; padding-left: 1.5rem;">
+          <li><code>npm run dev</code> \u2014 Start dev server</li>
+          <li><code>npm run build</code> \u2014 Production build</li>
+          <li><code>npm run preview</code> \u2014 Preview build</li>
+        </ul>
+        <hx-divider style="margin: 1rem 0;" />
+        <p style="font-size: 0.875rem;" class="text-secondary">
+          Add more HELiX components in <code>plugins/helix.client.ts</code>.
+        </p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Next Steps</h3>
+          <hx-badge variant="warning">Action</hx-badge>
+        </div>
+        <ul style="line-height: 2; padding-left: 1.5rem;">
+          <li>Customize tokens in <code>helix-tokens.css</code></li>
+          <li>Add routes in <code>app/pages/</code></li>
+          <li><NuxtLink to="/examples/forms">Explore form participation</NuxtLink></li>
+          <li><a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">Browse all components</a></li>
+        </ul>
+      </hx-card>
+    </div>
+  </section>
+</template>
 `,
   );
 
-  await writeVueErrorBoundary(options);
+  // app/pages/components.vue — component showcase page
+  await safeWriteFile(
+    path.join(pagesDir, 'components.vue'),
+    `<script setup lang="ts">
+useHead({
+  title: 'Components \u2014 HELiX + Nuxt 4',
+  meta: [{ name: 'description', content: 'Browse the HELiX component library.' }],
+});
+</script>
+
+<template>
+  <section class="hero" style="padding: 3rem 2rem;">
+    <div class="container">
+      <h1>Component Library</h1>
+      <p>Browse the full HELiX component catalog. Each component is built on Lit 3 with Shadow DOM encapsulation.</p>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="section-header">
+      <h2>Core UI</h2>
+      <p>Essential building blocks for any interface.</p>
+    </div>
+    <div style="display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Button</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">Multi-variant button with full keyboard support.</p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Badge</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Error</hx-badge>
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">Status indicators with semantic color variants.</p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Avatar</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
+          <hx-avatar size="sm">AB</hx-avatar>
+          <hx-avatar size="md">CD</hx-avatar>
+          <hx-avatar size="lg">EF</hx-avatar>
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">User identity with initials or image support.</p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Progress Bar</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+          <hx-progress-bar :value="75" :max="100" />
+          <hx-progress-bar :value="45" :max="100" />
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">Accessible progress indicators with ARIA support.</p>
+      </hx-card>
+    </div>
+  </section>
+</template>
+`,
+  );
+
+  // app/pages/examples/forms.vue — form participation demo
+  const examplesDir = path.join(pagesDir, 'examples');
+  await safeEnsureDir(examplesDir);
+  await safeWriteFile(
+    path.join(examplesDir, 'forms.vue'),
+    `<script setup lang="ts">
+import { ref } from 'vue';
+
+useHead({
+  title: 'Forms \u2014 HELiX + Nuxt 4',
+  meta: [{ name: 'description', content: 'HELiX form components with native form participation via ElementInternals.' }],
+});
+
+const formData = ref<Record<string, string>>({});
+const submitted = ref(false);
+
+function handleSubmit(e: Event) {
+  e.preventDefault();
+  const form = e.target as HTMLFormElement;
+  const data = new FormData(form);
+  const entries: Record<string, string> = {};
+  data.forEach((value, key) => {
+    entries[key] = value.toString();
+  });
+  formData.value = entries;
+  submitted.value = true;
+  setTimeout(() => {
+    submitted.value = false;
+  }, 5000);
+}
+</script>
+
+<template>
+  <main class="container" style="padding-top: 2rem; padding-bottom: 4rem; max-width: 800px; margin: 0 auto;">
+    <h1 style="margin-bottom: 0.5rem;">Form Participation</h1>
+    <p class="text-secondary" style="margin-bottom: 2rem;">
+      HELiX form components participate in native HTML forms via ElementInternals.
+      No special Vue wrappers needed \u2014 just use a standard &lt;form&gt; element.
+    </p>
+
+    <hx-card>
+      <div slot="header"><h2>Registration Form</h2></div>
+      <form style="display: flex; flex-direction: column; gap: 1.5rem;" @submit="handleSubmit">
+        <div style="display: grid; gap: 1rem; grid-template-columns: 1fr 1fr;">
+          <hx-text-input name="firstName" label="First name" placeholder="Jane" required />
+          <hx-text-input name="lastName" label="Last name" placeholder="Doe" required />
+        </div>
+        <hx-text-input name="email" label="Email" type="email" placeholder="jane@example.com" required />
+        <hx-textarea name="bio" label="Bio" placeholder="Tell us about yourself..." rows="3" />
+        <hx-select name="role" label="Role">
+          <option value="">Select a role...</option>
+          <option value="developer">Developer</option>
+          <option value="designer">Designer</option>
+          <option value="manager">Manager</option>
+        </hx-select>
+        <hx-checkbox name="terms" label="I agree to the terms and conditions" required />
+        <div style="display: flex; gap: 0.5rem;">
+          <hx-button variant="primary" type="submit">Submit</hx-button>
+          <hx-button variant="secondary" type="reset">Reset</hx-button>
+        </div>
+      </form>
+    </hx-card>
+
+    <hx-card v-if="submitted" style="margin-top: 1.5rem;">
+      <div slot="header">
+        <h3>Form Data (from FormData API)</h3>
+        <hx-badge variant="success">Submitted</hx-badge>
+      </div>
+      <pre style="padding: 1rem; border-radius: 0.5rem; font-size: 0.85rem; overflow: auto;">{{ JSON.stringify(formData, null, 2) }}</pre>
+    </hx-card>
+
+    <hx-card style="margin-top: 1.5rem;">
+      <div slot="header"><h3>How It Works</h3></div>
+      <ul style="line-height: 2; padding-left: 1.5rem;">
+        <li><strong>ElementInternals:</strong> Each HELiX form component calls <code>this.internals.setFormValue()</code></li>
+        <li><strong>FormData:</strong> Values appear in <code>new FormData(form)</code> automatically</li>
+        <li><strong>Validation:</strong> Components report validity via <code>internals.setValidity()</code></li>
+        <li><strong>Reset:</strong> Forms reset web components via <code>formResetCallback()</code></li>
+        <li><strong>No wrappers needed:</strong> This is native browser behavior, not framework-specific</li>
+      </ul>
+    </hx-card>
+  </main>
+</template>
+`,
+  );
+
+  // app/error.vue — Nuxt error page using hx-* components
+  await safeWriteFile(
+    path.join(appDir, 'error.vue'),
+    `<script setup lang="ts">
+import type { NuxtError } from '#app';
+
+defineProps<{ error: NuxtError }>();
+
+const handleClear = () => clearError({ redirect: '/' });
+</script>
+
+<template>
+  <hx-theme theme="auto">
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem;">
+      <hx-card style="max-width: 500px; width: 100%; text-align: center;">
+        <div slot="header">
+          <hx-badge variant="danger">{{ error.statusCode }}</hx-badge>
+        </div>
+        <h1 style="margin-bottom: 1rem;">{{ error.statusMessage || 'An error occurred' }}</h1>
+        <p class="text-secondary" style="margin-bottom: 1.5rem;">
+          {{ error.message || 'Something went wrong. Please try again.' }}
+        </p>
+        <hx-button variant="primary" @hx-click="handleClear">Go Home</hx-button>
+      </hx-card>
+    </div>
+  </hx-theme>
+</template>
+`,
+  );
+
+  await writeVueNuxtErrorBoundary(options);
 }
 
 async function scaffoldAngular(options: ProjectOptions): Promise<void> {
@@ -6219,6 +7235,66 @@ ${options.designTokens ? "import '../helix-tokens.css';" : "import '@helixui/lib
 }
 
 // ─── Error boundary components ────────────────────────────────────────────────
+
+async function writeVueNuxtErrorBoundary(options: ProjectOptions): Promise<void> {
+  const componentsDir = path.join(options.directory, 'app', 'components');
+  await safeEnsureDir(componentsDir);
+
+  await safeWriteFile(
+    path.join(componentsDir, 'ErrorBoundary.vue'),
+    `<script setup lang="ts">
+import { ref, onErrorCaptured } from 'vue';
+
+/**
+ * ErrorBoundary — catches errors thrown in descendant components.
+ *
+ * Usage:
+ *   <ErrorBoundary>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ */
+
+const error = ref<Error | null>(null);
+
+onErrorCaptured((err: Error): boolean => {
+  error.value = err;
+  console.error('[ErrorBoundary] Caught error:', err);
+  return false;
+});
+
+function reset(): void {
+  error.value = null;
+}
+</script>
+
+<template>
+  <div v-if="error" role="alert" class="hx-error-boundary">
+    <h2>Something went wrong</h2>
+    <pre class="hx-error-boundary__message">{{ error.message }}</pre>
+    <hx-button variant="danger" @hx-click="reset">Try again</hx-button>
+  </div>
+  <slot v-else />
+</template>
+
+<style scoped>
+.hx-error-boundary {
+  padding: 2rem;
+  border: 1px solid var(--hx-color-danger, #dc3545);
+  border-radius: var(--hx-radius-md, 0.5rem);
+  background: var(--hx-color-danger-surface, #fff5f5);
+  color: var(--hx-color-danger, #dc3545);
+}
+
+.hx-error-boundary__message {
+  font-size: 0.85rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  white-space: pre-wrap;
+}
+</style>
+`,
+  );
+}
 
 async function writeReactErrorBoundary(options: ProjectOptions): Promise<void> {
   const componentsDir = path.join(options.directory, 'src', 'components');
