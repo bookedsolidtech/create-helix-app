@@ -77,10 +77,8 @@ export async function loadHelixRcHooks(
       : path.resolve(projectRoot, entry.handler);
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const mod = await import(handlerPath);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const fn = (mod.default ?? mod) as HookFn;
+      const mod: unknown = await import(handlerPath);
+      const fn = ((mod as { default?: HookFn }).default ?? (mod as HookFn)) as HookFn;
       resolved.push({ name: entry.name, fn });
     } catch (err) {
       onError?.(entry, err);

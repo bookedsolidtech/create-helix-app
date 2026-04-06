@@ -3101,104 +3101,263 @@ export default defineConfig({});
 async function scaffoldSvelteKit(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const routesDir = path.join(srcDir, 'routes');
+  const libDir = path.join(srcDir, 'lib');
   await safeEnsureDir(routesDir);
+  await safeEnsureDir(libDir);
+  // static/og/ — created for brand assets (content copied from package assets if available)
+  await safeEnsureDir(path.join(options.directory, 'static', 'og'));
 
-  // svelte.config.js
+  // svelte.config.js — includes vitePreprocess for TypeScript/CSS preprocessing
   await safeWriteFile(
     path.join(options.directory, 'svelte.config.js'),
-    `import adapter from '@sveltejs/adapter-auto';
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  kit: {
-    adapter: adapter(),
-  },
-};
-
-export default config;
-`,
+    [
+      "import adapter from '@sveltejs/adapter-auto';",
+      "import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';",
+      '',
+      "/** @type {import('@sveltejs/kit').Config} */",
+      'const config = {',
+      '  preprocess: vitePreprocess(),',
+      '  kit: {',
+      '    adapter: adapter(),',
+      '  },',
+      '};',
+      '',
+      'export default config;',
+      '',
+    ].join('\n'),
   );
 
   // vite.config.ts
   await safeWriteFile(
     path.join(options.directory, 'vite.config.ts'),
-    `import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  plugins: [sveltekit()],
-});
-`,
+    [
+      "import { sveltekit } from '@sveltejs/kit/vite';",
+      "import { defineConfig } from 'vite';",
+      '',
+      'export default defineConfig({',
+      '  plugins: [sveltekit()],',
+      '});',
+      '',
+    ].join('\n'),
   );
 
-  // +page.svelte
+  // src/helix.d.ts — Svelte ambient declarations for hx-* custom elements
   await safeWriteFile(
-    path.join(routesDir, '+page.svelte'),
-    `<script lang="ts">
-  import { onMount } from 'svelte';
-
-  let name = $state('');
-  let submitted = $state(false);
-
-  onMount(async () => {
-    await import('@helixui/library');
-  });
-
-  function handleSubmit() {
-    submitted = true;
-    setTimeout(() => { submitted = false; }, 3000);
-  }
-</script>
-
-<svelte:head>
-  <title>${sanitizeForHtml(options.name)}</title>
-</svelte:head>
-
-<div class="container">
-  <h1>HELiX + SvelteKit</h1>
-  <p>Svelte has the best native custom element support of any framework.</p>
-
-  <hx-card>
-    <div slot="header"><h2>Interactive Demo</h2></div>
-    <hx-text-input
-      label="Your name"
-      placeholder="Enter your name"
-      value={name}
-      on:hx-input={(e) => name = e.detail?.value ?? ''}
-    />
-    <hx-button variant="primary" style="margin-top: 1rem" on:hx-click={handleSubmit}>
-      Say Hello
-    </hx-button>
-    {#if submitted}
-      <hx-alert variant="success" open style="margin-top: 1rem">
-        Hello, {name || 'World'}!
-      </hx-alert>
-    {/if}
-  </hx-card>
-</div>
-
-<style>
-  .container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
-</style>
-`,
+    path.join(srcDir, 'helix.d.ts'),
+    [
+      '/**',
+      ' * Svelte ambient type declarations for HELiX web components.',
+      ' *',
+      " * Registers hx-* custom elements with Svelte's JSX/HTML type system",
+      ' * via svelteHTML.IntrinsicElements so TypeScript understands them in templates.',
+      ' */',
+      'declare namespace svelteHTML {',
+      '  interface IntrinsicElements {',
+      "    'hx-accordion': { [key: string]: unknown };",
+      "    'hx-accordion-item': { [key: string]: unknown };",
+      "    'hx-alert': { variant?: string; open?: boolean; [key: string]: unknown };",
+      "    'hx-avatar': { src?: string; alt?: string; size?: string; [key: string]: unknown };",
+      "    'hx-badge': { variant?: string; size?: string; [key: string]: unknown };",
+      "    'hx-banner': { variant?: string; [key: string]: unknown };",
+      "    'hx-breadcrumb': { [key: string]: unknown };",
+      "    'hx-button': { variant?: string; size?: string; disabled?: boolean; type?: string; [key: string]: unknown };",
+      "    'hx-button-group': { [key: string]: unknown };",
+      "    'hx-card': { elevation?: string; [key: string]: unknown };",
+      "    'hx-carousel': { [key: string]: unknown };",
+      "    'hx-checkbox': { checked?: boolean; disabled?: boolean; name?: string; value?: string; [key: string]: unknown };",
+      "    'hx-checkbox-group': { [key: string]: unknown };",
+      "    'hx-code-snippet': { language?: string; [key: string]: unknown };",
+      "    'hx-color-picker': { value?: string; [key: string]: unknown };",
+      "    'hx-combobox': { value?: string; placeholder?: string; [key: string]: unknown };",
+      "    'hx-counter': { value?: number; min?: number; max?: number; [key: string]: unknown };",
+      "    'hx-data-table': { [key: string]: unknown };",
+      "    'hx-date-picker': { value?: string; [key: string]: unknown };",
+      "    'hx-dialog': { open?: boolean; label?: string; [key: string]: unknown };",
+      "    'hx-divider': { orientation?: string; [key: string]: unknown };",
+      "    'hx-drawer': { open?: boolean; placement?: string; [key: string]: unknown };",
+      "    'hx-dropdown': { [key: string]: unknown };",
+      "    'hx-field': { [key: string]: unknown };",
+      "    'hx-field-label': { [key: string]: unknown };",
+      "    'hx-file-upload': { accept?: string; multiple?: boolean; [key: string]: unknown };",
+      "    'hx-grid': { columns?: string; gap?: string; [key: string]: unknown };",
+      "    'hx-icon': { name?: string; size?: string; [key: string]: unknown };",
+      "    'hx-icon-button': { name?: string; label?: string; size?: string; [key: string]: unknown };",
+      "    'hx-menu': { [key: string]: unknown };",
+      "    'hx-menu-item': { value?: string; disabled?: boolean; [key: string]: unknown };",
+      "    'hx-meter': { value?: number; min?: number; max?: number; [key: string]: unknown };",
+      "    'hx-nav': { [key: string]: unknown };",
+      "    'hx-pagination': { page?: number; total?: number; [key: string]: unknown };",
+      "    'hx-popover': { placement?: string; [key: string]: unknown };",
+      "    'hx-progress-bar': { value?: number; max?: number; [key: string]: unknown };",
+      "    'hx-progress-ring': { value?: number; max?: number; [key: string]: unknown };",
+      "    'hx-radio-group': { value?: string; name?: string; [key: string]: unknown };",
+      "    'hx-rating': { value?: number; max?: number; [key: string]: unknown };",
+      "    'hx-select': { value?: string; placeholder?: string; disabled?: boolean; [key: string]: unknown };",
+      "    'hx-skeleton': { width?: string; height?: string; [key: string]: unknown };",
+      "    'hx-slider': { value?: number; min?: number; max?: number; step?: number; [key: string]: unknown };",
+      "    'hx-spinner': { size?: string; [key: string]: unknown };",
+      "    'hx-split-button': { [key: string]: unknown };",
+      "    'hx-split-panel': { [key: string]: unknown };",
+      "    'hx-stat': { label?: string; value?: string; [key: string]: unknown };",
+      "    'hx-status-indicator': { status?: string; [key: string]: unknown };",
+      "    'hx-switch': { checked?: boolean; disabled?: boolean; name?: string; [key: string]: unknown };",
+      "    'hx-tab': { [key: string]: unknown };",
+      "    'hx-tab-panel': { [key: string]: unknown };",
+      "    'hx-tabs': { [key: string]: unknown };",
+      "    'hx-tag': { variant?: string; [key: string]: unknown };",
+      "    'hx-text': { [key: string]: unknown };",
+      "    'hx-text-input': { value?: string; label?: string; placeholder?: string; disabled?: boolean; type?: string; [key: string]: unknown };",
+      "    'hx-textarea': { value?: string; label?: string; placeholder?: string; rows?: number; [key: string]: unknown };",
+      "    'hx-theme': { theme?: string; [key: string]: unknown };",
+      "    'hx-toast': { variant?: string; open?: boolean; duration?: number; [key: string]: unknown };",
+      "    'hx-tooltip': { content?: string; placement?: string; [key: string]: unknown };",
+      "    'hx-top-nav': { sticky?: boolean; label?: string; [key: string]: unknown };",
+      "    'hx-tree-item': { expanded?: boolean; [key: string]: unknown };",
+      "    'hx-tree-view': { [key: string]: unknown };",
+      '  }',
+      '}',
+      '',
+    ].join('\n'),
   );
 
-  // +layout.svelte
+  // src/lib/helix.ts — Client-only HELiX loader using SvelteKit browser guard
+  await safeWriteFile(
+    path.join(libDir, 'helix.ts'),
+    [
+      '/**',
+      ' * HELiX Web Components — Client-side initializer.',
+      ' *',
+      " * Uses SvelteKit's browser guard from $app/environment to ensure the",
+      ' * library is only imported in the browser (never on the server/SSR).',
+      ' * A singleton flag prevents double-registration on hot-reloads.',
+      ' *',
+      ' * Call from onMount() in +layout.svelte so it runs client-side only.',
+      ' */',
+      "import { browser } from '$app/environment';",
+      '',
+      'let _initialized = false;',
+      '',
+      'export async function initHelix(): Promise<void> {',
+      '  if (!browser || _initialized) return;',
+      '  _initialized = true;',
+      "  await import('@helixui/library');",
+      '}',
+      '',
+    ].join('\n'),
+  );
+
+  // src/routes/+layout.svelte — Layout calling initHelix via onMount
+  const layoutTokensImport = options.designTokens ? "  import '../helix-tokens.css';\n" : '';
   await safeWriteFile(
     path.join(routesDir, '+layout.svelte'),
-    `<script>
-  import '@helixui/tokens/tokens.css';
-</script>
-
-<slot />
-`,
+    [
+      '<script lang="ts">',
+      "  import { onMount } from 'svelte';",
+      "  import { initHelix } from '$lib/helix.js';",
+      layoutTokensImport.trimEnd(),
+      '',
+      '  onMount(() => {',
+      '    initHelix();',
+      '  });',
+      '</script>',
+      '',
+      '<slot />',
+      '',
+    ].join('\n'),
   );
 
-  // app.html
+  // src/routes/+page.svelte — Production landing page using Svelte 5 runes
+  const projectTitle = sanitizeForHtml(options.name);
+  await safeWriteFile(
+    path.join(routesDir, '+page.svelte'),
+    [
+      '<script lang="ts">',
+      '  /**',
+      '   * HELiX + SvelteKit — Production Landing Page',
+      '   *',
+      '   * Demonstrates Svelte 5 runes ($state, $derived) with HELiX web components.',
+      '   * Svelte has first-class custom element support — no wrappers needed.',
+      '   */',
+      "  import { initHelix } from '$lib/helix.js';",
+      '  let count = $state(0);',
+      '  let doubled = $derived(count * 2);',
+      "  let name = $state('');",
+      '  let submitted = $state(false);',
+      '',
+      '  function handleSubmit() {',
+      '    submitted = true;',
+      '    setTimeout(() => {',
+      '      submitted = false;',
+      '    }, 3000);',
+      '  }',
+      '</script>',
+      '',
+      '<svelte:head>',
+      `  <title>${projectTitle}</title>`,
+      '  <meta name="description" content="Built with HELiX web components and SvelteKit" />',
+      '</svelte:head>',
+      '',
+      '<div class="container">',
+      '  <section class="hero">',
+      '    <hx-badge variant="info">Svelte 5 + HELiX</hx-badge>',
+      `    <h1>Welcome to ${projectTitle}</h1>`,
+      '    <p>',
+      '      Enterprise web components running natively in SvelteKit.',
+      '      Svelte treats custom elements as first-class citizens — no wrappers, no adapters.',
+      '    </p>',
+      '    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">',
+      '      <hx-button variant="primary" size="lg">Get Started</hx-button>',
+      '      <hx-button variant="secondary" size="lg">View Components</hx-button>',
+      '    </div>',
+      '  </section>',
+      '',
+      '  <hx-divider></hx-divider>',
+      '',
+      '  <section class="feature-grid" style="margin-top: 2rem;">',
+      '    <hx-card>',
+      '      <div slot="header">',
+      '        <h3>Svelte 5 Runes</h3>',
+      '        <hx-badge variant="success">$state</hx-badge>',
+      '      </div>',
+      '      <p style="color: var(--hx-color-text-secondary, #666); margin-bottom: 1rem;">',
+      '        Count: <strong>{count}</strong>, Doubled: <strong>{doubled}</strong>',
+      '      </p>',
+      '      <div style="display: flex; gap: 0.5rem; align-items: center;">',
+      '        <hx-button variant="secondary" size="sm" onclick={() => count--}>−</hx-button>',
+      '        <hx-button variant="primary" size="sm" onclick={() => count++}>+</hx-button>',
+      '        <hx-button variant="ghost" size="sm" onclick={() => (count = 0)}>Reset</hx-button>',
+      '      </div>',
+      '    </hx-card>',
+      '',
+      '    <hx-card>',
+      '      <div slot="header">',
+      '        <h3>Interactive Demo</h3>',
+      '        <hx-badge variant="info">Custom Events</hx-badge>',
+      '      </div>',
+      '      <div style="display: flex; flex-direction: column; gap: 1rem;">',
+      '        <hx-text-input',
+      '          label="Your name"',
+      '          placeholder="Enter your name"',
+      '          value={name}',
+      "          oninput={(e: CustomEvent) => (name = (e as CustomEvent & { detail: { value: string } }).detail?.value ?? '')}",
+      '        />',
+      '        <hx-button variant="primary" onclick={handleSubmit}>',
+      '          Say Hello',
+      '        </hx-button>',
+      '        {#if submitted}',
+      '          <hx-alert variant="success" open>',
+      "            Hello, {name || 'World'}! HELiX components work natively in Svelte.",
+      '          </hx-alert>',
+      '        {/if}',
+      '      </div>',
+      '    </hx-card>',
+      '  </section>',
+      '</div>',
+      '',
+    ].join('\n'),
+  );
+
+  // src/app.html
   await safeWriteFile(
     path.join(srcDir, 'app.html'),
     `<!DOCTYPE html>
