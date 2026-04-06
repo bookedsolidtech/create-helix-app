@@ -101,6 +101,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       - run: pnpm run test -- --coverage
       - name: Generate coverage badge JSON
         if: always()
@@ -187,8 +188,8 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      - name: Validate package (dry-run publish)
-        run: pnpm publish --dry-run --no-git-checks
+      - name: Validate package (pack dry-run)
+        run: pnpm pack --dry-run
 
   smoke-test:
     name: Smoke Test
