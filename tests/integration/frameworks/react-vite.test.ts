@@ -32,11 +32,15 @@ describe('react-vite integration', () => {
     await assertFilesExist(o.directory, [
       'package.json',
       'vite.config.ts',
+      'tsconfig.json',
       'index.html',
       'src/main.tsx',
       'src/App.tsx',
       'src/index.css',
+      'src/helix.d.ts',
       'src/helix-setup.ts',
+      'src/components/helix/wrappers.tsx',
+      'src/components/helix/provider.tsx',
       '.gitignore',
       'README.md',
     ]);
@@ -47,6 +51,7 @@ describe('react-vite integration', () => {
     await scaffoldProject(o);
     const content = await readText(o.directory, 'src/helix-setup.ts');
     expect(content).toContain("import '@helixui/library'");
+    expect(content).toContain('Selected bundles: core');
   });
 
   it('main.tsx imports helix-setup', async () => {
@@ -66,6 +71,8 @@ describe('react-vite integration', () => {
     expect(pkg.dependencies['react']).toBeDefined();
     expect(pkg.dependencies['react-dom']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
+    expect(pkg.dependencies['@lit/react']).toBeDefined();
+    expect(pkg.dependencies['@helixui/tokens']).toBeDefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
     expect(pkg.devDependencies['@vitejs/plugin-react']).toBeDefined();
   });
@@ -87,5 +94,53 @@ describe('react-vite integration', () => {
       'tsconfig.json',
     );
     expect(tsconfig.compilerOptions.strict).toBe(true);
+  });
+
+  it('generates eslint.config.js and .prettierrc when eslint is true', async () => {
+    const o = opts('rv-eslint');
+    await scaffoldProject(o);
+    await assertFilesExist(o.directory, ['eslint.config.js', '.prettierrc']);
+  });
+
+  it('generates helix-tokens.css with design token overrides', async () => {
+    const o = opts('rv-tokens');
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('@import');
+    expect(css).toContain('--hx-color-primary');
+  });
+
+  it('helix.d.ts declares hx-* custom elements', async () => {
+    const o = opts('rv-helix-dts');
+    await scaffoldProject(o);
+    const dts = await readText(o.directory, 'src/helix.d.ts');
+    expect(dts).toContain("'hx-button'");
+    expect(dts).toContain("'hx-card'");
+  });
+
+  it('wrappers.tsx imports @lit/react and @helixui/library components', async () => {
+    const o = opts('rv-wrappers');
+    await scaffoldProject(o);
+    const wrappers = await readText(o.directory, 'src/components/helix/wrappers.tsx');
+    expect(wrappers).toContain("from '@lit/react'");
+    expect(wrappers).toContain("'@helixui/library/components/hx-button'");
+    expect(wrappers).toContain('HxButton');
+    expect(wrappers).toContain('HxCard');
+  });
+
+  it('provider.tsx exports HelixProvider', async () => {
+    const o = opts('rv-provider');
+    await scaffoldProject(o);
+    const provider = await readText(o.directory, 'src/components/helix/provider.tsx');
+    expect(provider).toContain('HelixProvider');
+  });
+
+  it('App.tsx uses hx-* HELiX components', async () => {
+    const o = opts('rv-app');
+    await scaffoldProject(o);
+    const app = await readText(o.directory, 'src/App.tsx');
+    expect(app).toContain('hx-button');
+    expect(app).toContain('hx-card');
+    expect(app).toContain('hx-badge');
   });
 });

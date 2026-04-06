@@ -30,7 +30,10 @@ export class HookManager {
     if (!this.hooks.has(name)) {
       this.hooks.set(name, []);
     }
-    this.hooks.get(name)!.push(fn);
+    const existing = this.hooks.get(name);
+    if (existing) {
+      existing.push(fn);
+    }
   }
 
   /**

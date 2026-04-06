@@ -2019,6 +2019,221 @@ export function FeatureCard({ icon, title, description, badge }: FeatureCardProp
 `,
   );
 
+  // src/components/helix/wrappers.tsx — @lit/react wrappers for HELiX components
+  await safeEnsureDir(path.join(srcDir, 'components', 'helix'));
+  await safeWriteFile(
+    path.join(srcDir, 'components', 'helix', 'wrappers.tsx'),
+    `/**
+ * React wrappers for HELiX web components.
+ *
+ * @lit/react creates type-safe React components that properly bridge:
+ * - Properties (not just attributes)
+ * - Events (CustomEvent → React callbacks)
+ * - Refs
+ *
+ * Usage:
+ *   import { HxButton, HxCard } from './components/helix/wrappers';
+ *   <HxButton variant="primary" onHxClick={handleClick}>Save</HxButton>
+ */
+import { createComponent } from '@lit/react';
+import React from 'react';
+
+// Import the web components (registers custom elements)
+import '@helixui/library/components/hx-button';
+import '@helixui/library/components/hx-card';
+import '@helixui/library/components/hx-text-input';
+import '@helixui/library/components/hx-select';
+import '@helixui/library/components/hx-checkbox';
+import '@helixui/library/components/hx-switch';
+import '@helixui/library/components/hx-dialog';
+import '@helixui/library/components/hx-alert';
+import '@helixui/library/components/hx-badge';
+import '@helixui/library/components/hx-tabs';
+// hx-tab and hx-tab-panel are registered by the hx-tabs import
+import '@helixui/library/components/hx-avatar';
+import '@helixui/library/components/hx-divider';
+import '@helixui/library/components/hx-tooltip';
+import '@helixui/library/components/hx-textarea';
+import '@helixui/library/components/hx-data-table';
+
+export const HxButton = createComponent({
+  tagName: 'hx-button',
+  elementClass: customElements.get('hx-button') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxClick: 'hx-click',
+    onHxFocus: 'hx-focus',
+    onHxBlur: 'hx-blur',
+  },
+});
+
+export const HxCard = createComponent({
+  tagName: 'hx-card',
+  elementClass: customElements.get('hx-card') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxTextInput = createComponent({
+  tagName: 'hx-text-input',
+  elementClass: customElements.get('hx-text-input') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxInput: 'hx-input',
+    onHxChange: 'hx-change',
+    onHxFocus: 'hx-focus',
+    onHxBlur: 'hx-blur',
+  },
+});
+
+export const HxSelect = createComponent({
+  tagName: 'hx-select',
+  elementClass: customElements.get('hx-select') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxChange: 'hx-change',
+  },
+});
+
+export const HxCheckbox = createComponent({
+  tagName: 'hx-checkbox',
+  elementClass: customElements.get('hx-checkbox') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxChange: 'hx-change',
+  },
+});
+
+export const HxSwitch = createComponent({
+  tagName: 'hx-switch',
+  elementClass: customElements.get('hx-switch') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxChange: 'hx-change',
+  },
+});
+
+export const HxDialog = createComponent({
+  tagName: 'hx-dialog',
+  elementClass: customElements.get('hx-dialog') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxClose: 'hx-close',
+    onHxOpen: 'hx-open',
+  },
+});
+
+export const HxAlert = createComponent({
+  tagName: 'hx-alert',
+  elementClass: customElements.get('hx-alert') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxClose: 'hx-close',
+  },
+});
+
+export const HxBadge = createComponent({
+  tagName: 'hx-badge',
+  elementClass: customElements.get('hx-badge') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxTabs = createComponent({
+  tagName: 'hx-tabs',
+  elementClass: customElements.get('hx-tabs') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxChange: 'hx-change',
+  },
+});
+
+export const HxTab = createComponent({
+  tagName: 'hx-tab',
+  elementClass: customElements.get('hx-tab') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxTabPanel = createComponent({
+  tagName: 'hx-tab-panel',
+  elementClass: customElements.get('hx-tab-panel') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxAvatar = createComponent({
+  tagName: 'hx-avatar',
+  elementClass: customElements.get('hx-avatar') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxDivider = createComponent({
+  tagName: 'hx-divider',
+  elementClass: customElements.get('hx-divider') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxTooltip = createComponent({
+  tagName: 'hx-tooltip',
+  elementClass: customElements.get('hx-tooltip') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxTextarea = createComponent({
+  tagName: 'hx-textarea',
+  elementClass: customElements.get('hx-textarea') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxInput: 'hx-input',
+    onHxChange: 'hx-change',
+  },
+});
+
+export const HxDataTable = createComponent({
+  tagName: 'hx-data-table',
+  elementClass: customElements.get('hx-data-table') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxSort: 'hx-sort',
+    onHxRowSelect: 'hx-row-select',
+  },
+});
+`,
+  );
+
+  // src/components/helix/provider.tsx — HelixProvider for client-side initialization
+  await safeWriteFile(
+    path.join(srcDir, 'components', 'helix', 'provider.tsx'),
+    `/**
+ * HelixProvider — initializes HELiX web components on the client.
+ *
+ * In a Vite SPA, all code runs in the browser so no SSR guard is needed.
+ * This provider handles the import and optionally sets a theme attribute
+ * on the document root before rendering children.
+ *
+ * Usage (in main.tsx or App.tsx):
+ *   import { HelixProvider } from './components/helix/provider';
+ *   <HelixProvider theme="light"><App /></HelixProvider>
+ */
+import { useEffect, type ReactNode } from 'react';
+
+interface HelixProviderProps {
+  children: ReactNode;
+  /** Explicit theme — set on <html data-theme>. Defaults to OS preference. */
+  theme?: 'light' | 'dark' | 'system';
+}
+
+export function HelixProvider({ children, theme }: HelixProviderProps) {
+  useEffect(() => {
+    // HELiX is already imported via helix-setup.ts / main.tsx.
+    // Apply an explicit theme override if provided.
+    if (theme && theme !== 'system') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
+
+  return <>{children}</>;
+}
+`,
+  );
+
   // App.tsx — high-quality landing page matching react-next quality standard
   await safeWriteFile(
     path.join(srcDir, 'App.tsx'),
