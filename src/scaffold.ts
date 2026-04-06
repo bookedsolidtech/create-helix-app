@@ -3101,15 +3101,22 @@ export default defineConfig({});
 async function scaffoldSvelteKit(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const routesDir = path.join(srcDir, 'routes');
+  const libDir = path.join(srcDir, 'lib');
+  const staticDir = path.join(options.directory, 'static');
   await safeEnsureDir(routesDir);
+  await safeEnsureDir(libDir);
+  await safeEnsureDir(staticDir);
 
   // svelte.config.js
   await safeWriteFile(
     path.join(options.directory, 'svelte.config.js'),
     `import adapter from '@sveltejs/adapter-auto';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
+  // Enables <script lang="ts"> preprocessing
+  preprocess: vitePreprocess(),
   kit: {
     adapter: adapter(),
   },
@@ -3131,70 +3138,700 @@ export default defineConfig({
 `,
   );
 
-  // +page.svelte
+  // src/helix.d.ts — TypeScript ambient declarations for hx-* custom elements
+  await safeWriteFile(
+    path.join(srcDir, 'helix.d.ts'),
+    `/**
+ * TypeScript ambient declarations for HELiX web components.
+ *
+ * Allows TypeScript to accept hx-* elements in Svelte templates without errors.
+ * Properties are typed broadly for flexibility — HELiX components accept
+ * standard HTML attributes as well as component-specific props.
+ *
+ * For strongly-typed event handling, add explicit types to your event listeners:
+ *   on:hx-input={(e: CustomEvent<{ value: string }>) => name = e.detail.value}
+ */
+
+declare namespace svelteHTML {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  interface IntrinsicElements {
+    'hx-accordion': Record<string, unknown>;
+    'hx-accordion-item': Record<string, unknown>;
+    'hx-alert': Record<string, unknown>;
+    'hx-avatar': Record<string, unknown>;
+    'hx-badge': Record<string, unknown>;
+    'hx-banner': Record<string, unknown>;
+    'hx-breadcrumb': Record<string, unknown>;
+    'hx-button': Record<string, unknown>;
+    'hx-button-group': Record<string, unknown>;
+    'hx-card': Record<string, unknown>;
+    'hx-carousel': Record<string, unknown>;
+    'hx-checkbox': Record<string, unknown>;
+    'hx-checkbox-group': Record<string, unknown>;
+    'hx-code-snippet': Record<string, unknown>;
+    'hx-color-picker': Record<string, unknown>;
+    'hx-combobox': Record<string, unknown>;
+    'hx-counter': Record<string, unknown>;
+    'hx-data-table': Record<string, unknown>;
+    'hx-date-picker': Record<string, unknown>;
+    'hx-dialog': Record<string, unknown>;
+    'hx-divider': Record<string, unknown>;
+    'hx-drawer': Record<string, unknown>;
+    'hx-dropdown': Record<string, unknown>;
+    'hx-field': Record<string, unknown>;
+    'hx-field-label': Record<string, unknown>;
+    'hx-file-upload': Record<string, unknown>;
+    'hx-grid': Record<string, unknown>;
+    'hx-hero': Record<string, unknown>;
+    'hx-icon': Record<string, unknown>;
+    'hx-icon-button': Record<string, unknown>;
+    'hx-menu': Record<string, unknown>;
+    'hx-menu-item': Record<string, unknown>;
+    'hx-meter': Record<string, unknown>;
+    'hx-nav': Record<string, unknown>;
+    'hx-pagination': Record<string, unknown>;
+    'hx-popover': Record<string, unknown>;
+    'hx-progress-bar': Record<string, unknown>;
+    'hx-progress-ring': Record<string, unknown>;
+    'hx-radio-group': Record<string, unknown>;
+    'hx-rating': Record<string, unknown>;
+    'hx-select': Record<string, unknown>;
+    'hx-skeleton': Record<string, unknown>;
+    'hx-slider': Record<string, unknown>;
+    'hx-spinner': Record<string, unknown>;
+    'hx-split-button': Record<string, unknown>;
+    'hx-split-panel': Record<string, unknown>;
+    'hx-stat': Record<string, unknown>;
+    'hx-status-indicator': Record<string, unknown>;
+    'hx-switch': Record<string, unknown>;
+    'hx-tab': Record<string, unknown>;
+    'hx-tab-panel': Record<string, unknown>;
+    'hx-tabs': Record<string, unknown>;
+    'hx-tag': Record<string, unknown>;
+    'hx-text': Record<string, unknown>;
+    'hx-text-input': Record<string, unknown>;
+    'hx-textarea': Record<string, unknown>;
+    'hx-toast': Record<string, unknown>;
+    'hx-tooltip': Record<string, unknown>;
+    'hx-tree-item': Record<string, unknown>;
+    'hx-tree-view': Record<string, unknown>;
+  }
+}
+
+export {};
+`,
+  );
+
+  // src/lib/helix-setup.ts — client-only HELiX initialisation helper
+  await safeWriteFile(
+    path.join(libDir, 'helix-setup.ts'),
+    `/**
+ * HELiX Web Components — client-side initialisation helper.
+ *
+ * SvelteKit renders on the server; custom elements are client-only.
+ * Call \`initHelix()\` inside \`onMount()\` (or in +layout.svelte's onMount)
+ * to ensure the library only loads in the browser.
+ *
+ * Usage in +layout.svelte:
+ *   import { onMount } from 'svelte';
+ *   import { initHelix } from '$lib/helix-setup';
+ *   onMount(initHelix);
+ */
+
+let _initialised = false;
+
+/**
+ * Dynamically imports the HELiX component library (client-only).
+ * Safe to call multiple times — subsequent calls are no-ops.
+ */
+export async function initHelix(): Promise<void> {
+  if (_initialised || typeof window === 'undefined') return;
+  _initialised = true;
+  await import('@helixui/library');
+}
+`,
+  );
+
+  // +layout.svelte — nav + footer, loads HELiX client-side, imports tokens
+  await safeWriteFile(
+    path.join(routesDir, '+layout.svelte'),
+    `<script lang="ts">
+  import { onMount } from 'svelte';
+  import { initHelix } from '$lib/helix-setup';
+${options.designTokens ? "  import '../../helix-tokens.css';\n" : ''}\
+  import '../app.css';
+
+  onMount(initHelix);
+
+  interface Props {
+    children: import('svelte').Snippet;
+  }
+
+  const { children }: Props = $props();
+</script>
+
+<header class="navbar">
+  <div class="navbar-inner">
+    <a href="/" class="navbar-brand" aria-label="Home">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" fill="currentColor">
+        <rect x="2" y="6" width="24" height="4" rx="2" />
+        <rect x="2" y="12" width="16" height="4" rx="2" />
+        <rect x="2" y="18" width="20" height="4" rx="2" />
+      </svg>
+      <span>HELiX</span>
+    </a>
+    <nav class="navbar-links" aria-label="Main navigation">
+      <a href="#components">Components</a>
+      <a href="#ecosystem">Ecosystem</a>
+      <a
+        href="https://github.com/bookedsolidtech/helix"
+        target="_blank"
+        rel="noopener noreferrer"
+      >GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  {@render children()}
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <p>
+      Built with <strong>HELiX</strong> &middot;
+      <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">
+        GitHub
+      </a>
+    </p>
+  </div>
+</footer>
+`,
+  );
+
+  // src/app.css — global styles
+  await safeWriteFile(
+    path.join(srcDir, 'app.css'),
+    `@import '@helixui/tokens/tokens.css';
+
+/* ── Reset ───────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: var(--hx-font-family, system-ui, -apple-system, sans-serif);
+  line-height: var(--hx-line-height-base, 1.5);
+  color: var(--hx-color-text, #1a1a1a);
+  background: var(--hx-color-surface, #ffffff);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--hx-color-primary, #0066cc);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+  background: var(--hx-color-surface-hover, #f5f5f5);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────── */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--hx-spacing-lg, 1.5rem);
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────── */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--hx-color-surface, #fff);
+  border-bottom: 1px solid var(--hx-color-border, #e5e7eb);
+  backdrop-filter: blur(8px);
+}
+
+.navbar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--hx-spacing-lg, 1.5rem);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--hx-color-text, #1a1a1a);
+  text-decoration: none;
+}
+.navbar-brand:hover {
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-left: auto;
+}
+
+.navbar-links a {
+  font-size: 0.9rem;
+  color: var(--hx-color-text-secondary, #555);
+}
+.navbar-links a:hover {
+  color: var(--hx-color-text, #1a1a1a);
+  text-decoration: none;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+.footer {
+  padding: 2rem 0;
+  border-top: 1px solid var(--hx-color-border, #e5e7eb);
+  text-align: center;
+  color: var(--hx-color-text-secondary, #666);
+  font-size: 0.875rem;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .navbar-links {
+    display: none;
+  }
+}
+`,
+  );
+
+  // +page.svelte — production landing page
   await safeWriteFile(
     path.join(routesDir, '+page.svelte'),
     `<script lang="ts">
-  import { onMount } from 'svelte';
+  /**
+   * HELiX + SvelteKit — Production Landing Page
+   *
+   * Svelte 5 runes are used for reactivity ($state, $derived).
+   * HELiX custom elements load via onMount in +layout.svelte.
+   * Custom events use on:hx-* syntax native to Svelte.
+   */
 
+  // Interactive demo state (Svelte 5 runes)
   let name = $state('');
-  let submitted = $state(false);
+  let greeted = $state(false);
 
-  onMount(async () => {
-    await import('@helixui/library');
-  });
-
-  function handleSubmit() {
-    submitted = true;
-    setTimeout(() => { submitted = false; }, 3000);
+  function handleInput(e: Event) {
+    const detail = (e as CustomEvent<{ value: string }>).detail;
+    name = detail?.value ?? '';
   }
+
+  function handleGreet() {
+    greeted = true;
+    setTimeout(() => { greeted = false; }, 3000);
+  }
+
+  const features = [
+    {
+      icon: '⚡',
+      title: 'Svelte 5 Runes',
+      badge: 'Svelte 5',
+      description: 'Fine-grained reactivity with $state and $derived. No store boilerplate — just plain reactive primitives.',
+    },
+    {
+      icon: '🎨',
+      title: 'Design Tokens',
+      badge: undefined as string | undefined,
+      description: 'Override any visual property — colour, spacing, radius, typography — via CSS custom properties. No CSS-in-JS required.',
+    },
+    {
+      icon: '♿',
+      title: 'Accessible by Default',
+      badge: undefined as string | undefined,
+      description: 'Every HELiX component ships with full ARIA support, keyboard navigation, and screen-reader announcements built in.',
+    },
+    {
+      icon: '🔒',
+      title: 'Shadow DOM Encapsulation',
+      badge: undefined as string | undefined,
+      description: 'Component styles live inside Shadow DOM. Your global CSS never leaks in — and their internals never leak out.',
+    },
+    {
+      icon: '📋',
+      title: 'Native Form Participation',
+      badge: undefined as string | undefined,
+      description: 'HELiX form controls use ElementInternals to participate in native HTML forms — no wrappers, no hacks.',
+    },
+    {
+      icon: '🌙',
+      title: 'Built-in Dark Mode',
+      badge: undefined as string | undefined,
+      description: 'Set data-theme="dark" on <html> and every component adapts automatically via CSS custom properties.',
+    },
+  ] as const;
 </script>
 
 <svelte:head>
   <title>${sanitizeForHtml(options.name)}</title>
+  <meta name="description" content="Built with HELiX web components and SvelteKit 2" />
 </svelte:head>
 
-<div class="container">
-  <h1>HELiX + SvelteKit</h1>
-  <p>Svelte has the best native custom element support of any framework.</p>
+<!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <hx-badge variant="success" style="margin-bottom: 1rem">
+      SvelteKit 2 · Svelte 5 · TypeScript
+    </hx-badge>
+    <h1 class="hero-title">
+      Build faster with<br />
+      <span class="hero-accent">HELiX&nbsp;+&nbsp;SvelteKit</span>
+    </h1>
+    <p class="hero-subtitle">
+      Enterprise-grade web components, Svelte 5 runes, and design tokens —
+      everything you need to ship production UIs at speed.
+    </p>
+    <div class="hero-actions">
+      <hx-button
+        variant="primary"
+        size="lg"
+        on:hx-click={() => document.getElementById('components')?.scrollIntoView({ behavior: 'smooth' })}
+      >
+        Explore Components
+      </hx-button>
+      <hx-button
+        variant="ghost"
+        size="lg"
+        on:hx-click={() => window.open('https://github.com/bookedsolidtech/helix', '_blank', 'noopener,noreferrer')}
+      >
+        View on GitHub
+      </hx-button>
+    </div>
+  </div>
+</section>
 
-  <hx-card>
-    <div slot="header"><h2>Interactive Demo</h2></div>
-    <hx-text-input
-      label="Your name"
-      placeholder="Enter your name"
-      value={name}
-      on:hx-input={(e) => name = e.detail?.value ?? ''}
-    />
-    <hx-button variant="primary" style="margin-top: 1rem" on:hx-click={handleSubmit}>
-      Say Hello
-    </hx-button>
-    {#if submitted}
-      <hx-alert variant="success" open style="margin-top: 1rem">
-        Hello, {name || 'World'}!
-      </hx-alert>
-    {/if}
-  </hx-card>
-</div>
+<!-- ── Component Showcase ─────────────────────────────────────────────── -->
+<section id="components" class="section">
+  <div class="container">
+    <h2 class="section-title">Component Showcase</h2>
+    <p class="section-subtitle">
+      HELiX ships 60+ accessible web components. Here are a few to get you started.
+    </p>
+
+    <div class="feature-grid">
+      {#each features as feature}
+        <hx-card class="feature-card">
+          <div slot="header" style="display: flex; align-items: center; gap: 0.5rem">
+            <span style="font-size: 1.25rem" aria-hidden="true">{feature.icon}</span>
+            <h3 style="margin: 0; font-size: 1rem; font-weight: 600">{feature.title}</h3>
+            {#if feature.badge}
+              <hx-badge variant="info" style="margin-left: auto">{feature.badge}</hx-badge>
+            {/if}
+          </div>
+          <p style="margin: 0; color: var(--hx-color-text-secondary, #555); line-height: 1.6">
+            {feature.description}
+          </p>
+        </hx-card>
+      {/each}
+    </div>
+
+    <!-- ── Interactive Demo ── -->
+    <hx-divider style="margin: 3rem 0 2rem"></hx-divider>
+    <h3 style="margin-bottom: 1.5rem">Interactive Demo</h3>
+    <div class="demo-grid">
+
+      <!-- Quick Start card -->
+      <hx-card>
+        <div slot="header"><h4 style="margin: 0">Quick Start</h4></div>
+        <div style="display: flex; flex-direction: column; gap: 1rem">
+          <hx-text-input
+            label="Your name"
+            placeholder="Enter your name"
+            value={name}
+            on:hx-input={handleInput}
+          ></hx-text-input>
+          <hx-button variant="primary" on:hx-click={handleGreet}>
+            Say Hello
+          </hx-button>
+          {#if greeted}
+            <hx-alert variant="success" open>
+              Hello, {name || 'World'}! HELiX components work natively in Svelte.
+            </hx-alert>
+          {/if}
+        </div>
+      </hx-card>
+
+      <!-- Button variants card -->
+      <hx-card>
+        <div slot="header">
+          <h4 style="margin: 0">Button Variants</h4>
+          <hx-badge variant="info">Shadow DOM</hx-badge>
+        </div>
+        <p style="margin-bottom: 1rem; color: var(--hx-color-text-secondary, #666)">
+          Style via CSS custom properties and <code>::part()</code> selectors.
+        </p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem">
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Danger</hx-badge>
+        </div>
+      </hx-card>
+
+      <!-- Event handling card -->
+      <hx-card>
+        <div slot="header"><h4 style="margin: 0">Event Handling</h4></div>
+        <p style="color: var(--hx-color-text-secondary, #666); margin-bottom: 1rem">
+          Svelte uses <code>on:hx-*</code> syntax for custom element events:
+        </p>
+        <pre class="code-block">{String.raw\`<hx-button
+  on:hx-click={handleClick}
+  variant="primary"
+>
+  Click me
+</hx-button>
+
+<hx-text-input
+  on:hx-input={(e) => {
+    name = e.detail.value;
+  }}
+/>\`}</pre>
+      </hx-card>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Ecosystem ─────────────────────────────────────────────────────────── -->
+<section id="ecosystem" class="section section-alt">
+  <div class="container">
+    <h2 class="section-title">Ecosystem</h2>
+    <p class="section-subtitle">
+      Everything you need to build production-ready applications.
+    </p>
+    <div class="ecosystem-grid">
+      {#each [
+        { name: 'SvelteKit 2', href: 'https://kit.svelte.dev', desc: 'Full-stack Svelte with SSR, file-based routing, and adapters' },
+        { name: 'Svelte 5', href: 'https://svelte.dev', desc: 'Fine-grained reactivity with runes — $state, $derived, $effect' },
+        { name: 'Vite 6', href: 'https://vite.dev', desc: 'Lightning-fast bundler with native ESM HMR' },
+        { name: 'TypeScript 5', href: 'https://typescriptlang.org', desc: 'Type-safe development end-to-end' },
+        { name: 'HELiX Library', href: 'https://github.com/bookedsolidtech/helix', desc: '60+ accessible, design-token-driven components' },
+        { name: 'HELiX Tokens', href: 'https://github.com/bookedsolidtech/helix', desc: 'CSS custom properties for every visual decision' },
+      ] as item}
+        <a href={item.href} target="_blank" rel="noopener noreferrer" class="ecosystem-link">
+          <strong>{item.name}</strong>
+          <span>{item.desc}</span>
+        </a>
+      {/each}
+    </div>
+  </div>
+</section>
+
+<!-- ── Get Started ───────────────────────────────────────────────────────── -->
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Get Started</h2>
+    <div class="guide-grid">
+      <hx-card>
+        <div slot="header"><h3 style="margin: 0">Project Structure</h3></div>
+        <pre class="code-block">{String.raw\`src/
+  routes/
+    +layout.svelte  # Nav, footer, HELiX init
+    +page.svelte    # Landing page (this file)
+  lib/
+    helix-setup.ts  # Client-side HELiX loader
+  helix.d.ts        # TypeScript for hx-* elements
+  app.css           # Global styles + tokens
+helix-tokens.css    # Design token overrides\`}</pre>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header"><h3 style="margin: 0">Customise Design Tokens</h3></div>
+        <pre class="code-block">{String.raw\`/* helix-tokens.css */
+@import '@helixui/tokens/tokens.css';
+
+:root {
+  --hx-color-primary: #0066cc;
+  --hx-spacing-md: 1rem;
+  --hx-radius-md: 0.5rem;
+}
+
+/* Target component internals */
+hx-button::part(button) {
+  font-weight: 700;
+}\`}</pre>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header"><h3 style="margin: 0">Available Commands</h3></div>
+        <pre class="code-block">{String.raw\`# Start development server
+npm run dev
+
+# Production build
+npm run build
+
+# Preview production build
+npm run preview\`}</pre>
+      </hx-card>
+    </div>
+  </div>
+</section>
 
 <style>
-  .container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 2rem;
+  /* ── Hero ──────────────────────────────────────────────────────────── */
+  .hero {
+    padding: 5rem 0 4rem;
+    text-align: center;
+  }
+
+  .hero-title {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1.25rem;
+    color: var(--hx-color-text, #1a1a1a);
+  }
+
+  .hero-accent {
+    color: var(--hx-color-primary, #0066cc);
+  }
+
+  .hero-subtitle {
+    font-size: 1.15rem;
+    color: var(--hx-color-text-secondary, #555);
+    max-width: 600px;
+    margin: 0 auto 2rem;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* ── Sections ──────────────────────────────────────────────────────── */
+  .section {
+    padding: 4rem 0;
+  }
+
+  .section-alt {
+    background: var(--hx-color-surface-hover, #f9fafb);
+  }
+
+  .section-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .section-subtitle {
+    color: var(--hx-color-text-secondary, #555);
+    margin-bottom: 2.5rem;
+  }
+
+  /* ── Feature grid ──────────────────────────────────────────────────── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .feature-card {
+    height: 100%;
+  }
+
+  /* ── Demo grid ─────────────────────────────────────────────────────── */
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+
+  /* ── Ecosystem grid ────────────────────────────────────────────────── */
+  .ecosystem-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+
+  .ecosystem-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 1.25rem;
+    border: 1px solid var(--hx-color-border, #e5e7eb);
+    border-radius: var(--hx-radius-md, 0.5rem);
+    background: var(--hx-color-surface, #fff);
+    color: var(--hx-color-text, #1a1a1a);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .ecosystem-link:hover {
+    border-color: var(--hx-color-primary, #0066cc);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hx-color-primary, #0066cc) 15%, transparent);
+    text-decoration: none;
+  }
+  .ecosystem-link strong {
+    font-size: 0.95rem;
+  }
+  .ecosystem-link span {
+    font-size: 0.82rem;
+    color: var(--hx-color-text-secondary, #666);
+  }
+
+  /* ── Guide grid ────────────────────────────────────────────────────── */
+  .guide-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+
+  /* ── Code block ────────────────────────────────────────────────────── */
+  .code-block {
+    font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    background: var(--hx-color-surface-hover, #f5f5f5);
+    border-radius: var(--hx-radius-sm, 0.375rem);
+    padding: 1rem;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ── Responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    .hero {
+      padding: 3rem 0 2.5rem;
+    }
   }
 </style>
-`,
-  );
-
-  // +layout.svelte
-  await safeWriteFile(
-    path.join(routesDir, '+layout.svelte'),
-    `<script>
-  import '@helixui/tokens/tokens.css';
-</script>
-
-<slot />
 `,
   );
 
@@ -3209,7 +3846,7 @@ export default defineConfig({
     ${CSP_META}
     %sveltekit.head%
   </head>
-  <body>
+  <body data-sveltekit-preload-data="hover">
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

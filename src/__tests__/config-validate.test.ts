@@ -220,7 +220,9 @@ describe('runConfigValidate', () => {
   });
 
   it('returns valid=true when the config file is valid JSON with no errors', () => {
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ defaults: { typescript: true } }) as never);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ defaults: { typescript: true } }) as never,
+    );
 
     const result = runConfigValidate('/project/.helixrc.json');
 
