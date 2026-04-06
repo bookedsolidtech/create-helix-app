@@ -658,23 +658,57 @@ export function generateReadme(themeName: string, preset: PresetConfig): string 
 
 Drupal 11 theme scaffolded with [HELiX](https://helixui.com) — **${preset.name} preset**.
 
-## Quick Start
+## Adding to your project
 
-### Docker (recommended)
+Copy this directory into your Drupal project's custom themes folder:
+
+\`\`\`bash
+cp -r ${themeName}/ web/themes/custom/
+\`\`\`
+
+Then enable it using whichever local dev platform your team uses:
+
+### DDEV
+
+\`\`\`bash
+ddev drush theme:enable ${themeName}
+ddev drush config:set system.theme default ${themeName}
+ddev drush cr
+\`\`\`
+
+### Lando
+
+\`\`\`bash
+lando drush theme:enable ${themeName}
+lando drush config:set system.theme default ${themeName}
+lando drush cr
+\`\`\`
+
+### Direct drush (Pantheon, Tugboat, other)
+
+\`\`\`bash
+drush theme:enable ${themeName}
+drush config:set system.theme default ${themeName}
+drush cr
+\`\`\`
+
+---
+
+## Standalone testing (no existing Drupal install)
+
+A Docker Compose stack is included for standalone validation. This is intended for
+quick theme checks and CI — it will be superseded by your team's dev platform
+(DDEV, Lando, etc.) on real projects.
 
 \`\`\`bash
 cd docker
 docker compose up -d
 docker compose exec drupal bash /opt/drupal/web/themes/custom/${themeName}/docker/scripts/setup-drupal.sh
+# Open http://localhost:8080
+docker compose down -v  # tear down when done
 \`\`\`
 
-Open [http://localhost:8080](http://localhost:8080).
-
-### Manual install
-
-1. Copy to \`web/themes/custom/${themeName}/\`
-2. \`drush theme:enable ${themeName}\`
-3. \`drush config:set system.theme default ${themeName}\`
+---
 
 ## Structure
 
@@ -685,9 +719,11 @@ ${themeName}/
 │   ├── node/
 │   └── views/
 ├── css/                 ← Global stylesheets
-├── js/                  ← Drupal behaviors
-├── templates/           ← Template overrides (delegate to SDCs)
-└── docker/              ← Local development stack
+│   ├── style.css
+│   └── helix-overrides.css
+├── js/                  ← Drupal behaviors (once() pattern)
+├── templates/           ← Template overrides — delegate to SDCs
+└── docker/              ← Standalone test stack (not for production)
 \`\`\`
 
 ## Components (${preset.name} preset)
@@ -696,7 +732,14 @@ ${preset.sdcList.map((s) => `- **${toTitleCase(s.name)}** (\`${s.group}\`) — $
 
 ## Customization
 
-Override HELiX CSS custom properties in \`css/helix-overrides.css\`.
+Override HELiX CSS custom properties in \`css/helix-overrides.css\`:
+
+\`\`\`css
+:root {
+  --hx-color-primary: #your-brand-color;
+  --hx-font-family-base: 'Your Font', sans-serif;
+}
+\`\`\`
 
 ## Architecture
 
