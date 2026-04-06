@@ -2810,7 +2810,17 @@ export default function DashboardExample() {
 
 async function scaffoldReactVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
+  const componentsDir = path.join(srcDir, 'components', 'helix');
   await safeEnsureDir(srcDir);
+  await safeEnsureDir(componentsDir);
+  await safeEnsureDir(path.join(srcDir, 'components'));
+
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await safeCopyDir(assetsSource, publicOgDir);
+  }
 
   // Generate unique install tracking ID
   const installId = randomBytes(8).toString('hex');
@@ -2834,6 +2844,32 @@ export default defineConfig({
 `,
   );
 
+  // tsconfig.json
+  if (options.typescript) {
+    await safeWriteJson(
+      path.join(options.directory, 'tsconfig.json'),
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: true,
+          esModuleInterop: true,
+          skipLibCheck: true,
+          forceConsistentCasingInFileNames: true,
+          resolveJsonModule: true,
+          isolatedModules: true,
+          jsx: 'react-jsx',
+          noEmit: true,
+        },
+        include: ['src'],
+        exclude: ['node_modules'],
+      },
+      { spaces: 2 },
+    );
+  }
+
   // index.html
   await safeWriteFile(
     path.join(options.directory, 'index.html'),
@@ -2844,6 +2880,9 @@ export default defineConfig({
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     ${CSP_META}
     <title>${sanitizeForHtml(options.name)}</title>
+    <meta property="og:title" content="${sanitizeForHtml(options.name)}" />
+    <meta property="og:description" content="Built with HELiX enterprise web components and React + Vite" />
+    <meta property="og:image" content="/og/bs-hx-square.png" />
   </head>
   <body>
     <div id="root"></div>
@@ -2859,7 +2898,7 @@ export default defineConfig({
     `import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-${options.designTokens ? "import './helix-setup';" : "import '@helixui/library';"}
+import './helix-setup';
 import './index.css';
 import { HelixProvider } from './components/helix/provider';
 
