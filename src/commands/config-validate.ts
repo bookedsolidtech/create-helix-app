@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { HelixConfig } from '../config.js';
 import { VALID_FRAMEWORKS, VALID_BUNDLES, VALID_PRESETS } from '../validation.js';
 
 export interface ConfigValidationError {
@@ -58,7 +57,8 @@ export function validateHelixConfig(config: unknown): ConfigValidationError[] {
           errors.push({ field: 'defaults.bundles', message: 'bundles must be an array' });
         } else {
           const invalid = (defaults['bundles'] as unknown[]).filter(
-            (b) => typeof b !== 'string' || !(VALID_BUNDLES as readonly string[]).includes(b as string),
+            (b) =>
+              typeof b !== 'string' || !(VALID_BUNDLES as readonly string[]).includes(b as string),
           );
           if (invalid.length > 0) {
             errors.push({
