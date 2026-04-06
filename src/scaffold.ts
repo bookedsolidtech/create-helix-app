@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import pc from 'picocolors';
 import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
@@ -34,7 +35,7 @@ export function sanitizeForHtml(input: string): string {
  * because many component libraries (including HELiX) inject scoped styles.
  */
 const CSP_META =
-  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'\">";
+  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'\" />";
 
 // ---------------------------------------------------------------------------
 // Dry-run infrastructure
@@ -80,6 +81,11 @@ async function safeWriteJson(
 async function safeEnsureDir(dirPath: string): Promise<void> {
   if (_dryRunActive) return;
   await fs.ensureDir(dirPath);
+}
+
+async function safeCopyDir(src: string, dest: string): Promise<void> {
+  if (_dryRunActive) return;
+  await fs.copy(src, dest);
 }
 
 async function walkDirRecursive(dir: string): Promise<string[]> {
@@ -768,14 +774,22 @@ async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
   const appDir = path.join(srcDir, 'app');
   await safeEnsureDir(appDir);
 
-  // next.config.ts
+  // Generate unique install tracking ID
+  const installId = randomBytes(8).toString('hex');
+
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await safeCopyDir(assetsSource, publicOgDir);
+  }
+
+  // next.config.ts — Next.js 16 with Turbopack (default bundler)
   await safeWriteFile(
     path.join(options.directory, 'next.config.ts'),
     `import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Web components need client-side hydration
-  // No special config needed — Next.js 15 handles custom elements natively
   reactStrictMode: true,
 };
 
@@ -783,7 +797,7 @@ export default nextConfig;
 `,
   );
 
-  // tsconfig.json for Next.js
+  // tsconfig.json for Next.js 16
   await safeWriteJson(
     path.join(options.directory, 'tsconfig.json'),
     {
@@ -849,34 +863,13 @@ import '@helixui/library/components/hx-divider';
 import '@helixui/library/components/hx-tooltip';
 import '@helixui/library/components/hx-textarea';
 import '@helixui/library/components/hx-data-table';
+import '@helixui/library/components/hx-top-nav';
+import '@helixui/library/components/hx-progress-bar';
+import '@helixui/library/components/hx-tag';
+import '@helixui/library/components/hx-code-snippet';
 
-// Type declarations for the custom elements
-// These map to the actual Lit component classes
-
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace JSX {
-    interface IntrinsicElements {
-      'hx-button': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-card': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-text-input': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-select': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-checkbox': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-switch': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-dialog': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-alert': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-badge': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tabs': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tab': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tab-panel': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-avatar': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-divider': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-tooltip': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-textarea': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-      'hx-data-table': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
-    }
-  }
-}
+// JSX types are declared globally in src/helix.d.ts
+// This file provides React-wrapped versions with proper event bridging
 
 /**
  * React-wrapped HELiX Button
@@ -1025,6 +1018,33 @@ export const HxDataTable = createComponent({
     onHxRowSelect: 'hx-row-select',
   },
 });
+
+export const HxTopNav = createComponent({
+  tagName: 'hx-top-nav',
+  elementClass: customElements.get('hx-top-nav') as CustomElementConstructor,
+  react: React,
+  events: {
+    onHxMobileToggle: 'hx-mobile-toggle',
+  },
+});
+
+export const HxProgressBar = createComponent({
+  tagName: 'hx-progress-bar',
+  elementClass: customElements.get('hx-progress-bar') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxTag = createComponent({
+  tagName: 'hx-tag',
+  elementClass: customElements.get('hx-tag') as CustomElementConstructor,
+  react: React,
+});
+
+export const HxCodeSnippet = createComponent({
+  tagName: 'hx-code-snippet',
+  elementClass: customElements.get('hx-code-snippet') as CustomElementConstructor,
+  react: React,
+});
 `,
   );
 
@@ -1048,7 +1068,7 @@ export const HxDataTable = createComponent({
  * - All form components use module-level counters (no crypto.randomUUID — SSR-safe)
  * - For client-only components, use next/dynamic with ssr: false
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 interface HelixProviderProps {
   children: ReactNode;
@@ -1057,8 +1077,6 @@ interface HelixProviderProps {
 }
 
 export function HelixProvider({ children, theme }: HelixProviderProps) {
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
     // Dynamic import ensures HELiX only loads on the client
     import('@helixui/library').then(() => {
@@ -1066,8 +1084,9 @@ export function HelixProvider({ children, theme }: HelixProviderProps) {
       if (theme && theme !== 'system') {
         document.documentElement.setAttribute('data-theme', theme);
       }
-      setReady(true);
-    }).catch(() => setReady(true));
+    }).catch(() => {
+      // Library failed to load — components will render as unstyled custom elements
+    });
   }, [theme]);
 
   // Render children immediately — components will upgrade when loaded
@@ -1091,7 +1110,6 @@ import 'react';
 type HxElement = React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Record<string, unknown>;
 
 declare module 'react' {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
       'hx-accordion': HxElement;
@@ -1149,8 +1167,10 @@ declare module 'react' {
       'hx-text': HxElement;
       'hx-text-input': HxElement;
       'hx-textarea': HxElement;
+      'hx-theme': HxElement;
       'hx-toast': HxElement;
       'hx-tooltip': HxElement;
+      'hx-top-nav': HxElement;
       'hx-tree-item': HxElement;
       'hx-tree-view': HxElement;
     }
@@ -1161,7 +1181,7 @@ export {};
 `,
   );
 
-  // Layout with provider
+  // Layout with provider and hx-theme for dark mode support
   await safeWriteFile(
     path.join(appDir, 'layout.tsx'),
     `import type { Metadata } from 'next';
@@ -1170,8 +1190,8 @@ ${options.designTokens ? "import '../../helix-tokens.css';" : ''}
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '${sanitizeForHtml(options.name)}',
-  description: 'Built with HELiX web components',
+  title: '${sanitizeForHtml(options.name)} — Built with HELiX',
+  description: 'Enterprise web components for React and Next.js',
 };
 
 export default function RootLayout({
@@ -1180,7 +1200,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en"${options.darkMode ? ' suppressHydrationWarning' : ''}>
+    <html lang="en" suppressHydrationWarning>
       <body>
         <HelixProvider>
           {children}
@@ -1192,12 +1212,10 @@ export default function RootLayout({
 `,
   );
 
-  // Global styles
+  // Global styles with dark mode support
   await safeWriteFile(
     path.join(appDir, 'globals.css'),
-    `@import '@helixui/tokens/tokens.css';
-
-*,
+    `*,
 *::before,
 *::after {
   box-sizing: border-box;
@@ -1205,47 +1223,548 @@ export default function RootLayout({
   padding: 0;
 }
 
+:root {
+  color-scheme: light dark;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --hx-page-bg: #0a0a0f;
+  --hx-page-text: #e4e4e7;
+  --hx-page-text-secondary: #a1a1aa;
+  --hx-page-surface: #18181b;
+  --hx-page-surface-raised: #27272a;
+  --hx-page-border: #3f3f46;
+  --hx-page-code-bg: #27272a;
+}
+
+html[data-theme="light"],
+html:not([data-theme]) {
+  --hx-page-bg: #fafafa;
+  --hx-page-text: #18181b;
+  --hx-page-text-secondary: #71717a;
+  --hx-page-surface: #ffffff;
+  --hx-page-surface-raised: #f4f4f5;
+  --hx-page-border: #e4e4e7;
+  --hx-page-code-bg: #f4f4f5;
+}
+
 body {
-  font-family: var(--hx-font-family, system-ui, -apple-system, sans-serif);
-  line-height: var(--hx-line-height-base, 1.5);
-  color: var(--hx-color-text, #1a1a1a);
-  background: var(--hx-color-surface, #ffffff);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--hx-page-text);
+  background: var(--hx-page-bg);
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: var(--hx-spacing-lg, 1.5rem);
+  padding: 0 1.5rem;
+}
+
+a {
+  color: var(--hx-color-primary-500, #3b82f6);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  color: var(--hx-page-text);
+  letter-spacing: -0.025em;
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--hx-page-code-bg);
+  color: var(--hx-page-text);
+}
+
+pre {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  background: var(--hx-page-code-bg) !important;
+  color: var(--hx-page-text);
+  border: 1px solid var(--hx-page-border);
+}
+
+.hero {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: var(--hx-page-surface);
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+.hero p {
+  font-size: 1.125rem;
+  color: var(--hx-page-text-secondary);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.section {
+  padding: 4rem 0;
+}
+
+.section-header {
+  margin-bottom: 2rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.section-header p {
+  color: var(--hx-page-text-secondary);
+}
+
+.grid-auto {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.grid-3 {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.grid-4 {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* ── hx-top-nav overrides ── */
+hx-top-nav {
+  --hx-top-nav-bg: var(--hx-page-surface);
+  --hx-top-nav-color: var(--hx-page-text);
+  --hx-top-nav-border-color: var(--hx-page-border);
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+hx-top-nav::part(header) {
+  border-radius: 0;
+}
+
+/* ── hx-card overrides ── */
+hx-card {
+  --hx-card-bg: var(--hx-page-surface);
+  --hx-card-color: var(--hx-page-text);
+  --hx-card-border-color: var(--hx-page-border);
+}
+
+hx-card::part(header) {
+  background: var(--hx-page-surface-raised);
+  border-bottom: 1px solid var(--hx-page-border);
+  padding: 0.875rem 1.25rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.grid-auto hx-card,
+.grid-3 hx-card,
+.grid-4 hx-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-auto hx-card::part(card),
+.grid-3 hx-card::part(card),
+.grid-4 hx-card::part(card) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-auto,
+.grid-3,
+.grid-4 {
+  align-items: stretch;
+}
+
+.text-secondary {
+  color: var(--hx-page-text-secondary);
+}
+
+/* ── Promo cards ── */
+.promo-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.promo-card {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--hx-page-border);
+  background: var(--hx-page-surface);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
+}
+
+.promo-card-image {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  display: block;
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.promo-card-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card-body h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--hx-page-text);
+}
+
+.promo-card-body p {
+  font-size: 0.9rem;
+  color: var(--hx-page-text-secondary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.promo-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hx-color-primary-500, #3b82f6);
+}
+
+.promo-card:hover .promo-card-cta {
+  text-decoration: underline;
+}
+
+/* ── Footer ── */
+.site-footer {
+  background: var(--hx-page-surface);
+  border-top: 1px solid var(--hx-page-border);
+  padding: 3rem 0 2rem;
+  margin-top: 0;
+}
+
+.footer-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+}
+
+@media (max-width: 768px) {
+  .footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .footer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.footer-brand p {
+  margin: 0;
+}
+
+.footer-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--hx-page-text);
+  margin-bottom: 0.75rem;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: 0.5rem;
+}
+
+.footer-links a {
+  color: var(--hx-page-text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+}
+
+.footer-links a:hover {
+  color: var(--hx-page-text);
+  text-decoration: none;
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-bottom p {
+  margin: 0;
 }
 `,
   );
 
-  // Main page — interactive demo using custom elements directly
+  // Theme toggle component
+  await safeWriteFile(
+    path.join(srcDir, 'components', 'theme-toggle.tsx'),
+    `'use client';
+
+import { useCallback, useEffect, useRef } from 'react';
+
+/**
+ * Dark mode toggle using hx-switch.
+ *
+ * Two-layer approach:
+ * 1. Sets data-theme on <html> for page-level CSS (globals.css vars)
+ * 2. Updates all hx-theme elements' theme property for component tokens
+ */
+export function ThemeToggle() {
+  const switchRef = useRef<HTMLElement>(null);
+
+  const applyTheme = useCallback((theme: 'light' | 'dark') => {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.querySelectorAll('hx-theme').forEach((el) => {
+      (el as HTMLElement & { theme: string }).theme = theme;
+    });
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('helix-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = saved ? saved === 'dark' : prefersDark;
+    applyTheme(isDark ? 'dark' : 'light');
+    if (switchRef.current) {
+      (switchRef.current as HTMLInputElement).checked = isDark;
+    }
+  }, [applyTheme]);
+
+  const handleChange = useCallback((e: Event) => {
+    const checked = (e as CustomEvent).detail?.checked ?? false;
+    const theme = checked ? 'dark' : 'light';
+    applyTheme(theme);
+    localStorage.setItem('helix-theme', theme);
+  }, [applyTheme]);
+
+  useEffect(() => {
+    const el = switchRef.current;
+    el?.addEventListener('hx-change', handleChange);
+    return () => el?.removeEventListener('hx-change', handleChange);
+  }, [handleChange]);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <span style={{ fontSize: '0.8rem' }}>Dark</span>
+      <hx-switch ref={switchRef} size="sm" />
+    </div>
+  );
+}
+`,
+  );
+
+  // Navbar component
+  await safeWriteFile(
+    path.join(srcDir, 'components', 'navbar.tsx'),
+    `'use client';
+
+import Link from 'next/link';
+import { ThemeToggle } from './theme-toggle';
+
+export function Navbar() {
+  return (
+    <hx-top-nav sticky label="Main navigation">
+      <div slot="logo">
+        <Link href="/" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          textDecoration: 'none',
+          color: 'inherit',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <img src="/og/bs-hx-square.png" alt="HELiX" style={{ height: '30px', width: '30px', borderRadius: '5px' }} />
+            <span style={{ fontWeight: 700, fontSize: '1.125rem', letterSpacing: '-0.025em' }}>HELiX</span>
+          </div>
+          <span style={{ opacity: 0.25, fontSize: '1.25rem', fontWeight: 200 }}>+</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <svg width="20" height="20" viewBox="0 0 180 180" fill="currentColor">
+              <mask id="hx-next-mask" height="180" maskUnits="userSpaceOnUse" width="180" x="0" y="0"><circle cx="90" cy="90" fill="white" r="90"/></mask>
+              <g mask="url(#hx-next-mask)"><circle cx="90" cy="90" fill="black" r="90"/><path d="M149.508 157.52L69.142 54H54v71.97h12.114V69.384l73.885 95.461a90.304 90.304 0 009.509-7.325z" fill="url(#hx-next-grad1)"/><rect fill="url(#hx-next-grad2)" height="72" width="12" x="115" y="54"/></g>
+              <defs><linearGradient id="hx-next-grad1" gradientUnits="userSpaceOnUse" x1="109" x2="144.5" y1="116.5" y2="160.5"><stop stopColor="white"/><stop offset="1" stopColor="white" stopOpacity="0"/></linearGradient><linearGradient id="hx-next-grad2" gradientUnits="userSpaceOnUse" x1="121" x2="120.799" y1="54" y2="106.875"><stop stopColor="white"/><stop offset="1" stopColor="white" stopOpacity="0"/></linearGradient></defs>
+            </svg>
+            <span style={{ fontWeight: 600, fontSize: '0.95rem', opacity: 0.9 }}>Next.js</span>
+          </div>
+        </Link>
+      </div>
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', marginLeft: '2rem' }}>
+        <Link href="/components" style={{ color: 'inherit', textDecoration: 'none', fontSize: '0.875rem', opacity: 0.8 }}>Components</Link>
+        <Link href="/examples/forms" style={{ color: 'inherit', textDecoration: 'none', fontSize: '0.875rem', opacity: 0.8 }}>Forms</Link>
+        <Link href="/examples/dashboard" style={{ color: 'inherit', textDecoration: 'none', fontSize: '0.875rem', opacity: 0.8 }}>Dashboard</Link>
+        <Link href="/docs" style={{ color: 'inherit', textDecoration: 'none', fontSize: '0.875rem', opacity: 0.8 }}>Docs</Link>
+      </div>
+      <div slot="actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <ThemeToggle />
+        <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer"
+          style={{ color: 'inherit', display: 'flex', alignItems: 'center', opacity: 0.7 }}
+          title="Booked Solid on GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a>
+        <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer"
+          style={{ display: 'flex', alignItems: 'center' }}
+          title="Booked Solid Technology">
+          <img src="https://bookedsolid.tech/logos/bs-bs-software-square.png?utm_source=create-helix&utm_medium=scaffold&utm_id=${installId}" alt="Booked Solid" style={{ height: '28px', width: '28px', borderRadius: '4px' }} />
+        </a>
+      </div>
+    </hx-top-nav>
+  );
+}
+`,
+  );
+
+  // Footer component
+  await safeWriteFile(
+    path.join(srcDir, 'components', 'footer.tsx'),
+    `import Link from 'next/link';
+
+export function Footer() {
+  const year = new Date().getFullYear();
+
+  return (
+    <footer className="site-footer">
+      <div className="container">
+        <div className="footer-grid">
+          <div className="footer-brand">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <img
+                src="/og/bs-hx-square.png"
+                alt="HELiX"
+                style={{ height: '32px', width: '32px', borderRadius: '4px' }}
+              />
+              <span style={{ fontWeight: 700, fontSize: '1.125rem' }}>HELiX</span>
+            </div>
+            <p className="text-secondary" style={{ fontSize: '0.85rem', lineHeight: '1.6', maxWidth: '280px' }}>
+              Enterprise web components built on Lit 3. Accessible, themeable, and framework-agnostic.
+            </p>
+          </div>
+          <div>
+            <h4 className="footer-heading">Product</h4>
+            <ul className="footer-links">
+              <li><Link href="/components">Components</Link></li>
+              <li><Link href="/examples/forms">Forms</Link></li>
+              <li><Link href="/examples/dashboard">Dashboard</Link></li>
+              <li><Link href="/docs">Documentation</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="footer-heading">Ecosystem</h4>
+            <ul className="footer-links">
+              <li><a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI</a></li>
+              <li><a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">HELiXiR</a></li>
+              <li><a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer">Discord-Ops</a></li>
+              <li><a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="footer-heading">Legal</h4>
+            <ul className="footer-links">
+              <li><a href="https://bookedsolid.tech/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></li>
+              <li><a href="https://bookedsolid.tech/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a></li>
+              <li><a href="https://bookedsolid.tech/about" target="_blank" rel="noopener noreferrer">About</a></li>
+              <li><a href="https://bookedsolid.tech/contact" target="_blank" rel="noopener noreferrer">Contact</a></li>
+            </ul>
+          </div>
+        </div>
+        <hx-divider style={{ margin: '2rem 0 1.5rem' }}></hx-divider>
+        <div className="footer-bottom">
+          <p className="text-secondary" style={{ fontSize: '0.8rem' }}>
+            &copy; 2026 Booked Solid Technology, a d/b/a of Clarity House LLC. All rights reserved.
+            Built with <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX</a> and <a href="https://nextjs.org" target="_blank" rel="noopener noreferrer">Next.js</a>.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer"
+              className="text-secondary" style={{ display: 'flex' }} title="GitHub">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+            </a>
+            <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center' }} title="Booked Solid Technology">
+              <img src="/og/bs-bs-software-square.png" alt="BS" style={{ height: '20px', width: '20px', borderRadius: '3px', opacity: 0.7 }} />
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+`,
+  );
+
+  // Main landing page — real showcase with navbar, components, ecosystem links, dev guidance
   await safeWriteFile(
     path.join(appDir, 'page.tsx'),
     `'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import { Navbar } from '@/components/navbar';
+import { Footer } from '@/components/footer';
 
-/**
- * HELiX + Next.js — Interactive Demo
- *
- * This page demonstrates using HELiX web components directly in React/Next.js.
- * Web components work in JSX — you just need to handle events via refs or addEventListener.
- *
- * Three patterns shown:
- * 1. Direct custom elements in JSX (simplest)
- * 2. Event handling via useRef + addEventListener
- * 3. @lit/react wrappers (see src/components/helix/wrappers.tsx for type-safe approach)
- */
 export default function Home() {
   const [name, setName] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const nameInputRef = useRef<HTMLElement>(null);
   const greetBtnRef = useRef<HTMLElement>(null);
 
-  // Pattern: addEventListener for custom events from web components
   useEffect(() => {
     const input = nameInputRef.current;
     const btn = greetBtnRef.current;
@@ -1270,134 +1789,692 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 700 }}>
-            Welcome to HELiX
-          </h1>
-          <p style={{ color: '#666' }}>
-            Enterprise web components, running in Next.js 15.
+    <hx-theme theme="auto">
+      <Navbar />
+
+      {/* Hero */}
+      <section className="hero">
+        <div className="container">
+          <h1>HELiX + Next.js 16</h1>
+          <p>
+            Enterprise-grade web components running natively in React.
+            75+ accessible, themeable components with Shadow DOM encapsulation.
           </p>
-        </div>
-      </div>
-
-      <hx-divider></hx-divider>
-
-      <hx-tabs style={{ marginTop: '2rem' }}>
-        <hx-tab slot="nav">Interactive Demo</hx-tab>
-        <hx-tab slot="nav">Theming</hx-tab>
-        <hx-tab slot="nav">Patterns</hx-tab>
-
-        <hx-tab-panel>
-          <div style={{ padding: '2rem 0', display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-            <hx-card>
-              <div slot="header">
-                <h3>Quick Start</h3>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <hx-text-input
-                  ref={nameInputRef}
-                  label="Your name"
-                  placeholder="Enter your name"
-                ></hx-text-input>
-                <hx-button ref={greetBtnRef} variant="primary">
-                  Say Hello
-                </hx-button>
-                {submitted && (
-                  <hx-alert variant="success" open>
-                    Hello, {name || 'World'}! HELiX components are working in React.
-                  </hx-alert>
-                )}
-              </div>
-            </hx-card>
-
-            <hx-card>
-              <div slot="header">
-                <h3>Button Variants</h3>
-                <hx-badge variant="info">Shadow DOM</hx-badge>
-              </div>
-              <p style={{ marginBottom: '1rem', color: '#666' }}>
-                HELiX components use Shadow DOM. Style them via CSS custom properties
-                and ::part() selectors.
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <hx-button variant="primary" size="sm">Primary</hx-button>
-                <hx-button variant="secondary" size="sm">Secondary</hx-button>
-                <hx-button variant="danger" size="sm">Danger</hx-button>
-                <hx-button variant="ghost" size="sm">Ghost</hx-button>
-              </div>
-            </hx-card>
-
-            <hx-card>
-              <div slot="header">
-                <h3>Event Handling</h3>
-              </div>
-              <p style={{ color: '#666' }}>
-                Use <code>useRef</code> + <code>addEventListener</code> for custom events,
-                or use the @lit/react wrappers in <code>src/components/helix/wrappers.tsx</code>
-                for a more React-native experience.
-              </p>
-              <pre style={{
-                marginTop: '1rem',
-                padding: '1rem',
-                borderRadius: '0.5rem',
-                background: '#f5f5f5',
-                fontSize: '0.8rem',
-                overflow: 'auto',
-              }}>
-{String.raw\`// Option 1: useRef + addEventListener
-const ref = useRef(null);
-useEffect(() => {
-  ref.current?.addEventListener(
-    'hx-click', handler
-  );
-}, []);
-
-// Option 2: @lit/react wrappers
-import { HxButton } from './wrappers';
-<HxButton onHxClick={handler} />\`}
-              </pre>
-            </hx-card>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <hx-button variant="primary" size="lg">
+              <Link href="/examples/forms" style={{ color: 'inherit', textDecoration: 'none' }}>
+                See Forms Demo
+              </Link>
+            </hx-button>
+            <hx-button variant="secondary" size="lg">
+              <Link href="/examples/dashboard" style={{ color: 'inherit', textDecoration: 'none' }}>
+                See Dashboard Demo
+              </Link>
+            </hx-button>
           </div>
-        </hx-tab-panel>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+            <hx-tag>Lit 3</hx-tag>
+            <hx-tag>Shadow DOM</hx-tag>
+            <hx-tag>WCAG 2.1 AA</hx-tag>
+            <hx-tag>SSR-Safe</hx-tag>
+            <hx-tag>React 19</hx-tag>
+            <hx-tag>Next.js 16</hx-tag>
+          </div>
+        </div>
+      </section>
 
-        <hx-tab-panel>
-          <div style={{ padding: '2rem 0' }}>
-            <hx-card>
-              <div slot="header"><h3>CSS Custom Properties</h3></div>
-              <p>Override design tokens to match your brand:</p>
-              <pre style={{ marginTop: '1rem', padding: '1rem', background: '#f5f5f5', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
-{String.raw\`:root {
+      {/* Component Showcase */}
+      <section className="container section">
+        <div className="section-header">
+          <h2>Component Showcase</h2>
+          <p>A sampling of HELiX components — all rendered as native web components via Shadow DOM.</p>
+        </div>
+
+        <div className="grid-auto">
+          {/* Interactive Card */}
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Interactive Input</h3>
+              <hx-badge variant="info">Forms</hx-badge>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <hx-text-input
+                ref={nameInputRef}
+                label="Your name"
+                placeholder="Enter your name"
+              ></hx-text-input>
+              <hx-button ref={greetBtnRef} variant="primary">
+                Say Hello
+              </hx-button>
+              {submitted && (
+                <hx-alert variant="success" open>
+                  Hello, {name || 'World'}! HELiX components are working.
+                </hx-alert>
+              )}
+            </div>
+          </hx-card>
+
+          {/* Button Variants */}
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Button Variants</h3>
+              <hx-badge variant="success">Actions</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+              All button styles respond to the active theme.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <hx-button variant="primary" size="sm">Primary</hx-button>
+              <hx-button variant="secondary" size="sm">Secondary</hx-button>
+              <hx-button variant="danger" size="sm">Danger</hx-button>
+              <hx-button variant="ghost" size="sm">Ghost</hx-button>
+            </div>
+          </hx-card>
+
+          {/* Data Display */}
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Data Display</h3>
+              <hx-badge variant="warning">Metrics</hx-badge>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Build Status</span>
+                <hx-badge variant="success">Passing</hx-badge>
+              </div>
+              <hx-progress-bar value={87} max={100}></hx-progress-bar>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <hx-tag>v1.1.2</hx-tag>
+                <hx-tag>stable</hx-tag>
+                <hx-tag>MIT</hx-tag>
+              </div>
+            </div>
+          </hx-card>
+
+          {/* Avatars & Badges */}
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Avatars &amp; Badges</h3>
+              <hx-badge variant="danger">Identity</hx-badge>
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <hx-avatar size="sm">AB</hx-avatar>
+              <hx-avatar size="md">CD</hx-avatar>
+              <hx-avatar size="lg">EF</hx-avatar>
+              <hx-divider vertical style={{ height: '2rem' }}></hx-divider>
+              <hx-badge variant="info">Info</hx-badge>
+              <hx-badge variant="success">Success</hx-badge>
+              <hx-badge variant="warning">Warning</hx-badge>
+              <hx-badge variant="danger">Danger</hx-badge>
+            </div>
+          </hx-card>
+        </div>
+      </section>
+
+      {/* Tabbed Content */}
+      <section className="container section" style={{ borderTop: '1px solid var(--hx-page-border)' }}>
+        <hx-tabs>
+          <hx-tab slot="nav">React Patterns</hx-tab>
+          <hx-tab slot="nav">Theming</hx-tab>
+          <hx-tab slot="nav">Event Handling</hx-tab>
+
+          <hx-tab-panel>
+            <div style={{ padding: '1.5rem 0' }}>
+              <hx-card>
+                <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>Using HELiX in Next.js 16</h3>
+                  <hx-badge variant="info">Architecture</hx-badge>
+                </div>
+                <ul style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
+                  <li><strong>Server Components</strong> render hx-* tags as inert HTML — zero JS shipped</li>
+                  <li><strong>Client Components</strong> (<code>&apos;use client&apos;</code>) hydrate and activate interactivity</li>
+                  <li><strong>HelixProvider</strong> in your root layout loads components via dynamic import</li>
+                  <li><strong>@lit/react wrappers</strong> bridge properties and events for type-safe React usage</li>
+                  <li><strong>hx-theme</strong> wraps content and injects CSS tokens for light/dark/high-contrast</li>
+                </ul>
+              </hx-card>
+            </div>
+          </hx-tab-panel>
+
+          <hx-tab-panel>
+            <div style={{ padding: '1.5rem 0' }}>
+              <hx-card>
+                <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>CSS Custom Properties</h3>
+                  <hx-badge variant="success">Tokens</hx-badge>
+                </div>
+                <p style={{ marginBottom: '1rem' }}>
+                  HELiX uses a three-tier token system: primitive, semantic, and component.
+                  Override at the semantic tier to respect theme scoping:
+                </p>
+                <pre style={{ padding: '1rem', borderRadius: '0.5rem', fontSize: '0.85rem', overflow: 'auto' }}>
+{\`:root {
   --hx-color-primary: #0066cc;
+  --hx-color-success: #22c55e;
   --hx-spacing-md: 1rem;
-  --hx-radius-md: 0.5rem;
 }
 
-/* ::part() for internal elements */
+/* ::part() targets Shadow DOM internals */
 hx-button::part(button) {
-  font-weight: 700;
-}\`}
-              </pre>
-            </hx-card>
-          </div>
-        </hx-tab-panel>
+  font-weight: 600;
+}
 
-        <hx-tab-panel>
-          <div style={{ padding: '2rem 0' }}>
-            <hx-card>
-              <div slot="header"><h3>Next.js Patterns</h3></div>
-              <ul style={{ lineHeight: '2' }}>
-                <li><strong>Client Components:</strong> Web components need <code>&apos;use client&apos;</code> — they require DOM</li>
-                <li><strong>HelixProvider:</strong> Wraps your layout to initialize components client-side</li>
-                <li><strong>Dynamic Import:</strong> HELiX loads via <code>import(&apos;@helixui/library&apos;)</code> in useEffect</li>
-                <li><strong>SSR:</strong> Components render as empty custom elements server-side, hydrate on client</li>
-              </ul>
-            </hx-card>
-          </div>
-        </hx-tab-panel>
-      </hx-tabs>
-    </main>
+hx-card::part(card) {
+  border: 1px solid var(--hx-color-border);
+}\`}
+                </pre>
+              </hx-card>
+            </div>
+          </hx-tab-panel>
+
+          <hx-tab-panel>
+            <div style={{ padding: '1.5rem 0' }}>
+              <hx-card>
+                <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>Two Approaches</h3>
+                  <hx-badge variant="warning">Events</hx-badge>
+                </div>
+                <pre style={{ padding: '1rem', borderRadius: '0.5rem', fontSize: '0.85rem', overflow: 'auto' }}>
+{\`// 1. Direct custom elements + useRef
+const ref = useRef<HTMLElement>(null);
+useEffect(() => {
+  ref.current?.addEventListener('hx-click', handler);
+  return () => ref.current?.removeEventListener('hx-click', handler);
+}, []);
+<hx-button ref={ref}>Click</hx-button>
+
+// 2. @lit/react wrappers (recommended)
+import { HxButton } from '@/components/helix/wrappers';
+<HxButton onHxClick={handler}>Click</HxButton>\`}
+                </pre>
+              </hx-card>
+            </div>
+          </hx-tab-panel>
+        </hx-tabs>
+      </section>
+
+      {/* Ecosystem Promos */}
+      <section className="container section" style={{ borderTop: '1px solid var(--hx-page-border)' }}>
+        <div className="section-header">
+          <h2>The Booked Solid Ecosystem</h2>
+          <p>Enterprise-grade tools for modern web development and AI-powered workflows.</p>
+        </div>
+        <div className="promo-grid">
+          <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer" className="promo-card">
+            <img
+              src="/og/helixui.png"
+              alt="HELiX UI — 80+ enterprise web components. Zero framework lock-in."
+              className="promo-card-image"
+            />
+            <div className="promo-card-body">
+              <h3>HELiX UI</h3>
+              <p>
+                80+ enterprise web components built on Lit 3. Shadow DOM encapsulation,
+                healthcare-first accessibility, and W3C DTCG design tokens. Works everywhere.
+              </p>
+              <span className="promo-card-cta">Explore HELiX UI &rarr;</span>
+            </div>
+          </a>
+          <a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer" className="promo-card">
+            <img
+              src="/og/helixir.png"
+              alt="HELiXiR — 37 MCP tools. 87 components loaded. Zero guesswork."
+              className="promo-card-image"
+            />
+            <div className="promo-card-body">
+              <h3>HELiXiR</h3>
+              <p>
+                MCP server for any CEM-compliant web component library. Connect to Claude, Cursor,
+                or any MCP client. Components, tokens, slots, and a11y scores — all queryable.
+              </p>
+              <span className="promo-card-cta">Explore HELiXiR &rarr;</span>
+            </div>
+          </a>
+          <a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer" className="promo-card">
+            <img
+              src="/og/discord-ops.png"
+              alt="Discord-Ops — Agency-grade Discord for AI agents."
+              className="promo-card-image"
+            />
+            <div className="promo-card-body">
+              <h3>Discord-Ops</h3>
+              <p>
+                Agency-grade Discord MCP server for AI agents. 45 tools, 23 message templates,
+                multi-guild routing, and multi-bot support. Send messages by project name, not channel IDs.
+              </p>
+              <span className="promo-card-cta">Explore Discord-Ops &rarr;</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      {/* Developer Guidance */}
+      <section className="container section" style={{ borderTop: '1px solid var(--hx-page-border)', paddingBottom: '5rem' }}>
+        <div className="section-header">
+          <h2>Getting Started</h2>
+          <p>Your project is ready. Here are the key files and next steps.</p>
+        </div>
+
+        <div className="grid-3">
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Key Files</h3>
+              <hx-badge variant="info">Reference</hx-badge>
+            </div>
+            <ul style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
+              <li><code>src/components/helix/wrappers.tsx</code> — React-wrapped components</li>
+              <li><code>src/components/helix/provider.tsx</code> — Client-side initializer</li>
+              <li><code>src/helix.d.ts</code> — JSX type declarations</li>
+              <li><code>src/components/navbar.tsx</code> — Top navigation</li>
+              <li><code>src/components/theme-toggle.tsx</code> — Dark mode switch</li>
+              <li><code>helix-tokens.css</code> — Design token overrides</li>
+            </ul>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Commands</h3>
+              <hx-badge variant="success">CLI</hx-badge>
+            </div>
+            <ul style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
+              <li><code>npm run dev</code> — Start dev server</li>
+              <li><code>npm run build</code> — Production build</li>
+              <li><code>npm run lint</code> — Lint with ESLint</li>
+            </ul>
+            <hx-divider style={{ margin: '1rem 0' }}></hx-divider>
+            <p style={{ fontSize: '0.875rem' }} className="text-secondary">
+              Add more HELiX components by importing them in <code>wrappers.tsx</code>.
+              The full list is in <code>@helixui/library/components/*</code>.
+            </p>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Next Steps</h3>
+              <hx-badge variant="warning">Action</hx-badge>
+            </div>
+            <ul style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
+              <li>Customize your theme in <code>helix-tokens.css</code></li>
+              <li>Add more components from the <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">component library</a></li>
+              <li>Explore <Link href="/examples/forms">form participation</Link></li>
+              <li>Build a <Link href="/examples/dashboard">data dashboard</Link></li>
+            </ul>
+          </hx-card>
+        </div>
+      </section>
+
+      <Footer />
+    </hx-theme>
+  );
+}
+`,
+  );
+
+  // Components page — overview of available HELiX components
+  const componentsDir = path.join(appDir, 'components');
+  await safeEnsureDir(componentsDir);
+  await safeWriteFile(
+    path.join(componentsDir, 'page.tsx'),
+    `'use client';
+
+import { Navbar } from '@/components/navbar';
+import { Footer } from '@/components/footer';
+
+export default function ComponentsPage() {
+  return (
+    <hx-theme theme="auto">
+      <Navbar />
+      <section className="hero" style={{ padding: '3rem 2rem' }}>
+        <div className="container">
+          <h1>Component Library</h1>
+          <p>Browse the full HELiX component catalog. Each component is built on Lit 3 with Shadow DOM encapsulation.</p>
+        </div>
+      </section>
+
+      <section className="container section">
+        <div className="section-header">
+          <h2>Core UI</h2>
+          <p>Essential building blocks for any interface.</p>
+        </div>
+        <div className="grid-4">
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Button</h3>
+              <hx-badge variant="success">Stable</hx-badge>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <hx-button variant="primary" size="sm">Primary</hx-button>
+              <hx-button variant="secondary" size="sm">Secondary</hx-button>
+              <hx-button variant="ghost" size="sm">Ghost</hx-button>
+            </div>
+            <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
+              Multi-variant button with loading states, icons, and full keyboard support.
+            </p>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Badge</h3>
+              <hx-badge variant="success">Stable</hx-badge>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <hx-badge variant="info">Info</hx-badge>
+              <hx-badge variant="success">Success</hx-badge>
+              <hx-badge variant="warning">Warning</hx-badge>
+              <hx-badge variant="danger">Error</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
+              Status indicators with semantic color variants.
+            </p>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Card</h3>
+              <hx-badge variant="success">Stable</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
+              Content container with optional header, footer, and media slots. Supports elevation and border variants.
+            </p>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Avatar</h3>
+              <hx-badge variant="success">Stable</hx-badge>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem' }}>
+              <hx-avatar size="sm">AB</hx-avatar>
+              <hx-avatar size="md">CD</hx-avatar>
+              <hx-avatar size="lg">EF</hx-avatar>
+            </div>
+            <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
+              User identity with initials, image, or icon support.
+            </p>
+          </hx-card>
+        </div>
+      </section>
+
+      <section className="container section" style={{ borderTop: '1px solid var(--hx-page-border)' }}>
+        <div className="section-header">
+          <h2>Form Controls</h2>
+          <p>Fully accessible form components with native form participation.</p>
+        </div>
+        <div className="grid-3">
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Text Input</h3>
+              <hx-badge variant="info">Forms</hx-badge>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <hx-text-input label="Email" placeholder="you@example.com" type="email"></hx-text-input>
+              <hx-text-input label="Password" placeholder="Enter password" type="password"></hx-text-input>
+            </div>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Checkbox &amp; Switch</h3>
+              <hx-badge variant="info">Forms</hx-badge>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <hx-checkbox>Enable notifications</hx-checkbox>
+              <hx-checkbox>Subscribe to updates</hx-checkbox>
+              <hx-switch>Dark mode</hx-switch>
+            </div>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Select</h3>
+              <hx-badge variant="info">Forms</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Dropdown select with search, multi-select, groups, and custom rendering. Uses Shadow DOM for style isolation.
+            </p>
+            <hx-select label="Framework" placeholder="Choose one">
+              <option value="react">React</option>
+              <option value="vue">Vue</option>
+              <option value="svelte">Svelte</option>
+            </hx-select>
+          </hx-card>
+        </div>
+      </section>
+
+      <section className="container section" style={{ borderTop: '1px solid var(--hx-page-border)', paddingBottom: '4rem' }}>
+        <div className="section-header">
+          <h2>Data &amp; Feedback</h2>
+          <p>Components for displaying data, status, and user feedback.</p>
+        </div>
+        <div className="grid-3">
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Progress</h3>
+              <hx-badge variant="warning">Metrics</hx-badge>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Upload</span>
+                <hx-progress-bar value={72} max={100}></hx-progress-bar>
+              </div>
+              <div>
+                <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Build</span>
+                <hx-progress-bar value={100} max={100}></hx-progress-bar>
+              </div>
+              <div>
+                <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Deploy</span>
+                <hx-progress-bar value={45} max={100}></hx-progress-bar>
+              </div>
+            </div>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Tags &amp; Chips</h3>
+              <hx-badge variant="success">Display</hx-badge>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <hx-tag>TypeScript</hx-tag>
+              <hx-tag>React 19</hx-tag>
+              <hx-tag>Next.js 16</hx-tag>
+              <hx-tag>Lit 3</hx-tag>
+              <hx-tag>Shadow DOM</hx-tag>
+              <hx-tag>WCAG 2.1</hx-tag>
+            </div>
+            <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
+              Lightweight metadata labels for categorization and filtering.
+            </p>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Alerts</h3>
+              <hx-badge variant="danger">Feedback</hx-badge>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <hx-alert variant="info" open>Informational message</hx-alert>
+              <hx-alert variant="success" open>Operation successful</hx-alert>
+              <hx-alert variant="warning" open>Caution advised</hx-alert>
+            </div>
+          </hx-card>
+        </div>
+      </section>
+
+      <Footer />
+    </hx-theme>
+  );
+}
+`,
+  );
+
+  // Docs page — getting started guide
+  const docsDir = path.join(appDir, 'docs');
+  await safeEnsureDir(docsDir);
+  await safeWriteFile(
+    path.join(docsDir, 'page.tsx'),
+    `'use client';
+
+import { Navbar } from '@/components/navbar';
+import { Footer } from '@/components/footer';
+
+export default function DocsPage() {
+  return (
+    <hx-theme theme="auto">
+      <Navbar />
+      <section className="hero" style={{ padding: '3rem 2rem' }}>
+        <div className="container">
+          <h1>Documentation</h1>
+          <p>Everything you need to build with HELiX components in your Next.js application.</p>
+        </div>
+      </section>
+
+      <section className="container section">
+        <div className="grid-auto">
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Quick Start</h3>
+              <hx-badge variant="info">Guide</hx-badge>
+            </div>
+            <ol style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
+              <li>Import components in <code>src/components/helix/wrappers.tsx</code></li>
+              <li>Use them as React components with full type safety</li>
+              <li>Customize tokens in <code>helix-tokens.css</code></li>
+              <li>Override Shadow DOM styles with <code>::part()</code> selectors</li>
+            </ol>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Architecture</h3>
+              <hx-badge variant="warning">Concepts</hx-badge>
+            </div>
+            <ul style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
+              <li><strong>Web Components</strong> — Standards-based, framework-agnostic</li>
+              <li><strong>Shadow DOM</strong> — Style encapsulation, no CSS leaks</li>
+              <li><strong>Lit 3</strong> — Reactive properties, declarative templates</li>
+              <li><strong>@lit/react</strong> — Property/event bridging for React</li>
+              <li><strong>hx-theme</strong> — Token injection via adopted stylesheets</li>
+            </ul>
+          </hx-card>
+        </div>
+      </section>
+
+      <section className="container section" style={{ borderTop: '1px solid var(--hx-page-border)' }}>
+        <div className="section-header">
+          <h2>Integration Patterns</h2>
+        </div>
+        <div className="grid-3">
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Server Components</h3>
+              <hx-badge variant="success">SSR</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+              HELiX tags render as declarative HTML in Server Components. No JavaScript shipped to the client until hydration.
+            </p>
+            <pre style={{ padding: '1rem', borderRadius: '0.5rem', fontSize: '0.85rem', overflow: 'auto' }}>
+{\`// Server Component (default)
+export default function Page() {
+  return (
+    <hx-card>
+      <div slot="header">Title</div>
+      <p>Static content, zero JS</p>
+    </hx-card>
+  );
+}\`}
+            </pre>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Client Components</h3>
+              <hx-badge variant="info">Interactive</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+              Add interactivity with client components. Use @lit/react wrappers for type-safe event handling.
+            </p>
+            <pre style={{ padding: '1rem', borderRadius: '0.5rem', fontSize: '0.85rem', overflow: 'auto' }}>
+{\`'use client';
+import { HxButton } from
+  '@/components/helix/wrappers';
+
+<HxButton
+  onHxClick={handleClick}
+  variant="primary"
+>
+  Click me
+</HxButton>\`}
+            </pre>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Theming</h3>
+              <hx-badge variant="warning">Tokens</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+              Override design tokens at the semantic tier. Changes cascade through all components automatically.
+            </p>
+            <pre style={{ padding: '1rem', borderRadius: '0.5rem', fontSize: '0.85rem', overflow: 'auto' }}>
+{\`/* helix-tokens.css */
+:root {
+  --hx-color-primary: #0066cc;
+  --hx-font-family: 'Inter';
+  --hx-border-radius-md: 8px;
+}\`}
+            </pre>
+          </hx-card>
+        </div>
+      </section>
+
+      <section className="container section" style={{ borderTop: '1px solid var(--hx-page-border)', paddingBottom: '4rem' }}>
+        <div className="section-header">
+          <h2>Resources</h2>
+        </div>
+        <div className="grid-3">
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>API Reference</h3>
+              <hx-badge variant="info">External</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+              Full component API documentation including properties, events, slots, and CSS custom properties.
+            </p>
+            <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">
+              View API Docs &rarr;
+            </a>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Source Code</h3>
+              <hx-badge variant="success">Open Source</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+              HELiX is open source under the MIT license. Contributions welcome.
+            </p>
+            <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">
+              View on GitHub &rarr;
+            </a>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>HELiXiR MCP</h3>
+              <hx-badge variant="warning">AI Tools</hx-badge>
+            </div>
+            <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+              Query component metadata, tokens, and a11y scores from your AI coding assistant.
+            </p>
+            <a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">
+              Learn More &rarr;
+            </a>
+          </hx-card>
+        </div>
+      </section>
+
+      <Footer />
+    </hx-theme>
   );
 }
 `,
@@ -1413,18 +2490,14 @@ hx-button::part(button) {
     `'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { Navbar } from '@/components/navbar';
+import { Footer } from '@/components/footer';
 
 /**
  * Form Participation Example
  *
  * HELiX form components use ElementInternals to participate in native HTML forms.
  * This means they work with FormData, form validation, and submit/reset events.
- *
- * Key patterns demonstrated:
- * 1. Native form submission with FormData
- * 2. Custom event handling for real-time validation
- * 3. Form reset behavior
- * 4. Accessible error states
  */
 export default function FormsExample() {
   const formRef = useRef<HTMLFormElement>(null);
@@ -1452,65 +2525,69 @@ export default function FormsExample() {
   }, []);
 
   return (
-    <main className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>Form Participation</h1>
-      <p style={{ color: 'var(--hx-color-text-secondary, #666)', marginBottom: '2rem' }}>
-        HELiX form components participate in native HTML forms via ElementInternals.
-        No special React wrappers needed — just use a standard {'<form>'} element.
-      </p>
+    <hx-theme theme="auto">
+      <Navbar />
+      <main className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem', maxWidth: '800px', margin: '0 auto' }}>
+        <h1 style={{ marginBottom: '0.5rem' }}>Form Participation</h1>
+        <p style={{ color: 'var(--hx-color-text-secondary, #666)', marginBottom: '2rem' }}>
+          HELiX form components participate in native HTML forms via ElementInternals.
+          No special React wrappers needed — just use a standard {'<form>'} element.
+        </p>
 
-      <hx-card>
-        <div slot="header"><h2>Registration Form</h2></div>
-        <form ref={formRef} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr' }}>
-            <hx-text-input name="firstName" label="First name" placeholder="Jane" required></hx-text-input>
-            <hx-text-input name="lastName" label="Last name" placeholder="Doe" required></hx-text-input>
-          </div>
-          <hx-text-input name="email" label="Email" type="email" placeholder="jane@example.com" required></hx-text-input>
-          <hx-textarea name="bio" label="Bio" placeholder="Tell us about yourself..." rows={3}></hx-textarea>
-          <hx-select name="role" label="Role">
-            <option value="">Select a role...</option>
-            <option value="developer">Developer</option>
-            <option value="designer">Designer</option>
-            <option value="manager">Manager</option>
-          </hx-select>
-          <hx-checkbox name="terms" label="I agree to the terms and conditions" required></hx-checkbox>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <hx-button variant="primary" type="submit">Submit</hx-button>
-            <hx-button variant="secondary" type="reset">Reset</hx-button>
-          </div>
-        </form>
-      </hx-card>
-
-      {submitted && (
-        <hx-card style={{ marginTop: '1.5rem' }}>
-          <div slot="header">
-            <h3>Form Data (from FormData API)</h3>
-            <hx-badge variant="success">Submitted</hx-badge>
-          </div>
-          <pre style={{
-            padding: '1rem',
-            background: 'var(--hx-color-surface-hover, #f5f5f5)',
-            borderRadius: '0.5rem',
-            fontSize: '0.85rem',
-            overflow: 'auto',
-          }}>
-            {JSON.stringify(formData, null, 2)}
-          </pre>
+        <hx-card>
+          <div slot="header"><h2>Registration Form</h2></div>
+          <form ref={formRef} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr' }}>
+              <hx-text-input name="firstName" label="First name" placeholder="Jane" required></hx-text-input>
+              <hx-text-input name="lastName" label="Last name" placeholder="Doe" required></hx-text-input>
+            </div>
+            <hx-text-input name="email" label="Email" type="email" placeholder="jane@example.com" required></hx-text-input>
+            <hx-textarea name="bio" label="Bio" placeholder="Tell us about yourself..." rows={3}></hx-textarea>
+            <hx-select name="role" label="Role">
+              <option value="">Select a role...</option>
+              <option value="developer">Developer</option>
+              <option value="designer">Designer</option>
+              <option value="manager">Manager</option>
+            </hx-select>
+            <hx-checkbox name="terms" label="I agree to the terms and conditions" required></hx-checkbox>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <hx-button variant="primary" type="submit">Submit</hx-button>
+              <hx-button variant="secondary" type="reset">Reset</hx-button>
+            </div>
+          </form>
         </hx-card>
-      )}
 
-      <hx-card style={{ marginTop: '1.5rem' }}>
-        <div slot="header"><h3>How It Works</h3></div>
-        <ul style={{ lineHeight: '2' }}>
-          <li><strong>ElementInternals:</strong> Each HELiX form component calls <code>this.internals.setFormValue()</code></li>
-          <li><strong>FormData:</strong> Values appear in <code>new FormData(form)</code> automatically</li>
-          <li><strong>Validation:</strong> Components report validity via <code>internals.setValidity()</code></li>
-          <li><strong>Reset:</strong> Forms reset web components via <code>formResetCallback()</code></li>
-          <li><strong>No wrappers needed:</strong> This is native browser behavior, not framework-specific</li>
-        </ul>
-      </hx-card>
-    </main>
+        {submitted && (
+          <hx-card style={{ marginTop: '1.5rem' }}>
+            <div slot="header">
+              <h3>Form Data (from FormData API)</h3>
+              <hx-badge variant="success">Submitted</hx-badge>
+            </div>
+            <pre style={{
+              padding: '1rem',
+              background: 'var(--hx-color-surface-hover, #f5f5f5)',
+              borderRadius: '0.5rem',
+              fontSize: '0.85rem',
+              overflow: 'auto',
+            }}>
+              {JSON.stringify(formData, null, 2)}
+            </pre>
+          </hx-card>
+        )}
+
+        <hx-card style={{ marginTop: '1.5rem' }}>
+          <div slot="header"><h3>How It Works</h3></div>
+          <ul style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
+            <li><strong>ElementInternals:</strong> Each HELiX form component calls <code>this.internals.setFormValue()</code></li>
+            <li><strong>FormData:</strong> Values appear in <code>new FormData(form)</code> automatically</li>
+            <li><strong>Validation:</strong> Components report validity via <code>internals.setValidity()</code></li>
+            <li><strong>Reset:</strong> Forms reset web components via <code>formResetCallback()</code></li>
+            <li><strong>No wrappers needed:</strong> This is native browser behavior, not framework-specific</li>
+          </ul>
+        </hx-card>
+      </main>
+      <Footer />
+    </hx-theme>
   );
 }
 `,
@@ -1524,6 +2601,9 @@ export default function FormsExample() {
     path.join(dashboardDir, 'page.tsx'),
     `'use client';
 
+import { Navbar } from '@/components/navbar';
+import { Footer } from '@/components/footer';
+
 /**
  * Dashboard Example
  *
@@ -1531,151 +2611,114 @@ export default function FormsExample() {
  */
 export default function DashboardExample() {
   return (
-    <main className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <div>
-          <h1>Dashboard</h1>
-          <p style={{ color: 'var(--hx-color-text-secondary, #666)' }}>HELiX data display components in action.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <hx-button variant="secondary" size="sm">Export</hx-button>
-          <hx-button variant="primary" size="sm">New Report</hx-button>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '2rem' }}>
-        <hx-card>
-          <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Total Users</h3></div>
-          <div style={{ fontSize: '2rem', fontWeight: 700 }}>2,847</div>
-          <hx-badge variant="success" style={{ marginTop: '0.5rem' }}>+12.5%</hx-badge>
-        </hx-card>
-        <hx-card>
-          <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Active Sessions</h3></div>
-          <div style={{ fontSize: '2rem', fontWeight: 700 }}>1,024</div>
-          <hx-badge variant="info" style={{ marginTop: '0.5rem' }}>Live</hx-badge>
-        </hx-card>
-        <hx-card>
-          <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Uptime</h3></div>
-          <div style={{ fontSize: '2rem', fontWeight: 700 }}>99.9%</div>
-          <hx-progress-bar value={99.9} max={100} style={{ marginTop: '0.5rem' }}></hx-progress-bar>
-        </hx-card>
-        <hx-card>
-          <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Response Time</h3></div>
-          <div style={{ fontSize: '2rem', fontWeight: 700 }}>142ms</div>
-          <hx-badge variant="warning" style={{ marginTop: '0.5rem' }}>Avg</hx-badge>
-        </hx-card>
-      </div>
-
-      <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: '2fr 1fr' }}>
-        <hx-card>
-          <div slot="header">
-            <h3>Recent Activity</h3>
+    <hx-theme theme="auto">
+      <Navbar />
+      <main className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <div>
+            <h1>Dashboard</h1>
+            <p style={{ color: 'var(--hx-color-text-secondary, #666)' }}>HELiX data display components in action.</p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {[
-              { user: 'Sarah Chen', action: 'Deployed v2.4.1', time: '2 min ago', variant: 'success' as const },
-              { user: 'Mike Johnson', action: 'Created pull request #847', time: '15 min ago', variant: 'info' as const },
-              { user: 'Emily Park', action: 'Merged feature/auth-flow', time: '1 hr ago', variant: 'info' as const },
-              { user: 'Alex Rivera', action: 'Reported bug #312', time: '3 hrs ago', variant: 'warning' as const },
-            ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid var(--hx-color-border, #eee)' }}>
-                <hx-avatar size="sm">{item.user.split(' ').map(n => n[0]).join('')}</hx-avatar>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500 }}>{item.user}</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>{item.action}</div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <hx-button variant="secondary" size="sm">Export</hx-button>
+            <hx-button variant="primary" size="sm">New Report</hx-button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '2rem' }}>
+          <hx-card>
+            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Total Users</h3></div>
+            <div style={{ fontSize: '2rem', fontWeight: 700 }}>2,847</div>
+            <hx-badge variant="success" style={{ marginTop: '0.5rem' }}>+12.5%</hx-badge>
+          </hx-card>
+          <hx-card>
+            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Active Sessions</h3></div>
+            <div style={{ fontSize: '2rem', fontWeight: 700 }}>1,024</div>
+            <hx-badge variant="info" style={{ marginTop: '0.5rem' }}>Live</hx-badge>
+          </hx-card>
+          <hx-card>
+            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Uptime</h3></div>
+            <div style={{ fontSize: '2rem', fontWeight: 700 }}>99.9%</div>
+            <hx-progress-bar value={99.9} max={100} style={{ marginTop: '0.5rem' }}></hx-progress-bar>
+          </hx-card>
+          <hx-card>
+            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Response Time</h3></div>
+            <div style={{ fontSize: '2rem', fontWeight: 700 }}>142ms</div>
+            <hx-badge variant="warning" style={{ marginTop: '0.5rem' }}>Avg</hx-badge>
+          </hx-card>
+        </div>
+
+        <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: '2fr 1fr' }}>
+          <hx-card>
+            <div slot="header">
+              <h3>Recent Activity</h3>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {[
+                { user: 'Sarah Chen', action: 'Deployed v2.4.1', time: '2 min ago', variant: 'success' as const },
+                { user: 'Mike Johnson', action: 'Created pull request #847', time: '15 min ago', variant: 'info' as const },
+                { user: 'Emily Park', action: 'Merged feature/auth-flow', time: '1 hr ago', variant: 'info' as const },
+                { user: 'Alex Rivera', action: 'Reported bug #312', time: '3 hrs ago', variant: 'warning' as const },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid var(--hx-color-border, #eee)' }}>
+                  <hx-avatar size="sm">{item.user.split(' ').map(n => n[0]).join('')}</hx-avatar>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500 }}>{item.user}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>{item.action}</div>
+                  </div>
+                  <hx-badge variant={item.variant}>{item.time}</hx-badge>
                 </div>
-                <hx-badge variant={item.variant}>{item.time}</hx-badge>
-              </div>
-            ))}
-          </div>
-        </hx-card>
-
-        <hx-card>
-          <div slot="header"><h3>System Status</h3></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                <span>CPU</span><span>67%</span>
-              </div>
-              <hx-progress-bar value={67} max={100}></hx-progress-bar>
+              ))}
             </div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                <span>Memory</span><span>4.2 / 8 GB</span>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header"><h3>System Status</h3></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                  <span>CPU</span><span>67%</span>
+                </div>
+                <hx-progress-bar value={67} max={100}></hx-progress-bar>
               </div>
-              <hx-progress-bar value={52} max={100}></hx-progress-bar>
-            </div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                <span>Storage</span><span>180 / 500 GB</span>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                  <span>Memory</span><span>4.2 / 8 GB</span>
+                </div>
+                <hx-progress-bar value={52} max={100}></hx-progress-bar>
               </div>
-              <hx-progress-bar value={36} max={100}></hx-progress-bar>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                  <span>Storage</span><span>180 / 500 GB</span>
+                </div>
+                <hx-progress-bar value={36} max={100}></hx-progress-bar>
+              </div>
+              <hx-divider></hx-divider>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <hx-tag>us-east-1</hx-tag>
+                <hx-tag>production</hx-tag>
+                <hx-tag>k8s</hx-tag>
+              </div>
             </div>
-            <hx-divider></hx-divider>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <hx-tag>us-east-1</hx-tag>
-              <hx-tag>production</hx-tag>
-              <hx-tag>k8s</hx-tag>
-            </div>
-          </div>
-        </hx-card>
-      </div>
-
-      <hx-card style={{ marginTop: '1.5rem' }}>
-        <div slot="header"><h3>Styling Web Components</h3></div>
-        <p>All components above are styled via CSS custom properties. Override them in your globals.css:</p>
-        <pre style={{ marginTop: '1rem', padding: '1rem', background: 'var(--hx-color-surface-hover, #f5f5f5)', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
-{String.raw\`/* Override design tokens globally */
-:root {
-  --hx-color-primary: #0066cc;
-  --hx-color-success: #22c55e;
-}
-
-/* Style specific component internals via ::part() */
-hx-card::part(card) {
-  border: 1px solid var(--hx-color-border);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-hx-button::part(button) {
-  font-weight: 600;
-  letter-spacing: 0.025em;
-}\`}
-        </pre>
-      </hx-card>
-    </main>
+          </hx-card>
+        </div>
+      </main>
+      <Footer />
+    </hx-theme>
   );
 }
 `,
   );
 
-  // Examples layout with navigation
+  // Examples layout — simplified since each page has its own navbar
   await safeWriteFile(
     path.join(examplesDir, 'layout.tsx'),
-    `'use client';
-
-export default function ExamplesLayout({
+    `export default function ExamplesLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div>
-      <nav style={{
-        padding: '0.75rem 2rem',
-        borderBottom: '1px solid var(--hx-color-border, #eee)',
-        display: 'flex',
-        gap: '1rem',
-        alignItems: 'center',
-      }}>
-        <a href="/" style={{ textDecoration: 'none', fontWeight: 600 }}>HELiX</a>
-        <hx-divider vertical style={{ height: '1.5rem' }}></hx-divider>
-        <a href="/examples/forms" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Forms</a>
-        <a href="/examples/dashboard" style={{ textDecoration: 'none', color: 'var(--hx-color-text-secondary, #666)' }}>Dashboard</a>
-      </nav>
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }
 `,
   );
@@ -2253,59 +3296,1061 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
 async function scaffoldAstro(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const pagesDir = path.join(srcDir, 'pages');
+  const layoutsDir = path.join(srcDir, 'layouts');
+  const stylesDir = path.join(srcDir, 'styles');
+
   await safeEnsureDir(pagesDir);
+  await safeEnsureDir(layoutsDir);
+  await safeEnsureDir(stylesDir);
+
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await safeCopyDir(assetsSource, publicOgDir);
+  }
 
   // astro.config.mjs
   await safeWriteFile(
     path.join(options.directory, 'astro.config.mjs'),
     `import { defineConfig } from 'astro/config';
 
-export default defineConfig({});
+/**
+ * Astro configuration for HELiX web components.
+ *
+ * HELiX custom elements are native browser APIs — no Astro integration
+ * required. They work perfectly with Astro's zero-JS-by-default model.
+ */
+export default defineConfig({
+  // output: 'static' is the default — full SSG, perfect for HELiX
+  // Switch to 'server' or 'hybrid' for SSR routes
+});
 `,
   );
 
-  // Main page
+  // src/helix.d.ts — TypeScript ambient declarations for hx-* custom elements
   await safeWriteFile(
-    path.join(pagesDir, 'index.astro'),
+    path.join(srcDir, 'helix.d.ts'),
+    `/**
+ * Ambient TypeScript declarations for HELiX web components.
+ *
+ * Extends Astro's JSX IntrinsicElements so hx-* tags are type-safe
+ * in .astro files and any TypeScript code in this project.
+ */
+
+type HxAttrs = Record<string, unknown>;
+
+declare namespace astroHTML.JSX {
+  interface IntrinsicElements {
+    'hx-accordion': HxAttrs;
+    'hx-accordion-item': HxAttrs;
+    'hx-alert': HxAttrs;
+    'hx-avatar': HxAttrs;
+    'hx-badge': HxAttrs;
+    'hx-banner': HxAttrs;
+    'hx-breadcrumb': HxAttrs;
+    'hx-button': HxAttrs;
+    'hx-button-group': HxAttrs;
+    'hx-card': HxAttrs;
+    'hx-carousel': HxAttrs;
+    'hx-checkbox': HxAttrs;
+    'hx-checkbox-group': HxAttrs;
+    'hx-code-snippet': HxAttrs;
+    'hx-color-picker': HxAttrs;
+    'hx-combobox': HxAttrs;
+    'hx-counter': HxAttrs;
+    'hx-data-table': HxAttrs;
+    'hx-date-picker': HxAttrs;
+    'hx-dialog': HxAttrs;
+    'hx-divider': HxAttrs;
+    'hx-drawer': HxAttrs;
+    'hx-dropdown': HxAttrs;
+    'hx-field': HxAttrs;
+    'hx-field-label': HxAttrs;
+    'hx-file-upload': HxAttrs;
+    'hx-grid': HxAttrs;
+    'hx-hero': HxAttrs;
+    'hx-icon': HxAttrs;
+    'hx-icon-button': HxAttrs;
+    'hx-menu': HxAttrs;
+    'hx-menu-item': HxAttrs;
+    'hx-meter': HxAttrs;
+    'hx-nav': HxAttrs;
+    'hx-pagination': HxAttrs;
+    'hx-popover': HxAttrs;
+    'hx-progress-bar': HxAttrs;
+    'hx-progress-ring': HxAttrs;
+    'hx-radio-group': HxAttrs;
+    'hx-rating': HxAttrs;
+    'hx-select': HxAttrs;
+    'hx-skeleton': HxAttrs;
+    'hx-slider': HxAttrs;
+    'hx-spinner': HxAttrs;
+    'hx-split-button': HxAttrs;
+    'hx-split-panel': HxAttrs;
+    'hx-stat': HxAttrs;
+    'hx-status-indicator': HxAttrs;
+    'hx-switch': HxAttrs;
+    'hx-tab': HxAttrs;
+    'hx-tab-panel': HxAttrs;
+    'hx-tabs': HxAttrs;
+    'hx-tag': HxAttrs;
+    'hx-text': HxAttrs;
+    'hx-text-input': HxAttrs;
+    'hx-textarea': HxAttrs;
+    'hx-theme': HxAttrs;
+    'hx-toast': HxAttrs;
+    'hx-tooltip': HxAttrs;
+    'hx-top-nav': HxAttrs;
+    'hx-tree-item': HxAttrs;
+    'hx-tree-view': HxAttrs;
+  }
+}
+
+export {};
+`,
+  );
+
+  // src/styles/global.css
+  await safeWriteFile(
+    path.join(stylesDir, 'global.css'),
+    `${options.designTokens ? "@import '../../helix-tokens.css';\n\n" : ''}*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --hx-page-bg: #0a0a0f;
+  --hx-page-text: #e4e4e7;
+  --hx-page-text-secondary: #a1a1aa;
+  --hx-page-surface: #18181b;
+  --hx-page-surface-raised: #27272a;
+  --hx-page-border: #3f3f46;
+  --hx-page-code-bg: #27272a;
+}
+
+html[data-theme="light"],
+html:not([data-theme]) {
+  --hx-page-bg: #fafafa;
+  --hx-page-text: #18181b;
+  --hx-page-text-secondary: #71717a;
+  --hx-page-surface: #ffffff;
+  --hx-page-surface-raised: #f4f4f5;
+  --hx-page-border: #e4e4e7;
+  --hx-page-code-bg: #f4f4f5;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--hx-page-text);
+  background: var(--hx-page-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+a {
+  color: var(--hx-color-primary-500, #3b82f6);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--hx-page-text);
+  letter-spacing: -0.025em;
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--hx-page-code-bg);
+  color: var(--hx-page-text);
+}
+
+pre {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  background: var(--hx-page-code-bg) !important;
+  color: var(--hx-page-text);
+  border: 1px solid var(--hx-page-border);
+}
+
+.hero {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: var(--hx-page-surface);
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+.hero p {
+  font-size: 1.125rem;
+  color: var(--hx-page-text-secondary);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.section {
+  padding: 4rem 0;
+}
+
+.section-header {
+  margin-bottom: 2rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.section-header p {
+  color: var(--hx-page-text-secondary);
+}
+
+.grid-auto {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.grid-3 {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.text-secondary {
+  color: var(--hx-page-text-secondary);
+}
+
+hx-top-nav {
+  --hx-top-nav-bg: var(--hx-page-surface);
+  --hx-top-nav-color: var(--hx-page-text);
+  --hx-top-nav-border-color: var(--hx-page-border);
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+hx-top-nav::part(header) {
+  border-radius: 0;
+}
+
+hx-card {
+  --hx-card-bg: var(--hx-page-surface);
+  --hx-card-color: var(--hx-page-text);
+  --hx-card-border-color: var(--hx-page-border);
+}
+
+hx-card::part(header) {
+  background: var(--hx-page-surface-raised);
+  border-bottom: 1px solid var(--hx-page-border);
+  padding: 0.875rem 1.25rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.promo-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.promo-card {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--hx-page-border);
+  background: var(--hx-page-surface);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
+}
+
+.promo-card-image {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  display: block;
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.promo-card-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card-body h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--hx-page-text);
+}
+
+.promo-card-body p {
+  font-size: 0.9rem;
+  color: var(--hx-page-text-secondary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.promo-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hx-color-primary-500, #3b82f6);
+}
+
+.site-footer {
+  background: var(--hx-page-surface);
+  border-top: 1px solid var(--hx-page-border);
+  padding: 3rem 0 2rem;
+}
+
+.footer-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+}
+
+@media (max-width: 768px) {
+  .footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .footer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.footer-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--hx-page-text);
+  margin-bottom: 0.75rem;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: 0.5rem;
+}
+
+.footer-links a {
+  color: var(--hx-page-text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+}
+
+.footer-links a:hover {
+  color: var(--hx-page-text);
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-bottom p {
+  margin: 0;
+}
+`,
+  );
+
+  // src/layouts/Layout.astro — base layout
+  await safeWriteFile(
+    path.join(layoutsDir, 'Layout.astro'),
     `---
-// HELiX components load client-side
+/**
+ * Base layout for all pages.
+ *
+ * Loads @helixui/library once via <script> in <head>.
+ * Custom elements render as inert HTML during SSG and upgrade client-side.
+ */
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = '${sanitizeForHtml(options.name)} — Built with HELiX',
+  description = 'Enterprise web components for Astro. Zero JS by default, perfect island architecture.',
+} = Astro.props;
 ---
+
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     ${CSP_META}
-    <title>${sanitizeForHtml(options.name)}</title>
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        margin: 0;
-        padding: 2rem;
-      }
-      .container { max-width: 800px; margin: 0 auto; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>HELiX + Astro</h1>
-      <p>Zero JS by default. Components hydrate as islands.</p>
-
-      <hx-card>
-        <div slot="header"><h2>Astro Islands</h2></div>
-        <p>HELiX components are custom elements — they self-register and work without a framework runtime.</p>
-        <hx-button variant="primary">Interactive Button</hx-button>
-      </hx-card>
-    </div>
-
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content="/og/helixui.png" />
+    <title>{title}</title>
     <script>
       import '@helixui/library';
     </script>
+    <link rel="stylesheet" href="/styles/global.css" />
+  </head>
+  <body>
+    <hx-theme theme="auto">
+      <hx-top-nav sticky label="Main navigation">
+        <div slot="logo">
+          <a href="/" style="display:flex;align-items:center;gap:0.75rem;text-decoration:none;color:inherit;">
+            <img src="/og/bs-hx-square.png" alt="HELiX" style="height:30px;width:30px;border-radius:5px;" />
+            <span style="font-weight:700;font-size:1.125rem;letter-spacing:-0.025em;">HELiX</span>
+            <span style="opacity:0.25;font-size:1.25rem;font-weight:200;">+</span>
+            <span style="font-weight:600;font-size:0.95rem;opacity:0.9;">Astro</span>
+          </a>
+        </div>
+        <div style="display:flex;gap:1.5rem;align-items:center;margin-left:2rem;">
+          <a href="/" style="color:inherit;text-decoration:none;font-size:0.875rem;opacity:0.8;">Home</a>
+          <a href="/components" style="color:inherit;text-decoration:none;font-size:0.875rem;opacity:0.8;">Components</a>
+          <a href="/docs" style="color:inherit;text-decoration:none;font-size:0.875rem;opacity:0.8;">Docs</a>
+        </div>
+        <div slot="actions" style="display:flex;align-items:center;gap:0.75rem;">
+          <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer"
+            style="color:inherit;display:flex;align-items:center;opacity:0.7;" title="GitHub">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+          <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer"
+            style="display:flex;align-items:center;" title="Booked Solid Technology">
+            <img src="/og/bs-bs-software-square.png" alt="Booked Solid" style="height:28px;width:28px;border-radius:4px;" />
+          </a>
+        </div>
+      </hx-top-nav>
+
+      <slot />
+
+      <footer class="site-footer">
+        <div class="container">
+          <div class="footer-grid">
+            <div>
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                <img src="/og/bs-hx-square.png" alt="HELiX" style="height:32px;width:32px;border-radius:4px;" />
+                <span style="font-weight:700;font-size:1.125rem;">HELiX</span>
+              </div>
+              <p class="text-secondary" style="font-size:0.85rem;line-height:1.6;max-width:280px;">
+                Enterprise web components built on Lit 3. Accessible, themeable, framework-agnostic.
+              </p>
+            </div>
+            <div>
+              <h4 class="footer-heading">Product</h4>
+              <ul class="footer-links">
+                <li><a href="/components">Components</a></li>
+                <li><a href="/docs">Documentation</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="footer-heading">Ecosystem</h4>
+              <ul class="footer-links">
+                <li><a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI</a></li>
+                <li><a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">HELiXiR</a></li>
+                <li><a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="footer-heading">Legal</h4>
+              <ul class="footer-links">
+                <li><a href="https://bookedsolid.tech/privacy" target="_blank" rel="noopener noreferrer">Privacy</a></li>
+                <li><a href="https://bookedsolid.tech/terms" target="_blank" rel="noopener noreferrer">Terms</a></li>
+                <li><a href="https://bookedsolid.tech/about" target="_blank" rel="noopener noreferrer">About</a></li>
+              </ul>
+            </div>
+          </div>
+          <hx-divider style="margin:2rem 0 1.5rem;"></hx-divider>
+          <div class="footer-bottom">
+            <p class="text-secondary" style="font-size:0.8rem;">
+              &copy; 2026 Booked Solid Technology, a d/b/a of Clarity House LLC. All rights reserved.
+              Built with <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX</a>
+              and <a href="https://astro.build" target="_blank" rel="noopener noreferrer">Astro</a>.
+            </p>
+            <div style="display:flex;gap:1rem;align-items:center;">
+              <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer"
+                class="text-secondary" style="display:flex;" title="GitHub">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                </svg>
+              </a>
+              <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer"
+                style="display:flex;align-items:center;" title="Booked Solid Technology">
+                <img src="/og/bs-bs-software-square.png" alt="BS" style="height:20px;width:20px;border-radius:3px;opacity:0.7;" />
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </hx-theme>
   </body>
 </html>
 `,
   );
-}
 
+  // src/pages/index.astro — production landing page
+  await safeWriteFile(
+    path.join(pagesDir, 'index.astro'),
+    `---
+/**
+ * HELiX + Astro landing page.
+ *
+ * hx-* custom elements work WITHOUT any Astro directive.
+ * They are native browser APIs — Astro outputs them as plain HTML,
+ * the browser parses them, and @helixui/library upgrades them on load.
+ */
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="${sanitizeForHtml(options.name)} — HELiX + Astro">
+  <section class="hero">
+    <div class="container">
+      <h1>HELiX + Astro</h1>
+      <p>
+        Zero JS by default. Enterprise web components that work as native browser elements —
+        no framework runtime, no hydration overhead, no islands required.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+        <hx-button variant="primary" size="lg">
+          <a href="/components" style="color:inherit;text-decoration:none;">Explore Components</a>
+        </hx-button>
+        <hx-button variant="secondary" size="lg">
+          <a href="/docs" style="color:inherit;text-decoration:none;">Read the Docs</a>
+        </hx-button>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:center;margin-top:1.5rem;flex-wrap:wrap;">
+        <hx-tag>Lit 3</hx-tag>
+        <hx-tag>Shadow DOM</hx-tag>
+        <hx-tag>WCAG 2.1 AA</hx-tag>
+        <hx-tag>Zero-JS SSG</hx-tag>
+        <hx-tag>Astro 5</hx-tag>
+        <hx-tag>Island Architecture</hx-tag>
+      </div>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="section-header">
+      <h2>Why Astro + HELiX</h2>
+      <p>The most natural pairing in modern web development.</p>
+    </div>
+    <div class="grid-3">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Zero JS by Default</h3>
+          <hx-badge variant="success">Astro</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          Astro ships zero JavaScript to the client by default. HELiX custom elements are native
+          browser APIs — they do not need a framework runtime to render.
+        </p>
+        <p style="font-size:0.875rem;">
+          Result: a full enterprise UI with <strong>near-zero JS overhead</strong> for static content.
+        </p>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">No Directives Needed</h3>
+          <hx-badge variant="info">HELiX</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          Unlike React or Vue components, <code>hx-*</code> custom elements do not need
+          <code>client:load</code> or <code>client:visible</code>. They are browser-native.
+        </p>
+        <p style="font-size:0.875rem;">
+          Load <code>@helixui/library</code> once in your layout — all elements upgrade automatically.
+        </p>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Perfect Island Fit</h3>
+          <hx-badge variant="warning">Architecture</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          When you need islands, use Astro's <code>client:*</code> directives for framework
+          components and let HELiX handle UI primitives natively.
+        </p>
+        <p style="font-size:0.875rem;">Astro islands for logic. HELiX for accessible, themeable UI.</p>
+      </hx-card>
+    </div>
+  </section>
+
+  <section class="container section" style="border-top:1px solid var(--hx-page-border);">
+    <div class="section-header">
+      <h2>Component Showcase</h2>
+      <p>All rendered as native custom elements — no framework, no hydration cost.</p>
+    </div>
+    <div class="grid-auto">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Button Variants</h3>
+          <hx-badge variant="success">Actions</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          All variants respond to the active theme via CSS custom properties.
+        </p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        </div>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Status Badges</h3>
+          <hx-badge variant="info">Display</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          Semantic status indicators with accessible color variants.
+        </p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Danger</hx-badge>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <hx-tag>Astro 5</hx-tag>
+          <hx-tag>Lit 3</hx-tag>
+          <hx-tag>WCAG 2.1</hx-tag>
+        </div>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Avatars</h3>
+          <hx-badge variant="danger">Identity</hx-badge>
+        </div>
+        <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+          <hx-avatar size="sm">AB</hx-avatar>
+          <hx-avatar size="md">CD</hx-avatar>
+          <hx-avatar size="lg">EF</hx-avatar>
+          <hx-divider vertical style="height:2rem;"></hx-divider>
+          <hx-avatar size="sm" style="--hx-avatar-bg:#3b82f6;">HX</hx-avatar>
+        </div>
+        <p class="text-secondary" style="font-size:0.875rem;">User identity with CSS custom property theming.</p>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Data Display</h3>
+          <hx-badge variant="warning">Metrics</hx-badge>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Build Status</span>
+            <hx-badge variant="success">Passing</hx-badge>
+          </div>
+          <hx-progress-bar value="92" max="100"></hx-progress-bar>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Coverage</span>
+            <hx-badge variant="info">87%</hx-badge>
+          </div>
+          <hx-progress-bar value="87" max="100"></hx-progress-bar>
+        </div>
+      </hx-card>
+    </div>
+  </section>
+
+  <section class="container section" style="border-top:1px solid var(--hx-page-border);">
+    <div class="section-header">
+      <h2>How It Works in Astro</h2>
+      <p>Three patterns for using HELiX in your Astro project.</p>
+    </div>
+    <div class="grid-3">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Static Pages</h3>
+          <hx-badge variant="success">SSG</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          Use <code>hx-*</code> elements directly in <code>.astro</code> files.
+          Renders as HTML at build time, upgrades on load.
+        </p>
+        <pre style="padding:0.75rem;border-radius:0.5rem;font-size:0.8rem;overflow:auto;">&lt;hx-card&gt;
+  &lt;div slot="header"&gt;Title&lt;/div&gt;
+  &lt;p&gt;Zero JS static content&lt;/p&gt;
+&lt;/hx-card&gt;</pre>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Tokens &amp; Theming</h3>
+          <hx-badge variant="info">CSS</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          Override design tokens in <code>helix-tokens.css</code>. Cascades through all Shadow DOM
+          components automatically.
+        </p>
+        <pre style="padding:0.75rem;border-radius:0.5rem;font-size:0.8rem;overflow:auto;">/* helix-tokens.css */
+:root &#123;
+  --hx-color-primary: #0066cc;
+  --hx-font-family: 'Inter';
+&#125;</pre>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Island Interactivity</h3>
+          <hx-badge variant="warning">Islands</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">
+          For complex state, wrap hx-* in a framework component and use <code>client:load</code>.
+        </p>
+        <pre style="padding:0.75rem;border-radius:0.5rem;font-size:0.8rem;overflow:auto;">&lt;!-- .astro file --&gt;
+&lt;MyForm client:load /&gt;
+&lt;!-- Inside MyForm.tsx --&gt;
+&lt;hx-text-input ... /&gt;</pre>
+      </hx-card>
+    </div>
+  </section>
+
+  <section class="container section" style="border-top:1px solid var(--hx-page-border);">
+    <div class="section-header">
+      <h2>The Booked Solid Ecosystem</h2>
+      <p>Enterprise-grade tools for modern web development and AI-powered workflows.</p>
+    </div>
+    <div class="promo-grid">
+      <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/helixui.png" alt="HELiX UI — 80+ enterprise web components." class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>HELiX UI</h3>
+          <p>80+ enterprise web components built on Lit 3. Shadow DOM encapsulation, healthcare-first accessibility, and W3C DTCG design tokens.</p>
+          <span class="promo-card-cta">Explore HELiX UI &rarr;</span>
+        </div>
+      </a>
+      <a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/helixir.png" alt="HELiXiR — MCP server for web components." class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>HELiXiR</h3>
+          <p>MCP server for any CEM-compliant web component library. Connect to Claude, Cursor, or any MCP client.</p>
+          <span class="promo-card-cta">Explore HELiXiR &rarr;</span>
+        </div>
+      </a>
+      <a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/discord-ops.png" alt="Discord-Ops — Agency-grade Discord for AI agents." class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>Discord-Ops</h3>
+          <p>Agency-grade Discord MCP server for AI agents. 45 tools, 23 message templates, multi-guild routing.</p>
+          <span class="promo-card-cta">Explore Discord-Ops &rarr;</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <section class="container section" style="border-top:1px solid var(--hx-page-border);padding-bottom:5rem;">
+    <div class="section-header">
+      <h2>Getting Started</h2>
+      <p>Your project is ready. Here are the key files and next steps.</p>
+    </div>
+    <div class="grid-3">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Key Files</h3>
+          <hx-badge variant="info">Reference</hx-badge>
+        </div>
+        <ul style="line-height:2;padding-left:1.5rem;">
+          <li><code>src/layouts/Layout.astro</code> — Base layout, loads HELiX</li>
+          <li><code>src/helix.d.ts</code> — TypeScript declarations for hx-* elements</li>
+          <li><code>src/styles/global.css</code> — Page styles + token imports</li>
+          <li><code>helix-tokens.css</code> — Design token overrides</li>
+          <li><code>src/helix-setup.ts</code> — Component bundle configuration</li>
+          <li><code>public/og/</code> — Brand assets</li>
+        </ul>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Commands</h3>
+          <hx-badge variant="success">CLI</hx-badge>
+        </div>
+        <ul style="line-height:2;padding-left:1.5rem;">
+          <li><code>npm run dev</code> — Start dev server</li>
+          <li><code>npm run build</code> — Production build</li>
+          <li><code>npm run preview</code> — Preview build output</li>
+        </ul>
+        <hx-divider style="margin:1rem 0;"></hx-divider>
+        <p style="font-size:0.875rem;" class="text-secondary">
+          Add HELiX components via <code>src/helix-setup.ts</code>.
+        </p>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Next Steps</h3>
+          <hx-badge variant="warning">Action</hx-badge>
+        </div>
+        <ul style="line-height:2;padding-left:1.5rem;">
+          <li>Customize your theme in <code>helix-tokens.css</code></li>
+          <li>Add pages in <code>src/pages/</code></li>
+          <li>Explore the <a href="/components">component catalog</a></li>
+          <li>Add <a href="https://docs.astro.build/en/guides/integrations-guide/" target="_blank" rel="noopener noreferrer">Astro integrations</a></li>
+        </ul>
+      </hx-card>
+    </div>
+  </section>
+</Layout>
+`,
+  );
+
+  // src/pages/components.astro
+  await safeWriteFile(
+    path.join(pagesDir, 'components.astro'),
+    `---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Components — ${sanitizeForHtml(options.name)}" description="HELiX component catalog for Astro.">
+  <section class="hero" style="padding:3rem 2rem;">
+    <div class="container">
+      <h1>Component Library</h1>
+      <p>Browse the HELiX component catalog. All components are native custom elements.</p>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="section-header">
+      <h2>Core UI</h2>
+      <p>Essential building blocks for any interface.</p>
+    </div>
+    <div style="display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Button</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        </div>
+        <p class="text-secondary" style="font-size:0.85rem;">
+          Multi-variant button with loading states, icons, and full keyboard support.
+        </p>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Badge</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Error</hx-badge>
+        </div>
+        <p class="text-secondary" style="font-size:0.85rem;">Status indicators with semantic color variants.</p>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Card</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <p class="text-secondary" style="font-size:0.85rem;">
+          Content container with optional header, footer, and media slots.
+        </p>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Avatar</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:center;margin-bottom:1rem;">
+          <hx-avatar size="sm">AB</hx-avatar>
+          <hx-avatar size="md">CD</hx-avatar>
+          <hx-avatar size="lg">EF</hx-avatar>
+        </div>
+        <p class="text-secondary" style="font-size:0.85rem;">User identity with initials, image, or icon support.</p>
+      </hx-card>
+    </div>
+  </section>
+
+  <section class="container section" style="border-top:1px solid var(--hx-page-border);padding-bottom:4rem;">
+    <div class="section-header">
+      <h2>Alerts &amp; Feedback</h2>
+      <p>Components for communicating status and feedback to users.</p>
+    </div>
+    <div class="grid-3">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Alerts</h3>
+          <hx-badge variant="danger">Feedback</hx-badge>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+          <hx-alert variant="info" open>Informational message</hx-alert>
+          <hx-alert variant="success" open>Operation successful</hx-alert>
+          <hx-alert variant="warning" open>Caution advised</hx-alert>
+        </div>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Progress</h3>
+          <hx-badge variant="warning">Metrics</hx-badge>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          <div>
+            <span class="text-secondary" style="font-size:0.85rem;">Upload</span>
+            <hx-progress-bar value="72" max="100"></hx-progress-bar>
+          </div>
+          <div>
+            <span class="text-secondary" style="font-size:0.85rem;">Build</span>
+            <hx-progress-bar value="100" max="100"></hx-progress-bar>
+          </div>
+        </div>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Tags</h3>
+          <hx-badge variant="success">Display</hx-badge>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <hx-tag>TypeScript</hx-tag>
+          <hx-tag>Astro 5</hx-tag>
+          <hx-tag>Lit 3</hx-tag>
+          <hx-tag>Shadow DOM</hx-tag>
+          <hx-tag>WCAG 2.1</hx-tag>
+        </div>
+        <p class="text-secondary" style="font-size:0.85rem;">Lightweight metadata labels for categorization.</p>
+      </hx-card>
+    </div>
+  </section>
+</Layout>
+`,
+  );
+
+  // src/pages/docs.astro
+  await safeWriteFile(
+    path.join(pagesDir, 'docs.astro'),
+    `---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Docs — ${sanitizeForHtml(options.name)}" description="Getting started with HELiX in Astro.">
+  <section class="hero" style="padding:3rem 2rem;">
+    <div class="container">
+      <h1>Documentation</h1>
+      <p>Everything you need to build with HELiX components in your Astro application.</p>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="grid-auto">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Quick Start</h3>
+          <hx-badge variant="info">Guide</hx-badge>
+        </div>
+        <ol style="line-height:2;padding-left:1.5rem;">
+          <li>HELiX is loaded in <code>src/layouts/Layout.astro</code> automatically</li>
+          <li>Use <code>hx-*</code> elements anywhere in <code>.astro</code> files</li>
+          <li>Customize design tokens in <code>helix-tokens.css</code></li>
+          <li>Override Shadow DOM with <code>::part()</code> selectors</li>
+        </ol>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Architecture</h3>
+          <hx-badge variant="warning">Concepts</hx-badge>
+        </div>
+        <ul style="line-height:2;padding-left:1.5rem;">
+          <li><strong>Web Components</strong> — Standards-based, framework-agnostic</li>
+          <li><strong>Shadow DOM</strong> — Style encapsulation, no CSS leaks</li>
+          <li><strong>Lit 3</strong> — Reactive properties, declarative templates</li>
+          <li><strong>hx-theme</strong> — Token injection via adopted stylesheets</li>
+          <li><strong>Astro SSG</strong> — Pre-rendered HTML, no hydration for hx-* elements</li>
+        </ul>
+      </hx-card>
+    </div>
+  </section>
+
+  <section class="container section" style="border-top:1px solid var(--hx-page-border);padding-bottom:4rem;">
+    <div class="section-header">
+      <h2>Resources</h2>
+    </div>
+    <div class="grid-3">
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">HELiX UI Docs</h3>
+          <hx-badge variant="info">External</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">Full component API documentation including properties, events, slots, and CSS custom properties.</p>
+        <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">View HELiX UI Docs &rarr;</a>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Source Code</h3>
+          <hx-badge variant="success">Open Source</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">HELiX is open source under the MIT license. Contributions welcome.</p>
+        <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
+      </hx-card>
+      <hx-card>
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">HELiXiR MCP</h3>
+          <hx-badge variant="warning">AI Tools</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom:1rem;">Query component metadata, tokens, and a11y scores from your AI coding assistant.</p>
+        <a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">Learn More &rarr;</a>
+      </hx-card>
+    </div>
+  </section>
+</Layout>
+`,
+  );
+}
 async function scaffoldSvelteKit(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const routesDir = path.join(srcDir, 'routes');
@@ -2428,11 +4473,26 @@ export default defineConfig({
 async function scaffoldVueNuxt(options: ProjectOptions): Promise<void> {
   const appDir = path.join(options.directory, 'app');
   const pagesDir = path.join(appDir, 'pages');
+  const layoutsDir = path.join(appDir, 'layouts');
+  const componentsDir = path.join(appDir, 'components');
   const pluginsDir = path.join(options.directory, 'plugins');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+
   await safeEnsureDir(pagesDir);
+  await safeEnsureDir(layoutsDir);
+  await safeEnsureDir(componentsDir);
   await safeEnsureDir(pluginsDir);
 
-  // nuxt.config.ts
+  // Generate unique install tracking ID
+  const installId = randomBytes(8).toString('hex');
+
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await safeCopyDir(assetsSource, publicOgDir);
+  }
+
+  // nuxt.config.ts — Nuxt 4 with HELiX custom element detection
   await safeWriteFile(
     path.join(options.directory, 'nuxt.config.ts'),
     `export default defineNuxtConfig({
@@ -2440,45 +4500,621 @@ async function scaffoldVueNuxt(options: ProjectOptions): Promise<void> {
   devtools: { enabled: true },
   vue: {
     compilerOptions: {
-      // Tell Vue to treat hx-* tags as custom elements
+      // Tell Vue to treat hx-* tags as custom elements (suppresses hydration warnings)
       isCustomElement: (tag: string) => tag.startsWith('hx-'),
     },
   },
-${options.designTokens ? `  css: ['~/helix-tokens.css'],` : ''}
+${options.designTokens ? `  css: ['~/helix-tokens.css'],\n` : ''}\
 });
 `,
   );
 
-  // HELiX plugin (client-only)
+  // HELiX plugin (client-only) — loads web components after hydration
   await safeWriteFile(
     path.join(pluginsDir, 'helix.client.ts'),
-    `export default defineNuxtPlugin(async () => {
+    `/**
+ * HELiX client plugin — registers all web components on the client side.
+ *
+ * The .client suffix tells Nuxt to only run this plugin in the browser,
+ * which is required because web components use browser APIs (customElements).
+ *
+ * Components render as inert HTML during SSR and upgrade to interactive
+ * custom elements once this plugin fires on the client.
+ */
+export default defineNuxtPlugin(async () => {
   await import('@helixui/library');
 });
 `,
   );
 
-  // app.vue
+  // helix.d.ts — TypeScript ambient declarations for hx-* custom elements
+  await safeWriteFile(
+    path.join(options.directory, 'helix.d.ts'),
+    `/**
+ * TypeScript ambient declarations for HELiX web components in Vue templates.
+ *
+ * Vue's compiler treats hx-* tags as custom elements (configured in nuxt.config.ts).
+ * This file tells TypeScript what attributes and events they accept.
+ */
+
+type HxElement = {
+  [key: string]: unknown;
+};
+
+declare module 'vue' {
+  interface GlobalComponents {
+    // intentionally empty — hx-* are handled as custom elements, not Vue components
+  }
+}
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'hx-accordion': HxElement;
+      'hx-accordion-item': HxElement;
+      'hx-alert': HxElement;
+      'hx-avatar': HxElement;
+      'hx-badge': HxElement;
+      'hx-banner': HxElement;
+      'hx-breadcrumb': HxElement;
+      'hx-button': HxElement;
+      'hx-button-group': HxElement;
+      'hx-card': HxElement;
+      'hx-carousel': HxElement;
+      'hx-checkbox': HxElement;
+      'hx-checkbox-group': HxElement;
+      'hx-code-snippet': HxElement;
+      'hx-color-picker': HxElement;
+      'hx-combobox': HxElement;
+      'hx-counter': HxElement;
+      'hx-data-table': HxElement;
+      'hx-date-picker': HxElement;
+      'hx-dialog': HxElement;
+      'hx-divider': HxElement;
+      'hx-drawer': HxElement;
+      'hx-dropdown': HxElement;
+      'hx-field': HxElement;
+      'hx-field-label': HxElement;
+      'hx-file-upload': HxElement;
+      'hx-grid': HxElement;
+      'hx-icon': HxElement;
+      'hx-icon-button': HxElement;
+      'hx-menu': HxElement;
+      'hx-menu-item': HxElement;
+      'hx-meter': HxElement;
+      'hx-nav': HxElement;
+      'hx-pagination': HxElement;
+      'hx-popover': HxElement;
+      'hx-progress-bar': HxElement;
+      'hx-progress-ring': HxElement;
+      'hx-radio-group': HxElement;
+      'hx-rating': HxElement;
+      'hx-select': HxElement;
+      'hx-skeleton': HxElement;
+      'hx-slider': HxElement;
+      'hx-spinner': HxElement;
+      'hx-split-button': HxElement;
+      'hx-split-panel': HxElement;
+      'hx-stat': HxElement;
+      'hx-status-indicator': HxElement;
+      'hx-switch': HxElement;
+      'hx-tab': HxElement;
+      'hx-tab-panel': HxElement;
+      'hx-tabs': HxElement;
+      'hx-tag': HxElement;
+      'hx-text': HxElement;
+      'hx-text-input': HxElement;
+      'hx-textarea': HxElement;
+      'hx-theme': HxElement;
+      'hx-toast': HxElement;
+      'hx-tooltip': HxElement;
+      'hx-top-nav': HxElement;
+      'hx-tree-item': HxElement;
+      'hx-tree-view': HxElement;
+    }
+  }
+}
+
+export {};
+`,
+  );
+
+  // app/app.vue — root with NuxtLayout support
   await safeWriteFile(
     path.join(appDir, 'app.vue'),
     `<template>
-  <NuxtPage />
+  <NuxtLayout>
+    <NuxtPage />
+  </NuxtLayout>
 </template>
 `,
   );
 
-  // index page
+  // app/layouts/default.vue — main layout with nav, footer, and global styles
+  await safeWriteFile(
+    path.join(layoutsDir, 'default.vue'),
+    `<script setup lang="ts">
+// Default layout wraps every page with the site nav and footer.
+</script>
+
+<template>
+  <hx-theme theme="auto">
+    <AppNavbar />
+    <main>
+      <slot />
+    </main>
+    <AppFooter />
+  </hx-theme>
+</template>
+
+<style>
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --hx-page-bg: #0a0a0f;
+  --hx-page-text: #e4e4e7;
+  --hx-page-text-secondary: #a1a1aa;
+  --hx-page-surface: #18181b;
+  --hx-page-surface-raised: #27272a;
+  --hx-page-border: #3f3f46;
+  --hx-page-code-bg: #27272a;
+}
+
+html[data-theme="light"],
+html:not([data-theme]) {
+  --hx-page-bg: #fafafa;
+  --hx-page-text: #18181b;
+  --hx-page-text-secondary: #71717a;
+  --hx-page-surface: #ffffff;
+  --hx-page-surface-raised: #f4f4f5;
+  --hx-page-border: #e4e4e7;
+  --hx-page-code-bg: #f4f4f5;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--hx-page-text);
+  background: var(--hx-page-bg);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+a {
+  color: var(--hx-color-primary-500, #3b82f6);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  color: var(--hx-page-text);
+  letter-spacing: -0.025em;
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--hx-page-code-bg);
+  color: var(--hx-page-text);
+}
+
+pre {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  background: var(--hx-page-code-bg) !important;
+  color: var(--hx-page-text);
+  border: 1px solid var(--hx-page-border);
+}
+
+.hero {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: var(--hx-page-surface);
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+.hero p {
+  font-size: 1.125rem;
+  color: var(--hx-page-text-secondary);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.section {
+  padding: 4rem 0;
+}
+
+.section-header {
+  margin-bottom: 2rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.section-header p {
+  color: var(--hx-page-text-secondary);
+}
+
+.grid-auto {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.grid-3 {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.text-secondary {
+  color: var(--hx-page-text-secondary);
+}
+
+hx-top-nav {
+  --hx-top-nav-bg: var(--hx-page-surface);
+  --hx-top-nav-color: var(--hx-page-text);
+  --hx-top-nav-border-color: var(--hx-page-border);
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+hx-top-nav::part(header) {
+  border-radius: 0;
+}
+
+hx-card {
+  --hx-card-bg: var(--hx-page-surface);
+  --hx-card-color: var(--hx-page-text);
+  --hx-card-border-color: var(--hx-page-border);
+}
+
+hx-card::part(header) {
+  background: var(--hx-page-surface-raised);
+  border-bottom: 1px solid var(--hx-page-border);
+  padding: 0.875rem 1.25rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.promo-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.promo-card {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--hx-page-border);
+  background: var(--hx-page-surface);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
+}
+
+.promo-card-image {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  display: block;
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.promo-card-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card-body h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--hx-page-text);
+}
+
+.promo-card-body p {
+  font-size: 0.9rem;
+  color: var(--hx-page-text-secondary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.promo-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hx-color-primary-500, #3b82f6);
+}
+
+.site-footer {
+  background: var(--hx-page-surface);
+  border-top: 1px solid var(--hx-page-border);
+  padding: 3rem 0 2rem;
+}
+
+.footer-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+}
+
+@media (max-width: 768px) {
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 480px) {
+  .footer-grid { grid-template-columns: 1fr; }
+}
+
+.footer-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--hx-page-text);
+  margin-bottom: 0.75rem;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: 0.5rem;
+}
+
+.footer-links a {
+  color: var(--hx-page-text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+}
+
+.footer-links a:hover {
+  color: var(--hx-page-text);
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-bottom p {
+  margin: 0;
+}
+</style>
+`,
+  );
+
+  // app/components/AppNavbar.vue — sticky nav using hx-top-nav
+  await safeWriteFile(
+    path.join(componentsDir, 'AppNavbar.vue'),
+    `<script setup lang="ts">
+import { ref, onMounted } from 'vue';
+
+const isDark = ref(false);
+
+onMounted(() => {
+  const saved = localStorage.getItem('helix-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  isDark.value = saved ? saved === 'dark' : prefersDark;
+  applyTheme(isDark.value ? 'dark' : 'light');
+});
+
+function applyTheme(theme: 'light' | 'dark') {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.querySelectorAll('hx-theme').forEach((el) => {
+    (el as HTMLElement & { theme: string }).theme = theme;
+  });
+}
+
+function handleThemeChange(e: Event) {
+  const checked = (e as CustomEvent).detail?.checked ?? false;
+  const theme = checked ? 'dark' : 'light';
+  isDark.value = checked;
+  applyTheme(theme);
+  localStorage.setItem('helix-theme', theme);
+}
+</script>
+
+<template>
+  <hx-top-nav sticky label="Main navigation">
+    <div slot="logo">
+      <NuxtLink
+        to="/"
+        style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;"
+      >
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <img src="/og/bs-hx-square.png" alt="HELiX" style="height: 30px; width: 30px; border-radius: 5px;" />
+          <span style="font-weight: 700; font-size: 1.125rem; letter-spacing: -0.025em;">HELiX</span>
+        </div>
+        <span style="opacity: 0.25; font-size: 1.25rem; font-weight: 200;">+</span>
+        <span style="font-weight: 600; font-size: 0.95rem; opacity: 0.9;">Nuxt 4</span>
+      </NuxtLink>
+    </div>
+    <div style="display: flex; gap: 1.5rem; align-items: center; margin-left: 2rem;">
+      <NuxtLink to="/" style="color: inherit; text-decoration: none; font-size: 0.875rem; opacity: 0.8;">Home</NuxtLink>
+      <NuxtLink to="/components" style="color: inherit; text-decoration: none; font-size: 0.875rem; opacity: 0.8;">Components</NuxtLink>
+      <NuxtLink to="/examples/forms" style="color: inherit; text-decoration: none; font-size: 0.875rem; opacity: 0.8;">Forms</NuxtLink>
+    </div>
+    <div slot="actions" style="display: flex; align-items: center; gap: 0.75rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="font-size: 0.8rem;">Dark</span>
+        <hx-switch size="sm" :checked="isDark" @hx-change="handleThemeChange" />
+      </div>
+      <a
+        href="https://github.com/bookedsolidtech"
+        target="_blank"
+        rel="noopener noreferrer"
+        style="color: inherit; display: flex; align-items: center; opacity: 0.7;"
+        title="Booked Solid on GitHub"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+        </svg>
+      </a>
+      <a
+        href="https://bookedsolid.tech"
+        target="_blank"
+        rel="noopener noreferrer"
+        style="display: flex; align-items: center;"
+        title="Booked Solid Technology"
+      >
+        <img
+          src="https://bookedsolid.tech/logos/bs-bs-software-square.png?utm_source=create-helix&utm_medium=scaffold&utm_id=${installId}"
+          alt="Booked Solid"
+          style="height: 28px; width: 28px; border-radius: 4px;"
+        />
+      </a>
+    </div>
+  </hx-top-nav>
+</template>
+`,
+  );
+
+  // app/components/AppFooter.vue — site footer
+  await safeWriteFile(
+    path.join(componentsDir, 'AppFooter.vue'),
+    `<script setup lang="ts">
+const year = new Date().getFullYear();
+</script>
+
+<template>
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <img src="/og/bs-hx-square.png" alt="HELiX" style="height: 32px; width: 32px; border-radius: 4px;" />
+            <span style="font-weight: 700; font-size: 1.125rem;">HELiX</span>
+          </div>
+          <p class="text-secondary" style="font-size: 0.85rem; line-height: 1.6; max-width: 280px;">
+            Enterprise web components built on Lit 3. Accessible, themeable, and framework-agnostic.
+          </p>
+        </div>
+        <div>
+          <h4 class="footer-heading">Product</h4>
+          <ul class="footer-links">
+            <li><NuxtLink to="/components">Components</NuxtLink></li>
+            <li><NuxtLink to="/examples/forms">Forms</NuxtLink></li>
+            <li><NuxtLink to="/">Documentation</NuxtLink></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-heading">Ecosystem</h4>
+          <ul class="footer-links">
+            <li><a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI</a></li>
+            <li><a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">HELiXiR</a></li>
+            <li><a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer">Discord-Ops</a></li>
+            <li><a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-heading">Legal</h4>
+          <ul class="footer-links">
+            <li><a href="https://bookedsolid.tech/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></li>
+            <li><a href="https://bookedsolid.tech/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a></li>
+            <li><a href="https://bookedsolid.tech/about" target="_blank" rel="noopener noreferrer">About</a></li>
+          </ul>
+        </div>
+      </div>
+      <hx-divider style="margin: 2rem 0 1.5rem;" />
+      <div class="footer-bottom">
+        <p class="text-secondary" style="font-size: 0.8rem;">
+          &copy; {{ year }} Booked Solid Technology, a d/b/a of Clarity House LLC. All rights reserved.
+          Built with <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX</a> and
+          <a href="https://nuxt.com" target="_blank" rel="noopener noreferrer">Nuxt 4</a>.
+        </p>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+          <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer" class="text-secondary" style="display: flex;" title="GitHub">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+          <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center;" title="Booked Solid Technology">
+            <img src="/og/bs-bs-software-square.png" alt="BS" style="height: 20px; width: 20px; border-radius: 3px; opacity: 0.7;" />
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</template>
+`,
+  );
+
+  // app/pages/index.vue — production landing page
   await safeWriteFile(
     path.join(pagesDir, 'index.vue'),
     `<script setup lang="ts">
 import { ref } from 'vue';
+
+useHead({
+  title: '${sanitizeForHtml(options.name)} \u2014 Built with HELiX',
+  meta: [{ name: 'description', content: 'Enterprise web components for Vue and Nuxt 4.' }],
+});
 
 const name = ref('');
 const submitted = ref(false);
 
 function handleSubmit() {
   submitted.value = true;
-  setTimeout(() => { submitted.value = false; }, 3000);
+  setTimeout(() => {
+    submitted.value = false;
+  }, 3000);
 }
 
 function handleInput(e: Event) {
@@ -2488,50 +5124,475 @@ function handleInput(e: Event) {
 </script>
 
 <template>
-  <div class="container">
-    <h1>HELiX + Nuxt 4</h1>
-    <p>Full-stack Vue with SSR. Web components auto-hydrate on the client.</p>
-
-    <hx-card>
-      <div slot="header"><h2>Interactive Form</h2></div>
-      <hx-text-input
-        label="Your name"
-        placeholder="Enter your name"
-        :value="name"
-        @hx-input="handleInput"
-      />
-      <hx-button variant="primary" style="margin-top: 1rem" @hx-click="handleSubmit">
-        Say Hello
-      </hx-button>
-      <hx-alert v-if="submitted" variant="success" open style="margin-top: 1rem">
-        Hello, {{ name || 'World' }}!
-      </hx-alert>
-    </hx-card>
-
-    <hx-card style="margin-top: 1.5rem">
-      <div slot="header"><h2>Component Showcase</h2></div>
-      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <hx-button variant="primary">Primary</hx-button>
-        <hx-button variant="secondary">Secondary</hx-button>
-        <hx-button variant="danger">Danger</hx-button>
-        <hx-badge variant="info">Badge</hx-badge>
-        <hx-badge variant="success">Success</hx-badge>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>HELiX + Nuxt 4</h1>
+      <p>
+        Enterprise-grade web components running natively in Vue.
+        75+ accessible, themeable components with Shadow DOM encapsulation.
+      </p>
+      <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+        <hx-button variant="primary" size="lg">
+          <NuxtLink to="/examples/forms" style="color: inherit; text-decoration: none;">
+            See Forms Demo
+          </NuxtLink>
+        </hx-button>
+        <hx-button variant="secondary" size="lg">
+          <NuxtLink to="/components" style="color: inherit; text-decoration: none;">
+            Browse Components
+          </NuxtLink>
+        </hx-button>
       </div>
-    </hx-card>
-  </div>
-</template>
+      <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1.5rem; flex-wrap: wrap;">
+        <hx-tag>Lit 3</hx-tag>
+        <hx-tag>Shadow DOM</hx-tag>
+        <hx-tag>WCAG 2.1 AA</hx-tag>
+        <hx-tag>SSR-Safe</hx-tag>
+        <hx-tag>Vue 3</hx-tag>
+        <hx-tag>Nuxt 4</hx-tag>
+      </div>
+    </div>
+  </section>
 
-<style scoped>
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
+  <!-- Component Showcase -->
+  <section class="container section">
+    <div class="section-header">
+      <h2>Component Showcase</h2>
+      <p>A sampling of HELiX components \u2014 all rendered as native web components via Shadow DOM.</p>
+    </div>
+
+    <div class="grid-auto">
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Interactive Input</h3>
+          <hx-badge variant="info">Forms</hx-badge>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <hx-text-input
+            label="Your name"
+            placeholder="Enter your name"
+            :value="name"
+            @hx-input="handleInput"
+          />
+          <hx-button variant="primary" @hx-click="handleSubmit">Say Hello</hx-button>
+          <hx-alert v-if="submitted" variant="success" open>
+            Hello, {{ name || 'World' }}! HELiX components are working.
+          </hx-alert>
+        </div>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Button Variants</h3>
+          <hx-badge variant="success">Actions</hx-badge>
+        </div>
+        <p class="text-secondary" style="margin-bottom: 1rem;">All button styles respond to the active theme.</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="danger" size="sm">Danger</hx-button>
+          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        </div>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Data Display</h3>
+          <hx-badge variant="warning">Metrics</hx-badge>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>Build Status</span>
+            <hx-badge variant="success">Passing</hx-badge>
+          </div>
+          <hx-progress-bar :value="87" :max="100" />
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <hx-tag>v1.1.2</hx-tag>
+            <hx-tag>stable</hx-tag>
+            <hx-tag>MIT</hx-tag>
+          </div>
+        </div>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Avatars &amp; Badges</h3>
+          <hx-badge variant="danger">Identity</hx-badge>
+        </div>
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+          <hx-avatar size="sm">AB</hx-avatar>
+          <hx-avatar size="md">CD</hx-avatar>
+          <hx-avatar size="lg">EF</hx-avatar>
+          <hx-divider vertical style="height: 2rem;" />
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Danger</hx-badge>
+        </div>
+      </hx-card>
+    </div>
+  </section>
+
+  <!-- Tabbed Patterns -->
+  <section class="container section" style="border-top: 1px solid var(--hx-page-border);">
+    <hx-tabs>
+      <hx-tab slot="nav">Vue Patterns</hx-tab>
+      <hx-tab slot="nav">Theming</hx-tab>
+      <hx-tab slot="nav">Event Handling</hx-tab>
+
+      <hx-tab-panel>
+        <div style="padding: 1.5rem 0;">
+          <hx-card>
+            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">Using HELiX in Nuxt 4</h3>
+              <hx-badge variant="info">Architecture</hx-badge>
+            </div>
+            <ul style="line-height: 2; padding-left: 1.5rem;">
+              <li><strong>SSR rendering</strong> outputs hx-* as inert HTML \u2014 zero JS shipped to server</li>
+              <li><strong>Client hydration</strong> upgrades components via <code>plugins/helix.client.ts</code></li>
+              <li><strong>isCustomElement</strong> in nuxt.config.ts suppresses Vue hydration warnings</li>
+              <li><strong>NuxtLayout</strong> wraps every page with the shared nav and footer</li>
+              <li><strong>hx-theme</strong> in the layout injects CSS tokens for light/dark/high-contrast</li>
+            </ul>
+          </hx-card>
+        </div>
+      </hx-tab-panel>
+
+      <hx-tab-panel>
+        <div style="padding: 1.5rem 0;">
+          <hx-card>
+            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">CSS Custom Properties</h3>
+              <hx-badge variant="success">Tokens</hx-badge>
+            </div>
+            <p style="margin-bottom: 1rem;">
+              HELiX uses a three-tier token system: primitive, semantic, and component.
+            </p>
+            <pre style="padding: 1rem; border-radius: 0.5rem; font-size: 0.85rem; overflow: auto;">/* helix-tokens.css */
+:root {
+  --hx-color-primary: #0066cc;
+  --hx-color-success: #22c55e;
 }
-</style>
+
+hx-button::part(button) {
+  font-weight: 600;
+}</pre>
+          </hx-card>
+        </div>
+      </hx-tab-panel>
+
+      <hx-tab-panel>
+        <div style="padding: 1.5rem 0;">
+          <hx-card>
+            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">Vue Event Handling</h3>
+              <hx-badge variant="warning">Events</hx-badge>
+            </div>
+            <pre style="padding: 1rem; border-radius: 0.5rem; font-size: 0.85rem; overflow: auto;">&lt;!-- Direct @event binding (Vue handles hx-* custom events) --&gt;
+&lt;hx-button @hx-click="handleClick"&gt;Click me&lt;/hx-button&gt;
+&lt;hx-text-input @hx-input="handleInput" /&gt;
+
+&lt;!-- Access CustomEvent detail --&gt;
+function handleInput(e: Event) {
+  const detail = (e as CustomEvent).detail;
+  value.value = detail?.value ?? '';
+}</pre>
+          </hx-card>
+        </div>
+      </hx-tab-panel>
+    </hx-tabs>
+  </section>
+
+  <!-- Ecosystem Promos -->
+  <section class="container section" style="border-top: 1px solid var(--hx-page-border);">
+    <div class="section-header">
+      <h2>The Booked Solid Ecosystem</h2>
+      <p>Enterprise-grade tools for modern web development and AI-powered workflows.</p>
+    </div>
+    <div class="promo-grid">
+      <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/helixui.png" alt="HELiX UI" class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>HELiX UI</h3>
+          <p>80+ enterprise web components built on Lit 3. Shadow DOM encapsulation, healthcare-first accessibility, and W3C DTCG design tokens.</p>
+          <span class="promo-card-cta">Explore HELiX UI &rarr;</span>
+        </div>
+      </a>
+      <a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/helixir.png" alt="HELiXiR" class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>HELiXiR</h3>
+          <p>MCP server for any CEM-compliant web component library. Connect to Claude, Cursor, or any MCP client.</p>
+          <span class="promo-card-cta">Explore HELiXiR &rarr;</span>
+        </div>
+      </a>
+      <a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer" class="promo-card">
+        <img src="/og/discord-ops.png" alt="Discord-Ops" class="promo-card-image" />
+        <div class="promo-card-body">
+          <h3>Discord-Ops</h3>
+          <p>Agency-grade Discord MCP server for AI agents. 45 tools, 23 message templates, multi-guild routing.</p>
+          <span class="promo-card-cta">Explore Discord-Ops &rarr;</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- Getting Started -->
+  <section class="container section" style="border-top: 1px solid var(--hx-page-border); padding-bottom: 5rem;">
+    <div class="section-header">
+      <h2>Getting Started</h2>
+      <p>Your project is ready. Here are the key files and next steps.</p>
+    </div>
+
+    <div class="grid-3">
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Key Files</h3>
+          <hx-badge variant="info">Reference</hx-badge>
+        </div>
+        <ul style="line-height: 2; padding-left: 1.5rem;">
+          <li><code>plugins/helix.client.ts</code> \u2014 HELiX initializer</li>
+          <li><code>app/layouts/default.vue</code> \u2014 Nav &amp; footer layout</li>
+          <li><code>app/components/AppNavbar.vue</code> \u2014 Top navigation</li>
+          <li><code>app/components/AppFooter.vue</code> \u2014 Site footer</li>
+          <li><code>helix.d.ts</code> \u2014 TypeScript declarations</li>
+          <li><code>helix-tokens.css</code> \u2014 Design token overrides</li>
+        </ul>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Commands</h3>
+          <hx-badge variant="success">CLI</hx-badge>
+        </div>
+        <ul style="line-height: 2; padding-left: 1.5rem;">
+          <li><code>npm run dev</code> \u2014 Start dev server</li>
+          <li><code>npm run build</code> \u2014 Production build</li>
+          <li><code>npm run preview</code> \u2014 Preview build</li>
+        </ul>
+        <hx-divider style="margin: 1rem 0;" />
+        <p style="font-size: 0.875rem;" class="text-secondary">
+          Add more HELiX components in <code>plugins/helix.client.ts</code>.
+        </p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Next Steps</h3>
+          <hx-badge variant="warning">Action</hx-badge>
+        </div>
+        <ul style="line-height: 2; padding-left: 1.5rem;">
+          <li>Customize tokens in <code>helix-tokens.css</code></li>
+          <li>Add routes in <code>app/pages/</code></li>
+          <li><NuxtLink to="/examples/forms">Explore form participation</NuxtLink></li>
+          <li><a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">Browse all components</a></li>
+        </ul>
+      </hx-card>
+    </div>
+  </section>
+</template>
 `,
   );
 
-  await writeVueErrorBoundary(options);
+  // app/pages/components.vue — component showcase page
+  await safeWriteFile(
+    path.join(pagesDir, 'components.vue'),
+    `<script setup lang="ts">
+useHead({
+  title: 'Components \u2014 HELiX + Nuxt 4',
+  meta: [{ name: 'description', content: 'Browse the HELiX component library.' }],
+});
+</script>
+
+<template>
+  <section class="hero" style="padding: 3rem 2rem;">
+    <div class="container">
+      <h1>Component Library</h1>
+      <p>Browse the full HELiX component catalog. Each component is built on Lit 3 with Shadow DOM encapsulation.</p>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="section-header">
+      <h2>Core UI</h2>
+      <p>Essential building blocks for any interface.</p>
+    </div>
+    <div style="display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Button</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <hx-button variant="primary" size="sm">Primary</hx-button>
+          <hx-button variant="secondary" size="sm">Secondary</hx-button>
+          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">Multi-variant button with full keyboard support.</p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Badge</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <hx-badge variant="info">Info</hx-badge>
+          <hx-badge variant="success">Success</hx-badge>
+          <hx-badge variant="warning">Warning</hx-badge>
+          <hx-badge variant="danger">Error</hx-badge>
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">Status indicators with semantic color variants.</p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Avatar</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
+          <hx-avatar size="sm">AB</hx-avatar>
+          <hx-avatar size="md">CD</hx-avatar>
+          <hx-avatar size="lg">EF</hx-avatar>
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">User identity with initials or image support.</p>
+      </hx-card>
+
+      <hx-card>
+        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0;">Progress Bar</h3>
+          <hx-badge variant="success">Stable</hx-badge>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+          <hx-progress-bar :value="75" :max="100" />
+          <hx-progress-bar :value="45" :max="100" />
+        </div>
+        <p class="text-secondary" style="font-size: 0.85rem;">Accessible progress indicators with ARIA support.</p>
+      </hx-card>
+    </div>
+  </section>
+</template>
+`,
+  );
+
+  // app/pages/examples/forms.vue — form participation demo
+  const examplesDir = path.join(pagesDir, 'examples');
+  await safeEnsureDir(examplesDir);
+  await safeWriteFile(
+    path.join(examplesDir, 'forms.vue'),
+    `<script setup lang="ts">
+import { ref } from 'vue';
+
+useHead({
+  title: 'Forms \u2014 HELiX + Nuxt 4',
+  meta: [{ name: 'description', content: 'HELiX form components with native form participation via ElementInternals.' }],
+});
+
+const formData = ref<Record<string, string>>({});
+const submitted = ref(false);
+
+function handleSubmit(e: Event) {
+  e.preventDefault();
+  const form = e.target as HTMLFormElement;
+  const data = new FormData(form);
+  const entries: Record<string, string> = {};
+  data.forEach((value, key) => {
+    entries[key] = value.toString();
+  });
+  formData.value = entries;
+  submitted.value = true;
+  setTimeout(() => {
+    submitted.value = false;
+  }, 5000);
+}
+</script>
+
+<template>
+  <main class="container" style="padding-top: 2rem; padding-bottom: 4rem; max-width: 800px; margin: 0 auto;">
+    <h1 style="margin-bottom: 0.5rem;">Form Participation</h1>
+    <p class="text-secondary" style="margin-bottom: 2rem;">
+      HELiX form components participate in native HTML forms via ElementInternals.
+      No special Vue wrappers needed \u2014 just use a standard &lt;form&gt; element.
+    </p>
+
+    <hx-card>
+      <div slot="header"><h2>Registration Form</h2></div>
+      <form style="display: flex; flex-direction: column; gap: 1.5rem;" @submit="handleSubmit">
+        <div style="display: grid; gap: 1rem; grid-template-columns: 1fr 1fr;">
+          <hx-text-input name="firstName" label="First name" placeholder="Jane" required />
+          <hx-text-input name="lastName" label="Last name" placeholder="Doe" required />
+        </div>
+        <hx-text-input name="email" label="Email" type="email" placeholder="jane@example.com" required />
+        <hx-textarea name="bio" label="Bio" placeholder="Tell us about yourself..." rows="3" />
+        <hx-select name="role" label="Role">
+          <option value="">Select a role...</option>
+          <option value="developer">Developer</option>
+          <option value="designer">Designer</option>
+          <option value="manager">Manager</option>
+        </hx-select>
+        <hx-checkbox name="terms" label="I agree to the terms and conditions" required />
+        <div style="display: flex; gap: 0.5rem;">
+          <hx-button variant="primary" type="submit">Submit</hx-button>
+          <hx-button variant="secondary" type="reset">Reset</hx-button>
+        </div>
+      </form>
+    </hx-card>
+
+    <hx-card v-if="submitted" style="margin-top: 1.5rem;">
+      <div slot="header">
+        <h3>Form Data (from FormData API)</h3>
+        <hx-badge variant="success">Submitted</hx-badge>
+      </div>
+      <pre style="padding: 1rem; border-radius: 0.5rem; font-size: 0.85rem; overflow: auto;">{{ JSON.stringify(formData, null, 2) }}</pre>
+    </hx-card>
+
+    <hx-card style="margin-top: 1.5rem;">
+      <div slot="header"><h3>How It Works</h3></div>
+      <ul style="line-height: 2; padding-left: 1.5rem;">
+        <li><strong>ElementInternals:</strong> Each HELiX form component calls <code>this.internals.setFormValue()</code></li>
+        <li><strong>FormData:</strong> Values appear in <code>new FormData(form)</code> automatically</li>
+        <li><strong>Validation:</strong> Components report validity via <code>internals.setValidity()</code></li>
+        <li><strong>Reset:</strong> Forms reset web components via <code>formResetCallback()</code></li>
+        <li><strong>No wrappers needed:</strong> This is native browser behavior, not framework-specific</li>
+      </ul>
+    </hx-card>
+  </main>
+</template>
+`,
+  );
+
+  // app/error.vue — Nuxt error page using hx-* components
+  await safeWriteFile(
+    path.join(appDir, 'error.vue'),
+    `<script setup lang="ts">
+import type { NuxtError } from '#app';
+
+defineProps<{ error: NuxtError }>();
+
+const handleClear = () => clearError({ redirect: '/' });
+</script>
+
+<template>
+  <hx-theme theme="auto">
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem;">
+      <hx-card style="max-width: 500px; width: 100%; text-align: center;">
+        <div slot="header">
+          <hx-badge variant="danger">{{ error.statusCode }}</hx-badge>
+        </div>
+        <h1 style="margin-bottom: 1rem;">{{ error.statusMessage || 'An error occurred' }}</h1>
+        <p class="text-secondary" style="margin-bottom: 1.5rem;">
+          {{ error.message || 'Something went wrong. Please try again.' }}
+        </p>
+        <hx-button variant="primary" @hx-click="handleClear">Go Home</hx-button>
+      </hx-card>
+    </div>
+  </hx-theme>
+</template>
+`,
+  );
+
+  await writeVueNuxtErrorBoundary(options);
 }
 
 async function scaffoldAngular(options: ProjectOptions): Promise<void> {
@@ -3073,7 +6134,19 @@ body {
 
 async function scaffoldPreactVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
+  const componentsDir = path.join(srcDir, 'components');
   await safeEnsureDir(srcDir);
+  await safeEnsureDir(componentsDir);
+
+  // Generate unique install tracking ID
+  const installId = randomBytes(8).toString('hex');
+
+  // Copy brand assets into public/og/
+  const assetsSource = path.join(new URL('.', import.meta.url).pathname, '..', 'assets', 'og');
+  const publicOgDir = path.join(options.directory, 'public', 'og');
+  if (await fs.pathExists(assetsSource)) {
+    await safeCopyDir(assetsSource, publicOgDir);
+  }
 
   // Override tsconfig for Preact — needs jsx: 'react-jsx' with jsxImportSource
   // pointing at preact so the JSX transform resolves to preact/jsx-runtime.
@@ -3113,7 +6186,7 @@ export default defineConfig({
 `,
   );
 
-  // index.html
+  // index.html — includes OG meta tags for social sharing
   await safeWriteFile(
     path.join(options.directory, 'index.html'),
     `<!DOCTYPE html>
@@ -3123,6 +6196,9 @@ export default defineConfig({
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     ${CSP_META}
     <title>${sanitizeForHtml(options.name)}</title>
+    <meta name="description" content="Enterprise web components with Preact and Vite." />
+    <meta property="og:title" content="${sanitizeForHtml(options.name)} — Built with HELiX" />
+    <meta property="og:image" content="/og/helixui.png" />
   </head>
   <body>
     <div id="app"></div>
@@ -3144,72 +6220,911 @@ render(<App />, document.getElementById('app')!);
 `,
   );
 
-  // src/app.tsx — Preact component
+  // src/helix.d.ts — JSX type declarations for hx-* custom elements
+  // Preact has its own JSX namespace — augment IntrinsicElements there.
   await safeWriteFile(
-    path.join(srcDir, 'app.tsx'),
-    `import { useState } from 'preact/hooks';
+    path.join(srcDir, 'helix.d.ts'),
+    `/**
+ * JSX type declarations for HELiX web components.
+ *
+ * Augments Preact's IntrinsicElements so TypeScript understands hx-* tags in JSX.
+ * Properties are typed broadly for flexibility — the web component runtime handles
+ * the actual attribute/property reflection.
+ */
+import 'preact';
 
-export function App() {
-  const [count, setCount] = useState(0);
+type HxElement = preact.JSX.HTMLAttributes<HTMLElement> & Record<string, unknown>;
+
+declare module 'preact' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'hx-accordion': HxElement;
+      'hx-accordion-item': HxElement;
+      'hx-alert': HxElement;
+      'hx-avatar': HxElement;
+      'hx-badge': HxElement;
+      'hx-banner': HxElement;
+      'hx-breadcrumb': HxElement;
+      'hx-button': HxElement;
+      'hx-button-group': HxElement;
+      'hx-card': HxElement;
+      'hx-carousel': HxElement;
+      'hx-checkbox': HxElement;
+      'hx-checkbox-group': HxElement;
+      'hx-code-snippet': HxElement;
+      'hx-color-picker': HxElement;
+      'hx-combobox': HxElement;
+      'hx-counter': HxElement;
+      'hx-data-table': HxElement;
+      'hx-date-picker': HxElement;
+      'hx-dialog': HxElement;
+      'hx-divider': HxElement;
+      'hx-drawer': HxElement;
+      'hx-dropdown': HxElement;
+      'hx-field': HxElement;
+      'hx-field-label': HxElement;
+      'hx-file-upload': HxElement;
+      'hx-grid': HxElement;
+      'hx-icon': HxElement;
+      'hx-icon-button': HxElement;
+      'hx-menu': HxElement;
+      'hx-menu-item': HxElement;
+      'hx-meter': HxElement;
+      'hx-nav': HxElement;
+      'hx-pagination': HxElement;
+      'hx-popover': HxElement;
+      'hx-progress-bar': HxElement;
+      'hx-progress-ring': HxElement;
+      'hx-radio-group': HxElement;
+      'hx-rating': HxElement;
+      'hx-select': HxElement;
+      'hx-skeleton': HxElement;
+      'hx-slider': HxElement;
+      'hx-spinner': HxElement;
+      'hx-split-button': HxElement;
+      'hx-split-panel': HxElement;
+      'hx-stat': HxElement;
+      'hx-status-indicator': HxElement;
+      'hx-switch': HxElement;
+      'hx-tab': HxElement;
+      'hx-tab-panel': HxElement;
+      'hx-tabs': HxElement;
+      'hx-tag': HxElement;
+      'hx-text': HxElement;
+      'hx-text-input': HxElement;
+      'hx-textarea': HxElement;
+      'hx-theme': HxElement;
+      'hx-toast': HxElement;
+      'hx-tooltip': HxElement;
+      'hx-top-nav': HxElement;
+      'hx-tree-item': HxElement;
+      'hx-tree-view': HxElement;
+    }
+  }
+}
+
+export {};
+`,
+  );
+
+  // src/components/navbar.tsx — top navigation with dark mode toggle
+  await safeWriteFile(
+    path.join(componentsDir, 'navbar.tsx'),
+    `import { useCallback, useEffect, useRef } from 'preact/hooks';
+
+export function Navbar() {
+  const switchRef = useRef<HTMLElement>(null);
+
+  const applyTheme = useCallback((theme: 'light' | 'dark') => {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.querySelectorAll('hx-theme').forEach((el) => {
+      (el as HTMLElement & { theme: string }).theme = theme;
+    });
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('helix-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = saved ? saved === 'dark' : prefersDark;
+    applyTheme(isDark ? 'dark' : 'light');
+    if (switchRef.current) {
+      (switchRef.current as HTMLInputElement).checked = isDark;
+    }
+  }, [applyTheme]);
+
+  const handleChange = useCallback((e: Event) => {
+    const checked = (e as CustomEvent).detail?.checked ?? false;
+    const theme = checked ? 'dark' : 'light';
+    applyTheme(theme);
+    localStorage.setItem('helix-theme', theme);
+  }, [applyTheme]);
+
+  useEffect(() => {
+    const el = switchRef.current;
+    el?.addEventListener('hx-change', handleChange);
+    return () => el?.removeEventListener('hx-change', handleChange);
+  }, [handleChange]);
 
   return (
-    <div class="container">
-      <h1>HELiX + Preact + Vite</h1>
-      <hx-card>
-        <div slot="header"><h2>Counter Demo</h2></div>
-        <p>Count: {count}</p>
-        <hx-button variant="primary" onClick={() => setCount((c) => c + 1)}>
-          Increment
-        </hx-button>
-        <hx-button
-          variant="secondary"
-          style="margin-left: 0.5rem"
-          onClick={() => setCount(0)}
-        >
-          Reset
-        </hx-button>
-      </hx-card>
-
-      <hx-card style="margin-top: 1.5rem">
-        <div slot="header">
-          <h2>Preact + Web Components</h2>
-          <hx-badge variant="info">3kB Runtime</hx-badge>
+    <hx-top-nav sticky label="Main navigation">
+      <div slot="logo">
+        <a href="/" style="display:flex;align-items:center;gap:0.75rem;text-decoration:none;color:inherit;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <img src="/og/bs-hx-square.png" alt="HELiX" style="height:30px;width:30px;border-radius:5px;" />
+            <span style="font-weight:700;font-size:1.125rem;letter-spacing:-0.025em;">HELiX</span>
+          </div>
+          <span style="opacity:0.25;font-size:1.25rem;font-weight:200;">+</span>
+          <span style="font-weight:600;font-size:0.95rem;opacity:0.9;">Preact</span>
+        </a>
+      </div>
+      <div style="display:flex;gap:1.5rem;align-items:center;margin-left:2rem;">
+        <a href="#components" style="color:inherit;text-decoration:none;font-size:0.875rem;opacity:0.8;">Components</a>
+        <a href="#interactive" style="color:inherit;text-decoration:none;font-size:0.875rem;opacity:0.8;">Demo</a>
+        <a href="#getting-started" style="color:inherit;text-decoration:none;font-size:0.875rem;opacity:0.8;">Docs</a>
+      </div>
+      <div slot="actions" style="display:flex;align-items:center;gap:0.75rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <span style="font-size:0.8rem;">Dark</span>
+          <hx-switch ref={switchRef} size="sm" />
         </div>
-        <p>Preact is a fast 3kB alternative to React with the same modern API.
-        It renders directly to the DOM with minimal overhead, making it ideal
-        for lightweight web component integration.</p>
-        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="danger" size="sm">Danger</hx-button>
-        </div>
-      </hx-card>
-    </div>
+        <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer"
+          style="color:inherit;display:flex;align-items:center;opacity:0.7;" title="Booked Solid on GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a>
+        <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer"
+          style="display:flex;align-items:center;" title="Booked Solid Technology">
+          <img src="https://bookedsolid.tech/logos/bs-bs-software-square.png?utm_source=create-helix&utm_medium=scaffold&utm_id=${installId}" alt="Booked Solid" style="height:28px;width:28px;border-radius:4px;" />
+        </a>
+      </div>
+    </hx-top-nav>
   );
 }
 `,
   );
 
-  // index.css
+  // src/components/footer.tsx
+  await safeWriteFile(
+    path.join(componentsDir, 'footer.tsx'),
+    `export function Footer() {
+  const year = new Date().getFullYear();
+
+  return (
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-brand">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+              <img src="/og/bs-hx-square.png" alt="HELiX" style="height:32px;width:32px;border-radius:4px;" />
+              <span style="font-weight:700;font-size:1.125rem;">HELiX</span>
+            </div>
+            <p class="text-secondary" style="font-size:0.85rem;line-height:1.6;max-width:280px;">
+              Enterprise web components built on Lit 3. Accessible, themeable, and framework-agnostic.
+            </p>
+          </div>
+          <div>
+            <h4 class="footer-heading">Product</h4>
+            <ul class="footer-links">
+              <li><a href="#components">Components</a></li>
+              <li><a href="#interactive">Demo</a></li>
+              <li><a href="#getting-started">Documentation</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="footer-heading">Ecosystem</h4>
+            <ul class="footer-links">
+              <li><a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI</a></li>
+              <li><a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">HELiXiR</a></li>
+              <li><a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer">Discord-Ops</a></li>
+              <li><a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="footer-heading">Legal</h4>
+            <ul class="footer-links">
+              <li><a href="https://bookedsolid.tech/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></li>
+              <li><a href="https://bookedsolid.tech/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a></li>
+              <li><a href="https://bookedsolid.tech/about" target="_blank" rel="noopener noreferrer">About</a></li>
+            </ul>
+          </div>
+        </div>
+        <hx-divider style="margin:2rem 0 1.5rem;"></hx-divider>
+        <div class="footer-bottom">
+          <p class="text-secondary" style="font-size:0.8rem;">
+            &copy; {year} Booked Solid Technology, a d/b/a of Clarity House LLC. All rights reserved.
+            Built with <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX</a> and <a href="https://preactjs.com" target="_blank" rel="noopener noreferrer">Preact</a>.
+          </p>
+          <div style="display:flex;gap:1rem;align-items:center;">
+            <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer"
+              class="text-secondary" style="display:flex;" title="GitHub">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+            </a>
+            <a href="https://bookedsolid.tech" target="_blank" rel="noopener noreferrer"
+              style="display:flex;align-items:center;" title="Booked Solid Technology">
+              <img src="/og/bs-bs-software-square.png" alt="BS" style="height:20px;width:20px;border-radius:3px;opacity:0.7;" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+`,
+  );
+
+  // src/app.tsx — Production landing page
+  // Preact uses class (not className), addEventListener for custom events
+  // HELiX web components work natively — no React wrappers needed
+  await safeWriteFile(
+    path.join(srcDir, 'app.tsx'),
+    `import { useState, useRef, useEffect } from 'preact/hooks';
+import { Navbar } from './components/navbar';
+import { Footer } from './components/footer';
+
+export function App() {
+  const [name, setName] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const nameInputRef = useRef<HTMLElement>(null);
+  const greetBtnRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const input = nameInputRef.current;
+    const btn = greetBtnRef.current;
+
+    const handleInput = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setName(detail?.value ?? '');
+    };
+
+    const handleClick = () => {
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+    };
+
+    input?.addEventListener('hx-input', handleInput);
+    btn?.addEventListener('hx-click', handleClick);
+
+    return () => {
+      input?.removeEventListener('hx-input', handleInput);
+      btn?.removeEventListener('hx-click', handleClick);
+    };
+  }, []);
+
+  return (
+    <hx-theme theme="auto">
+      <Navbar />
+
+      {/* Hero */}
+      <section class="hero">
+        <div class="container">
+          <h1>HELiX + Preact + Vite</h1>
+          <p>
+            Enterprise-grade web components in a 3kB runtime.
+            75+ accessible, themeable HELiX components work natively with Preact — no wrappers needed.
+          </p>
+          <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+            <hx-button variant="primary" size="lg">
+              <a href="#components" style="color:inherit;text-decoration:none;">See Components</a>
+            </hx-button>
+            <hx-button variant="secondary" size="lg">
+              <a href="#interactive" style="color:inherit;text-decoration:none;">Try the Demo</a>
+            </hx-button>
+          </div>
+          <div style="display:flex;gap:0.5rem;justify-content:center;margin-top:1.5rem;flex-wrap:wrap;">
+            <hx-tag>Lit 3</hx-tag>
+            <hx-tag>Shadow DOM</hx-tag>
+            <hx-tag>WCAG 2.1 AA</hx-tag>
+            <hx-tag>3kB Preact</hx-tag>
+            <hx-tag>Vite</hx-tag>
+          </div>
+        </div>
+      </section>
+
+      {/* Component Showcase */}
+      <section id="components" class="container section">
+        <div class="section-header">
+          <h2>Component Showcase</h2>
+          <p>A sampling of HELiX components — all rendered as native web components via Shadow DOM.</p>
+        </div>
+
+        <div class="grid-auto">
+          {/* Button Variants */}
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Button Variants</h3>
+              <hx-badge variant="success">Actions</hx-badge>
+            </div>
+            <p class="text-secondary" style="margin-bottom:1rem;">
+              All button styles respond to the active theme.
+            </p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <hx-button variant="primary" size="sm">Primary</hx-button>
+              <hx-button variant="secondary" size="sm">Secondary</hx-button>
+              <hx-button variant="danger" size="sm">Danger</hx-button>
+              <hx-button variant="ghost" size="sm">Ghost</hx-button>
+            </div>
+          </hx-card>
+
+          {/* Badges & Tags */}
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Badges &amp; Tags</h3>
+              <hx-badge variant="info">Status</hx-badge>
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+              <hx-badge variant="info">Info</hx-badge>
+              <hx-badge variant="success">Success</hx-badge>
+              <hx-badge variant="warning">Warning</hx-badge>
+              <hx-badge variant="danger">Danger</hx-badge>
+            </div>
+            <hx-divider style="margin:0.75rem 0;"></hx-divider>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <hx-tag>v1.1.2</hx-tag>
+              <hx-tag>stable</hx-tag>
+              <hx-tag>MIT</hx-tag>
+            </div>
+          </hx-card>
+
+          {/* Data Display */}
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Data Display</h3>
+              <hx-badge variant="warning">Metrics</hx-badge>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span>Build Status</span>
+                <hx-badge variant="success">Passing</hx-badge>
+              </div>
+              <hx-progress-bar value={87} max={100}></hx-progress-bar>
+              <div style="display:flex;gap:1rem;align-items:center;margin-top:0.5rem;">
+                <hx-avatar size="sm">AB</hx-avatar>
+                <hx-avatar size="md">CD</hx-avatar>
+                <hx-avatar size="lg">EF</hx-avatar>
+              </div>
+            </div>
+          </hx-card>
+
+          {/* Why Preact */}
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Why Preact?</h3>
+              <hx-badge variant="danger">3kB</hx-badge>
+            </div>
+            <ul style="line-height:2;padding-left:1.5rem;">
+              <li>Same modern API as React — minimal learning curve</li>
+              <li>3kB runtime vs 45kB+ for React</li>
+              <li>Native web component support — no wrappers needed</li>
+              <li>Vite hot-reload for rapid development</li>
+            </ul>
+          </hx-card>
+        </div>
+      </section>
+
+      {/* Interactive Demo */}
+      <section id="interactive" class="container section" style="border-top:1px solid var(--hx-page-border);">
+        <div class="section-header">
+          <h2>Interactive Demo</h2>
+          <p>HELiX custom events work natively in Preact via addEventListener — no adapter layer needed.</p>
+        </div>
+
+        <div class="grid-auto">
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Say Hello</h3>
+              <hx-badge variant="info">hx-input + hx-click</hx-badge>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:1rem;">
+              <hx-text-input
+                ref={nameInputRef}
+                label="Your name"
+                placeholder="Enter your name"
+              ></hx-text-input>
+              <hx-button ref={greetBtnRef} variant="primary">
+                Say Hello
+              </hx-button>
+              {submitted && (
+                <hx-alert variant="success" open>
+                  Hello, {name || 'World'}! HELiX components are working.
+                </hx-alert>
+              )}
+            </div>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Preact Patterns</h3>
+              <hx-badge variant="warning">Architecture</hx-badge>
+            </div>
+            <ul style="line-height:2;padding-left:1.5rem;">
+              <li><strong>useRef</strong> — attach refs to hx-* elements</li>
+              <li><strong>addEventListener</strong> — listen for hx-click, hx-input etc.</li>
+              <li><strong>useState</strong> — react to custom event data</li>
+              <li><strong>class</strong> not className — Preact uses HTML attribute names</li>
+            </ul>
+          </hx-card>
+        </div>
+      </section>
+
+      {/* Ecosystem Promos */}
+      <section class="container section" style="border-top:1px solid var(--hx-page-border);">
+        <div class="section-header">
+          <h2>The Booked Solid Ecosystem</h2>
+          <p>Enterprise-grade tools for modern web development and AI-powered workflows.</p>
+        </div>
+        <div class="promo-grid">
+          <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer" class="promo-card">
+            <img src="/og/helixui.png" alt="HELiX UI — 80+ enterprise web components." class="promo-card-image" />
+            <div class="promo-card-body">
+              <h3>HELiX UI</h3>
+              <p>
+                80+ enterprise web components built on Lit 3. Shadow DOM encapsulation,
+                healthcare-first accessibility, and W3C DTCG design tokens. Works everywhere.
+              </p>
+              <span class="promo-card-cta">Explore HELiX UI &rarr;</span>
+            </div>
+          </a>
+          <a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer" class="promo-card">
+            <img src="/og/helixir.png" alt="HELiXiR — MCP tools for web components." class="promo-card-image" />
+            <div class="promo-card-body">
+              <h3>HELiXiR</h3>
+              <p>
+                MCP server for any CEM-compliant web component library. Connect to Claude, Cursor,
+                or any MCP client. Components, tokens, slots, and a11y scores — all queryable.
+              </p>
+              <span class="promo-card-cta">Explore HELiXiR &rarr;</span>
+            </div>
+          </a>
+          <a href="https://bookedsolid.tech/discord-ops" target="_blank" rel="noopener noreferrer" class="promo-card">
+            <img src="/og/discord-ops.png" alt="Discord-Ops — Agency-grade Discord for AI agents." class="promo-card-image" />
+            <div class="promo-card-body">
+              <h3>Discord-Ops</h3>
+              <p>
+                Agency-grade Discord MCP server for AI agents. 45 tools, 23 message templates,
+                multi-guild routing, and multi-bot support.
+              </p>
+              <span class="promo-card-cta">Explore Discord-Ops &rarr;</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      {/* Getting Started */}
+      <section id="getting-started" class="container section" style="border-top:1px solid var(--hx-page-border);padding-bottom:5rem;">
+        <div class="section-header">
+          <h2>Getting Started</h2>
+          <p>Your project is ready. Here are the key files and next steps.</p>
+        </div>
+
+        <div class="grid-3">
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Key Files</h3>
+              <hx-badge variant="info">Reference</hx-badge>
+            </div>
+            <ul style="line-height:2;padding-left:1.5rem;">
+              <li><code>src/app.tsx</code> — Root component (this page)</li>
+              <li><code>src/index.tsx</code> — Preact render mount</li>
+              <li><code>src/helix.d.ts</code> — JSX type declarations</li>
+              <li><code>src/helix-setup.ts</code> — HELiX library import</li>
+              <li><code>src/components/navbar.tsx</code> — Navigation</li>
+              <li><code>helix-tokens.css</code> — Design token overrides</li>
+            </ul>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Commands</h3>
+              <hx-badge variant="success">CLI</hx-badge>
+            </div>
+            <ul style="line-height:2;padding-left:1.5rem;">
+              <li><code>npm run dev</code> — Start dev server</li>
+              <li><code>npm run build</code> — Production build</li>
+              <li><code>npm run preview</code> — Preview build</li>
+            </ul>
+            <hx-divider style="margin:1rem 0;"></hx-divider>
+            <p style="font-size:0.875rem;" class="text-secondary">
+              Add more HELiX components by importing them in <code>helix-setup.ts</code>.
+            </p>
+          </hx-card>
+
+          <hx-card>
+            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">Next Steps</h3>
+              <hx-badge variant="warning">Action</hx-badge>
+            </div>
+            <ul style="line-height:2;padding-left:1.5rem;">
+              <li>Customize your theme in <code>helix-tokens.css</code></li>
+              <li>Add more components from the <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">component library</a></li>
+              <li>Use <code>useRef</code> + <code>addEventListener</code> for events</li>
+              <li>Explore <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI docs</a></li>
+            </ul>
+          </hx-card>
+        </div>
+      </section>
+
+      <Footer />
+    </hx-theme>
+  );
+}
+`,
+  );
+
+  // src/index.css — full global styles with dark mode support
   await safeWriteFile(
     path.join(srcDir, 'index.css'),
     `@import '@helixui/tokens/tokens.css';
 
-body {
-  font-family: var(--hx-font-family, system-ui, sans-serif);
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
   margin: 0;
-  padding: 2rem;
-  color: var(--hx-color-text, #1a1a1a);
+  padding: 0;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --hx-page-bg: #0a0a0f;
+  --hx-page-text: #e4e4e7;
+  --hx-page-text-secondary: #a1a1aa;
+  --hx-page-surface: #18181b;
+  --hx-page-surface-raised: #27272a;
+  --hx-page-border: #3f3f46;
+  --hx-page-code-bg: #27272a;
+}
+
+html[data-theme="light"],
+html:not([data-theme]) {
+  --hx-page-bg: #fafafa;
+  --hx-page-text: #18181b;
+  --hx-page-text-secondary: #71717a;
+  --hx-page-surface: #ffffff;
+  --hx-page-surface-raised: #f4f4f5;
+  --hx-page-border: #e4e4e7;
+  --hx-page-code-bg: #f4f4f5;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--hx-page-text);
+  background: var(--hx-page-bg);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .container {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+a {
+  color: var(--hx-color-primary-500, #3b82f6);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  color: var(--hx-page-text);
+  letter-spacing: -0.025em;
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--hx-page-code-bg);
+  color: var(--hx-page-text);
+}
+
+pre {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  background: var(--hx-page-code-bg) !important;
+  color: var(--hx-page-text);
+  border: 1px solid var(--hx-page-border);
+}
+
+.hero {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: var(--hx-page-surface);
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+.hero p {
+  font-size: 1.125rem;
+  color: var(--hx-page-text-secondary);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.section {
+  padding: 4rem 0;
+}
+
+.section-header {
+  margin-bottom: 2rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.section-header p {
+  color: var(--hx-page-text-secondary);
+}
+
+.grid-auto {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.grid-3 {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* hx-top-nav overrides */
+hx-top-nav {
+  --hx-top-nav-bg: var(--hx-page-surface);
+  --hx-top-nav-color: var(--hx-page-text);
+  --hx-top-nav-border-color: var(--hx-page-border);
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+hx-top-nav::part(header) {
+  border-radius: 0;
+}
+
+/* hx-card overrides */
+hx-card {
+  --hx-card-bg: var(--hx-page-surface);
+  --hx-card-color: var(--hx-page-text);
+  --hx-card-border-color: var(--hx-page-border);
+}
+
+hx-card::part(header) {
+  background: var(--hx-page-surface-raised);
+  border-bottom: 1px solid var(--hx-page-border);
+  padding: 0.875rem 1.25rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.text-secondary {
+  color: var(--hx-page-text-secondary);
+}
+
+/* Promo cards */
+.promo-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.promo-card {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--hx-page-border);
+  background: var(--hx-page-surface);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
+}
+
+.promo-card-image {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  display: block;
+  border-bottom: 1px solid var(--hx-page-border);
+}
+
+.promo-card-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-card-body h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--hx-page-text);
+}
+
+.promo-card-body p {
+  font-size: 0.9rem;
+  color: var(--hx-page-text-secondary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.promo-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hx-color-primary-500, #3b82f6);
+}
+
+/* Footer */
+.site-footer {
+  background: var(--hx-page-surface);
+  border-top: 1px solid var(--hx-page-border);
+  padding: 3rem 0 2rem;
+}
+
+.footer-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+}
+
+@media (max-width: 768px) {
+  .footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .footer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.footer-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--hx-page-text);
+  margin-bottom: 0.75rem;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: 0.5rem;
+}
+
+.footer-links a {
+  color: var(--hx-page-text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+}
+
+.footer-links a:hover {
+  color: var(--hx-page-text);
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-bottom p {
+  margin: 0;
 }
 `,
   );
 
-  await writeReactErrorBoundary(options);
+  // src/components/ErrorBoundary.tsx — Preact-native error boundary
+  await safeWriteFile(
+    path.join(componentsDir, 'ErrorBoundary.tsx'),
+    `import { Component } from 'preact';
+import type { ComponentChildren } from 'preact';
+
+interface ErrorBoundaryProps {
+  children: ComponentChildren;
+  fallback?: ComponentChildren;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+/**
+ * ErrorBoundary — catches rendering errors in child component trees.
+ *
+ * Preact's Component supports getDerivedStateFromError / componentDidCatch,
+ * making this functionally equivalent to a React error boundary.
+ */
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error): void {
+    console.error('[ErrorBoundary] Caught error:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div
+          role="alert"
+          style="padding:2rem;border:1px solid var(--hx-color-danger,#dc3545);border-radius:var(--hx-radius-md,0.5rem);background:var(--hx-color-danger-surface,#fff5f5);color:var(--hx-color-danger,#dc3545);"
+        >
+          <h2 style="margin-bottom:0.5rem;">Something went wrong</h2>
+          {this.state.error && (
+            <pre style="font-size:0.85rem;overflow-x:auto;margin-bottom:1rem;white-space:pre-wrap;">
+              {this.state.error.message}
+            </pre>
+          )}
+          <hx-button
+            variant="secondary"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Try again
+          </hx-button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+`,
+  );
 }
 
 async function scaffoldStencil(options: ProjectOptions): Promise<void> {
@@ -3325,6 +7240,66 @@ ${options.designTokens ? "import '../helix-tokens.css';" : "import '@helixui/lib
 }
 
 // ─── Error boundary components ────────────────────────────────────────────────
+
+async function writeVueNuxtErrorBoundary(options: ProjectOptions): Promise<void> {
+  const componentsDir = path.join(options.directory, 'app', 'components');
+  await safeEnsureDir(componentsDir);
+
+  await safeWriteFile(
+    path.join(componentsDir, 'ErrorBoundary.vue'),
+    `<script setup lang="ts">
+import { ref, onErrorCaptured } from 'vue';
+
+/**
+ * ErrorBoundary — catches errors thrown in descendant components.
+ *
+ * Usage:
+ *   <ErrorBoundary>
+ *     <MyComponent />
+ *   </ErrorBoundary>
+ */
+
+const error = ref<Error | null>(null);
+
+onErrorCaptured((err: Error): boolean => {
+  error.value = err;
+  console.error('[ErrorBoundary] Caught error:', err);
+  return false;
+});
+
+function reset(): void {
+  error.value = null;
+}
+</script>
+
+<template>
+  <div v-if="error" role="alert" class="hx-error-boundary">
+    <h2>Something went wrong</h2>
+    <pre class="hx-error-boundary__message">{{ error.message }}</pre>
+    <hx-button variant="danger" @hx-click="reset">Try again</hx-button>
+  </div>
+  <slot v-else />
+</template>
+
+<style scoped>
+.hx-error-boundary {
+  padding: 2rem;
+  border: 1px solid var(--hx-color-danger, #dc3545);
+  border-radius: var(--hx-radius-md, 0.5rem);
+  background: var(--hx-color-danger-surface, #fff5f5);
+  color: var(--hx-color-danger, #dc3545);
+}
+
+.hx-error-boundary__message {
+  font-size: 0.85rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  white-space: pre-wrap;
+}
+</style>
+`,
+  );
+}
 
 async function writeReactErrorBoundary(options: ProjectOptions): Promise<void> {
   const componentsDir = path.join(options.directory, 'src', 'components');

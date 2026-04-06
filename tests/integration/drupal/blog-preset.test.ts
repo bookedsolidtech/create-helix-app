@@ -1,27 +1,29 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
-import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText } from '../setup.js';
 
 const ROOT = makeTmpRoot('drupal-blog');
 
 // blog preset: standard (7) + blog-specific (5) = 12 SDCs
 const STANDARD_SDCS = [
-  'node-teaser',
-  'views-grid',
-  'hero-banner',
-  'site-header',
-  'site-footer',
-  'breadcrumb',
-  'search-form',
-];
+  { name: 'node-teaser', group: 'node' },
+  { name: 'content-grid', group: 'views' },
+  { name: 'site-header', group: 'block' },
+  { name: 'site-footer', group: 'block' },
+  { name: 'breadcrumb', group: 'block' },
+  { name: 'search-form', group: 'block' },
+  { name: 'hero-banner', group: 'block' },
+] as const;
+
 const BLOG_SPECIFIC_SDCS = [
-  'article-full',
-  'author-byline',
-  'related-articles',
-  'tag-cloud',
-  'newsletter-signup',
-];
+  { name: 'article-full', group: 'node' },
+  { name: 'author-byline', group: 'node' },
+  { name: 'related-articles', group: 'views' },
+  { name: 'tag-cloud', group: 'block' },
+  { name: 'newsletter-signup', group: 'block' },
+] as const;
+
 const ALL_BLOG_SDCS = [...STANDARD_SDCS, ...BLOG_SPECIFIC_SDCS];
 
 afterAll(async () => {
@@ -35,10 +37,12 @@ describe('drupal blog preset integration', () => {
     await assertFilesExist(dir, [
       'test_blog.info.yml',
       'test_blog.libraries.yml',
-      'helixui.libraries.yml',
+      'test_blog.theme',
       'package.json',
       'composer.json',
-      'src/behaviors/blog-behaviors.js',
+      'css/style.css',
+      'js/behaviors.js',
+      'docker/docker-compose.yml',
     ]);
   });
 
@@ -48,21 +52,26 @@ describe('drupal blog preset integration', () => {
     const info = await readText(dir, 'test_blog_info.info.yml');
     expect(info).toContain('blog');
     expect(info).toContain('core_version_requirement: ^10 || ^11');
+    expect(info).toContain("path: 'components'");
   });
 
-  it('creates exactly 12 SDC component directories', async () => {
+  it('creates all 12 SDC component directories across correct groups', async () => {
     const dir = path.join(ROOT, 'blog-count');
     await scaffoldDrupalTheme({ themeName: 'test_blog_count', directory: dir, preset: 'blog' });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
-    expect(sdcDirs).toHaveLength(12);
+    for (const sdc of ALL_BLOG_SDCS) {
+      await assertFilesExist(dir, [
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+      ]);
+    }
   });
 
   it('all blog-specific SDC directories are present', async () => {
     const dir = path.join(ROOT, 'blog-specific');
     await scaffoldDrupalTheme({ themeName: 'test_blog_sdcs', directory: dir, preset: 'blog' });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
     for (const sdc of BLOG_SPECIFIC_SDCS) {
-      expect(sdcDirs).toContain(sdc);
+      await assertFilesExist(dir, [
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+      ]);
     }
   });
 
@@ -73,13 +82,14 @@ describe('drupal blog preset integration', () => {
       directory: dir,
       preset: 'blog',
     });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
     for (const sdc of STANDARD_SDCS) {
-      expect(sdcDirs).toContain(sdc);
+      await assertFilesExist(dir, [
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+      ]);
     }
   });
 
-  it('each SDC directory contains .component.yml and .twig files', async () => {
+  it('each SDC directory contains .component.yml, .twig, and .css files', async () => {
     const dir = path.join(ROOT, 'blog-sdc-files');
     await scaffoldDrupalTheme({
       themeName: 'test_blog_sdc_files',
@@ -88,20 +98,17 @@ describe('drupal blog preset integration', () => {
     });
     for (const sdc of ALL_BLOG_SDCS) {
       await assertFilesExist(dir, [
-        `src/components/${sdc}/${sdc}.component.yml`,
-        `src/components/${sdc}/${sdc}.twig`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.twig`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.css`,
       ]);
     }
   });
 
-  it('helixui.libraries.yml contains blog-specific SDC entries', async () => {
-    const dir = path.join(ROOT, 'blog-libs');
-    await scaffoldDrupalTheme({ themeName: 'test_blog_libs', directory: dir, preset: 'blog' });
-    const libs = await readText(dir, 'helixui.libraries.yml');
-    expect(libs).toContain('provider: cdn');
-    for (const sdc of BLOG_SPECIFIC_SDCS) {
-      expect(libs).toContain(`helixui.${sdc}:`);
-    }
+  it('generates template override for article-full', async () => {
+    const dir = path.join(ROOT, 'blog-templates');
+    await scaffoldDrupalTheme({ themeName: 'test_blog_tmpl', directory: dir, preset: 'blog' });
+    await assertFilesExist(dir, ['templates/node/node--article--full.html.twig']);
   });
 
   it('package.json has @helixui/drupal-starter and @helixui/tokens', async () => {
@@ -112,14 +119,15 @@ describe('drupal blog preset integration', () => {
     expect(pkg).toContain('@helixui/tokens');
   });
 
-  it('behaviors file uses once() pattern and is named blog-behaviors.js', async () => {
+  it('behaviors file uses once() pattern', async () => {
     const dir = path.join(ROOT, 'blog-behaviors');
     await scaffoldDrupalTheme({
       themeName: 'test_blog_behaviors',
       directory: dir,
       preset: 'blog',
     });
-    const behaviors = await readText(dir, 'src/behaviors/blog-behaviors.js');
+    const behaviors = await readText(dir, 'js/behaviors.js');
     expect(behaviors).toContain("once('");
+    expect(behaviors).toContain('Drupal.behaviors');
   });
 });

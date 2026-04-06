@@ -2,17 +2,45 @@ import { describe, it, expect } from 'vitest';
 import {
   toTitleCase,
   generateThemeInfoYml,
-  generateThemeLibrariesYml,
   generateComposerJson,
   generatePackageJson,
   generateBehaviorsJs,
   generateComponentYml,
   generateComponentTwig,
+  generateComponentCss,
+  generateTemplateOverride,
+  generateStyleCss,
+  generateHelixOverridesCss,
+  generateDockerCompose,
+  generateThemePhp,
 } from '../generators/drupal-theme.js';
+import { generateThemeLibraries } from '../generators/libraries.js';
 import { getPreset } from '../presets/loader.js';
+import type { SDCDefinition } from '../types.js';
 
 const standardPreset = getPreset('standard');
 const healthcarePreset = getPreset('healthcare');
+
+// Representative SDC definitions for unit tests
+const nodeTeaserSdc: SDCDefinition = {
+  name: 'node-teaser',
+  group: 'node',
+  helixComponents: ['hx-card', 'hx-badge', 'hx-text', 'hx-avatar'],
+  templateOverride: 'node/node--article--teaser.html.twig',
+};
+
+const heroBannerSdc: SDCDefinition = {
+  name: 'hero-banner',
+  group: 'block',
+  helixComponents: ['hx-hero', 'hx-text', 'hx-button'],
+};
+
+const contentGridSdc: SDCDefinition = {
+  name: 'content-grid',
+  group: 'views',
+  helixComponents: ['hx-card'],
+  templateOverride: 'views/views-view--content.html.twig',
+};
 
 describe('toTitleCase', () => {
   it('converts underscore-separated words to title case', () => {
@@ -29,6 +57,10 @@ describe('toTitleCase', () => {
 
   it('handles mixed underscores and hyphens', () => {
     expect(toTitleCase('my_node-teaser')).toBe('My Node Teaser');
+  });
+
+  it('converts hyphenated strings', () => {
+    expect(toTitleCase('hero-banner')).toBe('Hero Banner');
   });
 });
 
@@ -58,6 +90,12 @@ describe('generateThemeInfoYml', () => {
     expect(yml).toContain('- my_theme/global');
   });
 
+  it('declares SDC component path', () => {
+    const yml = generateThemeInfoYml('my_theme', standardPreset);
+    expect(yml).toContain('components:');
+    expect(yml).toContain("path: 'components'");
+  });
+
   it('works with healthcare preset', () => {
     const yml = generateThemeInfoYml('hospital_site', healthcarePreset);
     expect(yml).toContain("name: 'Hospital Site'");
@@ -65,24 +103,30 @@ describe('generateThemeInfoYml', () => {
   });
 });
 
-describe('generateThemeLibrariesYml', () => {
+describe('generateThemeLibraries', () => {
   it('contains global library entry', () => {
-    const yml = generateThemeLibrariesYml('my_theme');
+    const yml = generateThemeLibraries('my_theme', standardPreset);
     expect(yml).toContain('global:');
   });
 
   it('contains css/style.css', () => {
-    const yml = generateThemeLibrariesYml('my_theme');
+    const yml = generateThemeLibraries('my_theme', standardPreset);
     expect(yml).toContain('css/style.css: {}');
   });
 
   it('contains VERSION placeholder', () => {
-    const yml = generateThemeLibrariesYml('my_theme');
+    const yml = generateThemeLibraries('my_theme', standardPreset);
     expect(yml).toContain('version: VERSION');
   });
 
+  it('contains helix-overrides entry', () => {
+    const yml = generateThemeLibraries('my_theme', standardPreset);
+    expect(yml).toContain('helix-overrides:');
+    expect(yml).toContain('css/helix-overrides.css: {}');
+  });
+
   it('is valid YAML structure (key: value pairs)', () => {
-    const yml = generateThemeLibrariesYml('another_theme');
+    const yml = generateThemeLibraries('another_theme', standardPreset);
     expect(yml).toMatch(/^\w+:/m);
     expect(yml).toContain('theme:');
   });
@@ -160,106 +204,242 @@ describe('generatePackageJson', () => {
 
 describe('generateBehaviorsJs', () => {
   it('contains Drupal.behaviors definition', () => {
-    const js = generateBehaviorsJs(standardPreset);
-    expect(js).toContain('Drupal.behaviors.helixuiInit');
+    const js = generateBehaviorsJs('my_theme', standardPreset);
+    expect(js).toContain('Drupal.behaviors.my_themeInit');
   });
 
   it('uses once() pattern', () => {
-    const js = generateBehaviorsJs(standardPreset);
+    const js = generateBehaviorsJs('my_theme', standardPreset);
     expect(js).toContain("once('");
   });
 
   it('has attach function', () => {
-    const js = generateBehaviorsJs(standardPreset);
-    expect(js).toContain('attach: function');
+    const js = generateBehaviorsJs('my_theme', standardPreset);
+    expect(js).toContain('attach(');
   });
 
   it('has detach function', () => {
-    const js = generateBehaviorsJs(standardPreset);
-    expect(js).toContain('detach: function');
+    const js = generateBehaviorsJs('my_theme', standardPreset);
+    expect(js).toContain('detach(');
   });
 
-  it('references preset id in file comment', () => {
-    const js = generateBehaviorsJs(healthcarePreset);
-    expect(js).toContain('healthcare');
+  it('references preset name in file comment', () => {
+    const js = generateBehaviorsJs('my_theme', healthcarePreset);
+    expect(js).toContain('Healthcare');
   });
 
   it('wraps code in IIFE with Drupal and once params', () => {
-    const js = generateBehaviorsJs(standardPreset);
+    const js = generateBehaviorsJs('my_theme', standardPreset);
     expect(js).toContain('(function (Drupal, once)');
     expect(js).toContain('}(Drupal, once))');
+  });
+
+  it('references hx-* components from preset', () => {
+    const js = generateBehaviorsJs('my_theme', standardPreset);
+    expect(js).toContain('hx-card');
   });
 });
 
 describe('generateComponentYml', () => {
   it('contains SDC schema reference', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain('$schema:');
     expect(yml).toContain('drupalcode.org');
   });
 
   it('contains display name in title case', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain("name: 'Node Teaser'");
   });
 
-  it('references theme library in libraryOverrides', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
-    expect(yml).toContain('my_theme/helixui.node-teaser');
+  it('has status: experimental', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
+    expect(yml).toContain('status: experimental');
   });
 
-  it('has props section with title and url', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+  it('has group field matching SDC group', () => {
+    const nodeYml = generateComponentYml(nodeTeaserSdc);
+    expect(nodeYml).toContain("group: 'Node Display'");
+
+    const blockYml = generateComponentYml(heroBannerSdc);
+    expect(blockYml).toContain("group: 'Block'");
+
+    const viewsYml = generateComponentYml(contentGridSdc);
+    expect(viewsYml).toContain("group: 'Views'");
+  });
+
+  it('has props section with title', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain('props:');
     expect(yml).toContain('title:');
+  });
+
+  it('node SDC has url and body props', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain('url:');
+    expect(yml).toContain('body:');
   });
 
-  it('has slots section with content slot', () => {
-    const yml = generateComponentYml('node-teaser', 'my_theme');
+  it('has slots section', () => {
+    const yml = generateComponentYml(nodeTeaserSdc);
     expect(yml).toContain('slots:');
-    expect(yml).toContain('content:');
   });
 
-  it('works with different sdc and theme names', () => {
-    const yml = generateComponentYml('hero-banner', 'hospital_theme');
+  it('works with hero-banner block SDC', () => {
+    const yml = generateComponentYml(heroBannerSdc);
     expect(yml).toContain("name: 'Hero Banner'");
-    expect(yml).toContain('hospital_theme/helixui.hero-banner');
+    expect(yml).toContain("group: 'Block'");
   });
 });
 
 describe('generateComponentTwig', () => {
-  it('uses sdcName as CSS class', () => {
-    const twig = generateComponentTwig('node-teaser');
-    expect(twig).toContain('class="node-teaser"');
+  it('node-teaser uses attach_library for hx-card', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
+    expect(twig).toContain("attach_library('helixui/hx-card')");
   });
 
-  it('renders title slot with link', () => {
-    const twig = generateComponentTwig('node-teaser');
+  it('node-teaser uses hx-card element', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
+    expect(twig).toContain('<hx-card');
+  });
+
+  it('node-teaser renders title and url props', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
     expect(twig).toContain('{{ title }}');
     expect(twig).toContain('{{ url }}');
   });
 
-  it('has content block for slot', () => {
-    const twig = generateComponentTwig('node-teaser');
-    expect(twig).toContain('{% block content %}');
-  });
-
-  it('includes file docblock comment', () => {
-    const twig = generateComponentTwig('node-teaser');
+  it('includes @file docblock comment', () => {
+    const twig = generateComponentTwig(nodeTeaserSdc);
     expect(twig).toContain('@file');
-    expect(twig).toContain('node-teaser');
   });
 
-  it('uses article element as wrapper', () => {
-    const twig = generateComponentTwig('node-teaser');
-    expect(twig).toContain('<article');
-    expect(twig).toContain('</article>');
+  it('block SDC uses attach_library for its components', () => {
+    const twig = generateComponentTwig(heroBannerSdc);
+    expect(twig).toContain("attach_library('helixui/hx-hero')");
   });
 
-  it('works with different component name', () => {
-    const twig = generateComponentTwig('hero-banner');
-    expect(twig).toContain('class="hero-banner"');
-    expect(twig).toContain('Hero Banner');
+  it('block SDC has the correct CSS class', () => {
+    const twig = generateComponentTwig(heroBannerSdc);
+    expect(twig).toContain('hero-banner');
+  });
+
+  it('site-header twig uses hx-container and slot pattern', () => {
+    const siteHeader: SDCDefinition = {
+      name: 'site-header',
+      group: 'block',
+      helixComponents: ['hx-container'],
+    };
+    const twig = generateComponentTwig(siteHeader);
+    expect(twig).toContain('hx-container');
+    expect(twig).toContain('site-header__logo');
+  });
+});
+
+describe('generateComponentCss', () => {
+  it('generates BEM-scoped CSS for the component', () => {
+    const css = generateComponentCss(nodeTeaserSdc);
+    expect(css).toContain('.node-teaser {');
+    expect(css).toContain('.node-teaser__body {');
+  });
+
+  it('uses HELiX CSS custom properties', () => {
+    const css = generateComponentCss(nodeTeaserSdc);
+    expect(css).toContain('var(--hx-');
+  });
+
+  it('works with block SDCs', () => {
+    const css = generateComponentCss(heroBannerSdc);
+    expect(css).toContain('.hero-banner {');
+  });
+});
+
+describe('generateTemplateOverride', () => {
+  it('generates an include call for the SDC', () => {
+    const twig = generateTemplateOverride(nodeTeaserSdc, 'my_theme');
+    expect(twig).toContain("include('my_theme:node-teaser')");
+  });
+
+  it('passes node variables for node template overrides', () => {
+    const twig = generateTemplateOverride(nodeTeaserSdc, 'my_theme');
+    expect(twig).toContain('node.label');
+  });
+
+  it('passes block variables for block template overrides', () => {
+    const blockSdc: SDCDefinition = {
+      name: 'site-header',
+      group: 'block',
+      helixComponents: ['hx-container'],
+      templateOverride: 'block/block--system-branding-block.html.twig',
+    };
+    const twig = generateTemplateOverride(blockSdc, 'my_theme');
+    expect(twig).toContain('block.label');
+  });
+
+  it('passes views variables for views template overrides', () => {
+    const twig = generateTemplateOverride(contentGridSdc, 'my_theme');
+    expect(twig).toContain('rows');
+  });
+});
+
+describe('generateStyleCss', () => {
+  it('imports helix-overrides.css', () => {
+    const css = generateStyleCss();
+    expect(css).toContain('@import url("helix-overrides.css")');
+  });
+
+  it('has body reset styles', () => {
+    const css = generateStyleCss();
+    expect(css).toContain('body {');
+    expect(css).toContain('margin: 0');
+  });
+});
+
+describe('generateHelixOverridesCss', () => {
+  it('has :root block with commented out overrides', () => {
+    const css = generateHelixOverridesCss();
+    expect(css).toContain(':root {');
+    expect(css).toContain('--hx-color-primary');
+  });
+});
+
+describe('generateDockerCompose', () => {
+  it('uses drupal:11-apache image', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('drupal:11-apache');
+  });
+
+  it('references the theme directory in volume mount', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('my_theme');
+  });
+
+  it('exposes port 8080', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('8080:80');
+  });
+
+  it('uses mariadb:11 for the database', () => {
+    const compose = generateDockerCompose('my_theme');
+    expect(compose).toContain('mariadb:11');
+  });
+});
+
+describe('generateThemePhp', () => {
+  it('starts with PHP opening tag', () => {
+    const php = generateThemePhp('my_theme', standardPreset.sdcList);
+    expect(php).toContain('<?php');
+  });
+
+  it('generates preprocess hooks for SDCs with templateOverride', () => {
+    const php = generateThemePhp('my_theme', standardPreset.sdcList);
+    // node-teaser has node templateOverride
+    expect(php).toContain('function my_theme_preprocess_node');
+  });
+
+  it('generates block preprocess hook for block template overrides', () => {
+    const php = generateThemePhp('my_theme', standardPreset.sdcList);
+    // site-header has block templateOverride
+    expect(php).toContain('function my_theme_preprocess_block');
   });
 });

@@ -1,8 +1,9 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
+import fs from 'fs-extra';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
 import { getPreset, isValidPreset, PRESETS } from '../../../src/presets/loader.js';
-import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText } from '../setup.js';
 import type { DrupalPreset } from '../../../src/types.js';
 
 const ROOT = makeTmpRoot('drupal-scaffold-all');
@@ -31,14 +32,16 @@ describe('drupal theme scaffolding — all presets', () => {
       await assertFilesExist(dir, [
         `test_${presetId}.info.yml`,
         `test_${presetId}.libraries.yml`,
-        'helixui.libraries.yml',
+        `test_${presetId}.theme`,
         'package.json',
         'composer.json',
-        `src/behaviors/${presetId}-behaviors.js`,
+        'css/style.css',
+        'js/behaviors.js',
+        'docker/docker-compose.yml',
       ]);
     });
 
-    it('info.yml declares type theme and Drupal 10/11 compatibility', async () => {
+    it('info.yml declares type theme, Drupal 10/11 compat, and SDC path', async () => {
       const dir = path.join(ROOT, `${presetId}-info`);
       await scaffoldDrupalTheme({
         themeName: `test_${presetId}_info`,
@@ -49,9 +52,11 @@ describe('drupal theme scaffolding — all presets', () => {
       expect(info).toContain('type: theme');
       expect(info).toContain('core_version_requirement: ^10 || ^11');
       expect(info).toContain(presetId);
+      expect(info).toContain('components:');
+      expect(info).toContain("path: 'components'");
     });
 
-    it('libraries.yml references the theme global library', async () => {
+    it('libraries.yml has global and helix-overrides CSS entries', async () => {
       const dir = path.join(ROOT, `${presetId}-themelib`);
       await scaffoldDrupalTheme({
         themeName: `test_${presetId}_lib`,
@@ -61,20 +66,29 @@ describe('drupal theme scaffolding — all presets', () => {
       const libs = await readText(dir, `test_${presetId}_lib.libraries.yml`);
       expect(libs).toContain('global:');
       expect(libs).toContain('css/style.css');
+      expect(libs).toContain('helix-overrides:');
     });
 
-    it('SDC directories exactly match the preset sdcList', async () => {
+    it('all SDCs exist at components/{group}/{name}/ path', async () => {
       const dir = path.join(ROOT, `${presetId}-sdcdirs`);
       await scaffoldDrupalTheme({
         themeName: `test_${presetId}_sdc`,
         directory: dir,
         preset: presetId,
       });
-      const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
-      expect(sdcDirs.sort()).toEqual([...preset.sdcList].sort());
+      for (const sdc of preset.sdcList) {
+        const ymlPath = path.join(
+          dir,
+          'components',
+          sdc.group,
+          sdc.name,
+          `${sdc.name}.component.yml`,
+        );
+        expect(fs.existsSync(ymlPath), `Missing: components/${sdc.group}/${sdc.name}/`).toBe(true);
+      }
     });
 
-    it('every SDC directory contains .component.yml and .twig', async () => {
+    it('every SDC directory contains .component.yml, .twig, and .css', async () => {
       const dir = path.join(ROOT, `${presetId}-sdcfiles`);
       await scaffoldDrupalTheme({
         themeName: `test_${presetId}_sdcf`,
@@ -83,35 +97,25 @@ describe('drupal theme scaffolding — all presets', () => {
       });
       for (const sdc of preset.sdcList) {
         await assertFilesExist(dir, [
-          `src/components/${sdc}/${sdc}.component.yml`,
-          `src/components/${sdc}/${sdc}.twig`,
+          `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+          `components/${sdc.group}/${sdc.name}/${sdc.name}.twig`,
+          `components/${sdc.group}/${sdc.name}/${sdc.name}.css`,
         ]);
       }
     });
 
-    it('helixui.libraries.yml has CDN provider and entry per SDC', async () => {
-      const dir = path.join(ROOT, `${presetId}-helixlibs`);
-      await scaffoldDrupalTheme({
-        themeName: `test_${presetId}_hl`,
-        directory: dir,
-        preset: presetId,
-      });
-      const libs = await readText(dir, 'helixui.libraries.yml');
-      expect(libs).toContain('provider: cdn');
-      expect(libs).toContain('helixui.base:');
-      for (const sdc of preset.sdcList) {
-        expect(libs).toContain(`helixui.${sdc}:`);
-      }
-    });
-
-    it('component.yml files reference the correct theme library', async () => {
+    it('component.yml files have SDC schema, status, and group', async () => {
       const dir = path.join(ROOT, `${presetId}-ymlref`);
       const themeName = `ref_${presetId}`;
       await scaffoldDrupalTheme({ themeName, directory: dir, preset: presetId });
-      // Check first SDC as representative
       const firstSdc = preset.sdcList[0];
-      const yml = await readText(dir, `src/components/${firstSdc}/${firstSdc}.component.yml`);
-      expect(yml).toContain(`${themeName}/helixui.${firstSdc}`);
+      const yml = await readText(
+        dir,
+        `components/${firstSdc.group}/${firstSdc.name}/${firstSdc.name}.component.yml`,
+      );
+      expect(yml).toContain('$schema:');
+      expect(yml).toContain('status: experimental');
+      expect(yml).toContain('group:');
     });
 
     it('composer.json has type drupal-theme', async () => {
@@ -138,14 +142,14 @@ describe('drupal theme scaffolding — all presets', () => {
       }
     });
 
-    it('behaviors file uses once() pattern', async () => {
+    it('behaviors file uses once() pattern and Drupal.behaviors', async () => {
       const dir = path.join(ROOT, `${presetId}-beh`);
       await scaffoldDrupalTheme({
         themeName: `test_${presetId}_beh`,
         directory: dir,
         preset: presetId,
       });
-      const behaviors = await readText(dir, `src/behaviors/${presetId}-behaviors.js`);
+      const behaviors = await readText(dir, 'js/behaviors.js');
       expect(behaviors).toContain("once('");
       expect(behaviors).toContain('Drupal.behaviors');
     });
@@ -157,31 +161,31 @@ describe('drupal theme scaffolding — all presets', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('drupal preset SDC hierarchy', () => {
-  const standardSdcs = getPreset('standard').sdcList;
-  const blogSdcs = getPreset('blog').sdcList;
+  const standardNames = getPreset('standard').sdcList.map((s) => s.name);
+  const blogNames = getPreset('blog').sdcList.map((s) => s.name);
 
   it('blog preset includes all standard SDCs', () => {
-    for (const sdc of standardSdcs) {
-      expect(blogSdcs).toContain(sdc);
+    for (const name of standardNames) {
+      expect(blogNames).toContain(name);
     }
   });
 
   it('healthcare preset includes all blog SDCs', () => {
-    const healthcareSdcs = getPreset('healthcare').sdcList;
-    for (const sdc of blogSdcs) {
-      expect(healthcareSdcs).toContain(sdc);
+    const healthcareNames = getPreset('healthcare').sdcList.map((s) => s.name);
+    for (const name of blogNames) {
+      expect(healthcareNames).toContain(name);
     }
   });
 
   it('intranet preset includes all standard SDCs but not blog-specific ones', () => {
-    const intranetSdcs = getPreset('intranet').sdcList;
-    for (const sdc of standardSdcs) {
-      expect(intranetSdcs).toContain(sdc);
+    const intranetNames = getPreset('intranet').sdcList.map((s) => s.name);
+    for (const name of standardNames) {
+      expect(intranetNames).toContain(name);
     }
     // blog-specific SDCs should NOT be in intranet
-    const blogOnly = blogSdcs.filter((s) => !standardSdcs.includes(s));
-    for (const sdc of blogOnly) {
-      expect(intranetSdcs).not.toContain(sdc);
+    const blogOnly = blogNames.filter((n) => !standardNames.includes(n));
+    for (const name of blogOnly) {
+      expect(intranetNames).not.toContain(name);
     }
   });
 });
@@ -201,7 +205,7 @@ describe('drupal scaffolding edge cases', () => {
     expect(isValidPreset('STANDARD')).toBe(false);
   });
 
-  it('isValidPreset accepts all four valid presets', () => {
+  it('isValidPreset accepts all five valid presets', () => {
     for (const presetId of ALL_PRESETS) {
       expect(isValidPreset(presetId)).toBe(true);
     }

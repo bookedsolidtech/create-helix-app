@@ -81,7 +81,7 @@ describe('TEMPLATES', () => {
     const preact = TEMPLATES.find((t) => t.id === 'preact-vite');
     expect(preact).toBeDefined();
     expect(preact!.name).toBe('Preact + Vite');
-    expect(preact!.hint).toBe('fast 3kB React alternative');
+    expect(preact!.hint).toBe('beta — template under review');
     expect(preact!.dependencies['preact']).toBeDefined();
     expect(preact!.devDependencies['@preact/preset-vite']).toBeDefined();
     expect(preact!.devDependencies['vite']).toBeDefined();
@@ -92,7 +92,7 @@ describe('TEMPLATES', () => {
     const stencil = TEMPLATES.find((t) => t.id === 'stencil');
     expect(stencil).toBeDefined();
     expect(stencil!.name).toBe('Stencil');
-    expect(stencil!.hint).toBe('compiled web components, standards-based');
+    expect(stencil!.hint).toBe('beta — template under review');
     expect(stencil!.dependencies['@stencil/core']).toBeDefined();
     expect(stencil!.dependencies['@helixui/library']).toBeDefined();
     expect(stencil!.devDependencies['typescript']).toBeDefined();
@@ -106,7 +106,7 @@ describe('getTemplate', () => {
     const template = getTemplate('react-next');
     expect(template).toBeDefined();
     expect(template!.id).toBe('react-next');
-    expect(template!.name).toBe('React + Next.js 15');
+    expect(template!.name).toBe('React + Next.js 16');
   });
 
   it('returns undefined for an unknown framework ID', () => {
@@ -118,7 +118,7 @@ describe('getTemplate', () => {
   });
 
   it.each([
-    ['react-next', 'React + Next.js 15'],
+    ['react-next', 'React + Next.js 16'],
     ['react-vite', 'React + Vite'],
     ['vue-nuxt', 'Vue + Nuxt 4'],
     ['vue-vite', 'Vue + Vite'],

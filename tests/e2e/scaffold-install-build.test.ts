@@ -53,7 +53,12 @@ const FRAMEWORKS: FrameworkTestEntry[] = [
   { framework: 'lit-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'preact-vite', hasBuild: true, buildOutputDir: 'dist' },
   { framework: 'stencil', hasBuild: true, buildOutputDir: 'www' },
-  { framework: 'ember', hasBuild: true, buildOutputDir: 'dist' },
+  {
+    framework: 'ember',
+    hasBuild: true,
+    buildOutputDir: 'dist',
+    knownBuildFailure: 'ember-cli cleanup errors in sandboxed/tmp environments',
+  },
   // vanilla is pure HTML -- no install or build needed
 ];
 

@@ -5,12 +5,12 @@ import type { TemplateConfig, ComponentBundleConfig } from './types.js';
 export const TEMPLATES: TemplateConfig[] = [
   {
     id: 'react-next',
-    name: 'React + Next.js 15',
+    name: 'React + Next.js 16',
     description: 'App Router, SSR-ready, full HELiX integration',
     hint: 'recommended for new projects',
     color: pc.cyan,
     dependencies: {
-      next: '^15.3.0',
+      next: '^16.0.0',
       react: '^19.1.0',
       'react-dom': '^19.1.0',
       '@helixui/library': '^1.0.0',
@@ -18,9 +18,13 @@ export const TEMPLATES: TemplateConfig[] = [
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
+      '@types/node': '^22.0.0',
       '@types/react': '^19.1.0',
       '@types/react-dom': '^19.1.0',
       typescript: '^5.7.0',
+      eslint: '^9.0.0',
+      '@eslint/js': '^9.0.0',
+      'typescript-eslint': '^8.0.0',
     },
     features: ['ssr', 'app-router', 'react-wrappers', 'form-integration'],
   },
@@ -28,7 +32,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'react-vite',
     name: 'React + Vite',
     description: 'Lightning fast dev, SPA-first, HELiX with @lit/react',
-    hint: 'best DX for SPAs',
+    hint: 'beta — template under review',
     color: pc.magenta,
     dependencies: {
       react: '^19.1.0',
@@ -50,7 +54,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'remix',
     name: 'React Router (Remix)',
     description: 'Full-stack React with SSR, nested routes, and HELiX integration',
-    hint: 'full-stack React, SSR',
+    hint: 'beta — template under review',
     color: pc.blue,
     dependencies: {
       'react-router': '^7.5.0',
@@ -77,7 +81,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'vue-nuxt',
     name: 'Vue + Nuxt 4',
     description: 'Full-stack Vue with SSR, native WC support',
-    hint: 'Vue ecosystem, SSR built-in',
+    hint: 'beta — template under review',
     color: pc.green,
     dependencies: {
       nuxt: '^4.0.0',
@@ -93,7 +97,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'vue-vite',
     name: 'Vue + Vite',
     description: 'Lightweight Vue 3 SPA with native WC binding',
-    hint: 'minimal, fast',
+    hint: 'beta — template under review',
     color: pc.green,
     dependencies: {
       vue: '^3.5.0',
@@ -111,7 +115,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'solid-vite',
     name: 'Solid.js + Vite',
     description: 'Fine-grained reactive SPA with native web component support',
-    hint: 'fine-grained reactivity',
+    hint: 'beta — template under review',
     color: pc.blue,
     dependencies: {
       'solid-js': '^1.9.0',
@@ -129,7 +133,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'qwik-vite',
     name: 'Qwik + Vite',
     description: 'Resumable framework with zero hydration and native web component support',
-    hint: 'resumable, zero hydration',
+    hint: 'beta — template under review',
     color: pc.magenta,
     dependencies: {
       '@builder.io/qwik': '^1.14.0',
@@ -146,7 +150,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'svelte-kit',
     name: 'SvelteKit',
     description: 'Svelte 5 + SvelteKit, native custom element support',
-    hint: 'best native WC support',
+    hint: 'beta — template under review',
     color: pc.red,
     dependencies: {
       '@sveltejs/kit': '^2.20.0',
@@ -165,7 +169,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'angular',
     name: 'Angular 18',
     description: 'Enterprise Angular with CUSTOM_ELEMENTS_SCHEMA',
-    hint: 'enterprise teams',
+    hint: 'beta — template under review',
     color: pc.red,
     dependencies: {
       '@angular/core': '^18.0.0',
@@ -188,7 +192,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'astro',
     name: 'Astro',
     description: 'Content-first with islands architecture, zero JS by default',
-    hint: 'docs sites, marketing',
+    hint: 'beta — template under review',
     color: pc.yellow,
     dependencies: {
       astro: '^5.7.0',
@@ -204,7 +208,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'vanilla',
     name: 'Vanilla (HTML + CDN)',
     description: 'No framework, no build step, just HTML and HELiX via CDN',
-    hint: 'prototyping, Drupal, CMS',
+    hint: 'beta — template under review',
     color: pc.white,
     dependencies: {},
     devDependencies: {},
@@ -214,7 +218,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'lit-vite',
     name: 'Lit + Vite',
     description: 'Lightweight web components with Google Lit and Vite build tooling',
-    hint: 'fast web components, small footprint',
+    hint: 'beta — template under review',
     color: pc.blue,
     dependencies: {
       lit: '^3.2.0',
@@ -232,7 +236,7 @@ export const TEMPLATES: TemplateConfig[] = [
     name: 'Preact + Vite',
     description:
       'Fast 3kB React alternative with the same modern API and native web component support',
-    hint: 'fast 3kB React alternative',
+    hint: 'beta — template under review',
     color: pc.magenta,
     dependencies: {
       preact: '^10.26.0',
@@ -251,7 +255,7 @@ export const TEMPLATES: TemplateConfig[] = [
     name: 'Stencil',
     description:
       'Compiler for building standards-based web components with lazy-loading and zero-dependency output',
-    hint: 'compiled web components, standards-based',
+    hint: 'beta — template under review',
     color: pc.cyan,
     dependencies: {
       '@stencil/core': '^4.22.0',
@@ -267,7 +271,7 @@ export const TEMPLATES: TemplateConfig[] = [
     id: 'ember',
     name: 'Ember.js',
     description: 'Convention-driven full-stack framework with native web component support',
-    hint: 'convention over configuration',
+    hint: 'beta — template under review',
     color: pc.red,
     dependencies: {
       'ember-source': '^6.0.0',

@@ -121,9 +121,22 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
 
   if (!isQuiet) s.stop(pc.green('Drupal theme scaffolded'));
 
-  const nextSteps = [`Copy ${themeNameStr}/ to your Drupal themes directory`, 'drush cr'];
+  const nextSteps = [
+    `Move ${themeNameStr}/ into your project:`,
+    `  DDEV:  cp -r ${themeNameStr}/ web/themes/custom/`,
+    `  Lando: cp -r ${themeNameStr}/ web/themes/custom/`,
+    `  Other: copy to <drupal-root>/web/themes/custom/`,
+    ``,
+    `Enable the theme:`,
+    `  ddev drush theme:enable ${themeNameStr} && ddev drush cr`,
+    `  lando drush theme:enable ${themeNameStr} && lando drush cr`,
+    ``,
+    `Standalone testing (no existing Drupal install needed):`,
+    `  cd ${themeNameStr}/docker && docker compose up -d`,
+    `  See README.md for full instructions`,
+  ].join('\n');
 
-  if (!isQuiet) p.note(nextSteps.join('\n'), 'Next steps');
+  if (!isQuiet) p.note(nextSteps, 'Next steps');
 
   console.log();
   console.log(pc.dim('  Theme:     ') + pc.cyan(themeNameStr));

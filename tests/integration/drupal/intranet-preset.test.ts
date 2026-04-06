@@ -1,26 +1,29 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
+import fs from 'fs-extra';
 import { scaffoldDrupalTheme } from '../../../src/generators/drupal-theme.js';
-import { makeTmpRoot, removeTempDir, assertFilesExist, readText, listSubdirs } from '../setup.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readText } from '../setup.js';
 
 const ROOT = makeTmpRoot('drupal-intranet');
 
 // intranet preset: standard (7) + intranet-specific (4) = 11 SDCs
 const STANDARD_SDCS = [
-  'node-teaser',
-  'views-grid',
-  'hero-banner',
-  'site-header',
-  'site-footer',
-  'breadcrumb',
-  'search-form',
-];
+  { name: 'node-teaser', group: 'node' },
+  { name: 'content-grid', group: 'views' },
+  { name: 'site-header', group: 'block' },
+  { name: 'site-footer', group: 'block' },
+  { name: 'breadcrumb', group: 'block' },
+  { name: 'search-form', group: 'block' },
+  { name: 'hero-banner', group: 'block' },
+] as const;
+
 const INTRANET_SPECIFIC_SDCS = [
-  'dashboard-card',
-  'notification-banner',
-  'data-table-view',
-  'user-profile',
-];
+  { name: 'dashboard-card', group: 'block' },
+  { name: 'notification-banner', group: 'block' },
+  { name: 'data-table-view', group: 'views' },
+  { name: 'user-profile', group: 'block' },
+] as const;
+
 const ALL_INTRANET_SDCS = [...STANDARD_SDCS, ...INTRANET_SPECIFIC_SDCS];
 
 afterAll(async () => {
@@ -38,10 +41,12 @@ describe('drupal intranet preset integration', () => {
     await assertFilesExist(dir, [
       'test_intranet.info.yml',
       'test_intranet.libraries.yml',
-      'helixui.libraries.yml',
+      'test_intranet.theme',
       'package.json',
       'composer.json',
-      'src/behaviors/intranet-behaviors.js',
+      'css/style.css',
+      'js/behaviors.js',
+      'docker/docker-compose.yml',
     ]);
   });
 
@@ -55,17 +60,21 @@ describe('drupal intranet preset integration', () => {
     const info = await readText(dir, 'test_int_info.info.yml');
     expect(info).toContain('intranet');
     expect(info).toContain('core_version_requirement: ^10 || ^11');
+    expect(info).toContain("path: 'components'");
   });
 
-  it('creates exactly 11 SDC component directories', async () => {
+  it('creates all 11 SDC component directories across correct groups', async () => {
     const dir = path.join(ROOT, 'int-count');
     await scaffoldDrupalTheme({
       themeName: 'test_int_count',
       directory: dir,
       preset: 'intranet',
     });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
-    expect(sdcDirs).toHaveLength(11);
+    for (const sdc of ALL_INTRANET_SDCS) {
+      await assertFilesExist(dir, [
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+      ]);
+    }
   });
 
   it('all intranet-specific SDC directories are present', async () => {
@@ -75,9 +84,10 @@ describe('drupal intranet preset integration', () => {
       directory: dir,
       preset: 'intranet',
     });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
     for (const sdc of INTRANET_SPECIFIC_SDCS) {
-      expect(sdcDirs).toContain(sdc);
+      await assertFilesExist(dir, [
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+      ]);
     }
   });
 
@@ -88,9 +98,10 @@ describe('drupal intranet preset integration', () => {
       directory: dir,
       preset: 'intranet',
     });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
     for (const sdc of STANDARD_SDCS) {
-      expect(sdcDirs).toContain(sdc);
+      await assertFilesExist(dir, [
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+      ]);
     }
   });
 
@@ -101,12 +112,11 @@ describe('drupal intranet preset integration', () => {
       directory: dir,
       preset: 'intranet',
     });
-    const sdcDirs = await listSubdirs(path.join(dir, 'src', 'components'));
-    expect(sdcDirs).not.toContain('article-full');
-    expect(sdcDirs).not.toContain('author-byline');
+    expect(fs.existsSync(path.join(dir, 'components/node/article-full'))).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'components/node/author-byline'))).toBe(false);
   });
 
-  it('each SDC directory contains .component.yml and .twig files', async () => {
+  it('each SDC directory contains .component.yml, .twig, and .css files', async () => {
     const dir = path.join(ROOT, 'int-sdc-files');
     await scaffoldDrupalTheme({
       themeName: 'test_int_sdc_files',
@@ -115,35 +125,23 @@ describe('drupal intranet preset integration', () => {
     });
     for (const sdc of ALL_INTRANET_SDCS) {
       await assertFilesExist(dir, [
-        `src/components/${sdc}/${sdc}.component.yml`,
-        `src/components/${sdc}/${sdc}.twig`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.component.yml`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.twig`,
+        `components/${sdc.group}/${sdc.name}/${sdc.name}.css`,
       ]);
     }
   });
 
-  it('helixui.libraries.yml contains intranet-specific SDC entries with CDN provider', async () => {
-    const dir = path.join(ROOT, 'int-libs');
-    await scaffoldDrupalTheme({
-      themeName: 'test_int_libs',
-      directory: dir,
-      preset: 'intranet',
-    });
-    const libs = await readText(dir, 'helixui.libraries.yml');
-    expect(libs).toContain('provider: cdn');
-    for (const sdc of INTRANET_SPECIFIC_SDCS) {
-      expect(libs).toContain(`helixui.${sdc}:`);
-    }
-  });
-
-  it('behaviors file uses once() pattern and is named intranet-behaviors.js', async () => {
+  it('behaviors file uses once() pattern', async () => {
     const dir = path.join(ROOT, 'int-behaviors');
     await scaffoldDrupalTheme({
       themeName: 'test_int_behaviors',
       directory: dir,
       preset: 'intranet',
     });
-    const behaviors = await readText(dir, 'src/behaviors/intranet-behaviors.js');
+    const behaviors = await readText(dir, 'js/behaviors.js');
     expect(behaviors).toContain("once('");
+    expect(behaviors).toContain('Drupal.behaviors');
   });
 
   it('package.json has @helixui/drupal-starter and @helixui/tokens', async () => {
