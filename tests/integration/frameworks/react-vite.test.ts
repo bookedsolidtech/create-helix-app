@@ -37,6 +37,10 @@ describe('react-vite integration', () => {
       'src/App.tsx',
       'src/index.css',
       'src/helix-setup.ts',
+      'src/helix.d.ts',
+      'src/components/helix/wrappers.tsx',
+      'src/components/helix/provider.tsx',
+      'helix-tokens.css',
       '.gitignore',
       'README.md',
     ]);
@@ -66,6 +70,8 @@ describe('react-vite integration', () => {
     expect(pkg.dependencies['react']).toBeDefined();
     expect(pkg.dependencies['react-dom']).toBeDefined();
     expect(pkg.dependencies['@helixui/library']).toBeDefined();
+    expect(pkg.dependencies['@lit/react']).toBeDefined();
+    expect(pkg.dependencies['@helixui/tokens']).toBeDefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
     expect(pkg.devDependencies['@vitejs/plugin-react']).toBeDefined();
   });
@@ -87,5 +93,41 @@ describe('react-vite integration', () => {
       'tsconfig.json',
     );
     expect(tsconfig.compilerOptions.strict).toBe(true);
+  });
+
+  it('wrappers.tsx uses @lit/react createComponent', async () => {
+    const o = opts('rv-wrappers');
+    await scaffoldProject(o);
+    const content = await readText(o.directory, 'src/components/helix/wrappers.tsx');
+    expect(content).toContain('@lit/react');
+    expect(content).toContain('createComponent');
+    expect(content).toContain('hx-button');
+    expect(content).toContain('hx-card');
+    expect(content).toContain('hx-badge');
+  });
+
+  it('provider.tsx exports HelixProvider', async () => {
+    const o = opts('rv-provider');
+    await scaffoldProject(o);
+    const content = await readText(o.directory, 'src/components/helix/provider.tsx');
+    expect(content).toContain('HelixProvider');
+    expect(content).toContain('@helixui/library');
+  });
+
+  it('helix-tokens.css contains design token overrides', async () => {
+    const o = opts('rv-tokens');
+    await scaffoldProject(o);
+    const css = await readText(o.directory, 'helix-tokens.css');
+    expect(css).toContain('@import');
+    expect(css).toContain('--hx-color-primary');
+  });
+
+  it('src/helix.d.ts has hx-* element declarations', async () => {
+    const o = opts('rv-helix-dts');
+    await scaffoldProject(o);
+    const content = await readText(o.directory, 'src/helix.d.ts');
+    expect(content).toContain('hx-button');
+    expect(content).toContain('hx-card');
+    expect(content).toContain('IntrinsicElements');
   });
 });
