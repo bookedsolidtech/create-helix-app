@@ -23,5 +23,9 @@ else
   echo "   https://github.com/gitleaks/gitleaks#installing"
 fi
 
-# ── Run lint-staged (from main root where node_modules lives) ─────────────────
-cd "$MAIN_ROOT" && pnpm exec lint-staged
+# ── Run lint-staged (from commit root so staged files are correctly resolved) ──
+# pnpm exec resolves the binary through the workspace even in worktrees.
+# Running from the commit root (not MAIN_ROOT) ensures lint-staged uses the
+# correct GIT_INDEX_FILE for this worktree's staged files.
+COMMIT_ROOT="$(git rev-parse --show-toplevel)"
+cd "$COMMIT_ROOT" && pnpm exec lint-staged
