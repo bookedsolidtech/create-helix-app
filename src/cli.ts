@@ -237,6 +237,8 @@ export async function runJsonScaffold(
     tokensFlag: boolean;
     bundlesFromFlag: ComponentBundle[] | null;
     outputDirArg: string | null;
+    dsNameFromArgs?: string | null;
+    tokenPrefixFromArgs?: string | null;
   },
 ): Promise<void> {
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
@@ -272,6 +274,8 @@ export async function runJsonScaffold(
     dryRun: opts.isDryRun,
     force: opts.isForce,
     verbose: opts.isVerbose,
+    dsName: opts.dsNameFromArgs ?? name,
+    tokenPrefix: opts.tokenPrefixFromArgs ?? '--hx',
   };
 
   try {
@@ -385,6 +389,8 @@ export async function runCLI(): Promise<void> {
     explicitFlags,
     projectName,
     skipAudit,
+    dsName: dsNameFromArgs,
+    tokenPrefix: tokenPrefixFromArgs,
   } = parsed;
 
   // Load config file and environment variables
@@ -605,6 +611,8 @@ ${presetList}
       tokensFlag,
       bundlesFromFlag,
       outputDirArg,
+      dsNameFromArgs,
+      tokenPrefixFromArgs,
     });
     return;
   }
@@ -680,6 +688,46 @@ ${presetList}
         });
       },
 
+      dsName: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') {
+          return Promise.resolve(projectName ?? 'my-ds');
+        }
+        if (dsNameFromArgs !== null) {
+          return Promise.resolve(dsNameFromArgs);
+        }
+        return p.text({
+          message: 'Design system codename',
+          placeholder: 'my-ds',
+          initialValue: projectName ?? 'my-ds',
+          validate(v) {
+            if (!v) return 'Required';
+            if (!/^[a-z][a-z0-9-]*$/.test(v))
+              return 'Lowercase letters, numbers, and hyphens only (must start with a letter)';
+          },
+        });
+      },
+
+      tokenPrefix: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') {
+          return Promise.resolve('--hx');
+        }
+        if (tokenPrefixFromArgs !== null) {
+          return Promise.resolve(tokenPrefixFromArgs);
+        }
+        return p.text({
+          message: 'CSS token prefix',
+          placeholder: '--hx',
+          initialValue: '--hx',
+          validate(v) {
+            if (!v) return 'Required';
+            if (!/^--[a-z][a-z0-9-]*$/.test(v))
+              return 'Must start with -- followed by a lowercase identifier (e.g. --bolt)';
+          },
+        });
+      },
+
       installDeps: () =>
         isNoInstall
           ? Promise.resolve(false)
@@ -712,6 +760,8 @@ ${presetList}
     dryRun: isDryRun,
     force: isForce,
     verbose: isVerbose,
+    dsName: project.dsName as string,
+    tokenPrefix: project.tokenPrefix as string,
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);

@@ -184,8 +184,8 @@ describe('validateFramework', () => {
     expect(validateFramework('React-Next')).toBe(false);
   });
 
-  it('VALID_FRAMEWORKS contains the expected 15 entries', () => {
-    expect(VALID_FRAMEWORKS).toHaveLength(15);
+  it('VALID_FRAMEWORKS contains the expected 16 entries', () => {
+    expect(VALID_FRAMEWORKS).toHaveLength(16);
   });
 
   it('VALID_FRAMEWORKS includes react-next', () => {

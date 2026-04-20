@@ -66,6 +66,7 @@ const FRAMEWORKS_WITHOUT_INDEX_HTML: Framework[] = [
   'astro',
   'stencil',
   'ember',
+  'wc-storybook',
 ];
 
 const ALL_FRAMEWORKS: Framework[] = TEMPLATES.map((t) => t.id);
@@ -84,6 +85,7 @@ const FRAMEWORK_KEY_DEP: Record<Framework, string> = {
   astro: 'astro',
   vanilla: '@helixui/library',
   'lit-vite': 'lit',
+  'wc-storybook': 'lit',
   'preact-vite': 'preact',
   stencil: '@stencil/core',
   ember: 'ember-source',

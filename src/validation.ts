@@ -20,6 +20,7 @@ export const VALID_FRAMEWORKS = [
   'astro',
   'vanilla',
   'lit-vite',
+  'wc-storybook',
   'preact-vite',
   'stencil',
   'ember',

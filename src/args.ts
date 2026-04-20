@@ -27,6 +27,10 @@ export interface ParsedArgs {
   bundles: ComponentBundle[] | null;
   outputDir: string | null;
 
+  // Design system factory (wc-storybook)
+  dsName: string | null;
+  tokenPrefix: string | null;
+
   // Boolean toggles
   typescript: boolean;
   eslint: boolean;
@@ -158,6 +162,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const profileArgIndex = argv.indexOf('--profile');
   const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
 
+  // --ds-name (design system codename, used by wc-storybook)
+  const dsNameArgIndex = argv.indexOf('--ds-name');
+  const dsName = dsNameArgIndex !== -1 ? (argv[dsNameArgIndex + 1] ?? null) : null;
+
+  // --token-prefix (CSS custom property prefix, used by wc-storybook)
+  const tokenPrefixArgIndex = argv.indexOf('--token-prefix');
+  const tokenPrefix = tokenPrefixArgIndex !== -1 ? (argv[tokenPrefixArgIndex + 1] ?? null) : null;
+
   return {
     subcommand,
     subcommandArg,
@@ -182,6 +194,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     skipAudit,
     offline,
     profile,
+    dsName,
+    tokenPrefix,
     showVersion,
     showHelp,
   };

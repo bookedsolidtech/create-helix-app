@@ -11,6 +11,7 @@ export type Framework =
   | 'astro'
   | 'vanilla'
   | 'lit-vite'
+  | 'wc-storybook'
   | 'preact-vite'
   | 'stencil'
   | 'ember';
@@ -68,6 +69,10 @@ export interface ProjectOptions {
   dryRun?: boolean;
   force?: boolean;
   verbose?: boolean;
+  /** Design system codename — drives element tag prefix and JS class prefix (e.g. 'bolt' → bolt-button, BoltButton) */
+  dsName?: string;
+  /** CSS custom property token prefix (e.g. '--bolt') — drives all generated CSS var() names */
+  tokenPrefix?: string;
 }
 
 export interface ComponentBundleConfig {

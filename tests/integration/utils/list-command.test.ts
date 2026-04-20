@@ -18,11 +18,11 @@ describe('list command', () => {
     consoleSpy.mockRestore();
   });
 
-  it('outputs all 15 framework names in table format', () => {
+  it('outputs all 16 framework names in table format', () => {
     runListCommand(false);
 
     const output = logs.join('\n');
-    expect(TEMPLATES).toHaveLength(15);
+    expect(TEMPLATES).toHaveLength(16);
 
     for (const t of TEMPLATES) {
       expect(output).toContain(t.id);
@@ -49,7 +49,7 @@ describe('list command', () => {
 
     expect(Array.isArray(parsed.templates)).toBe(true);
     expect(Array.isArray(parsed.presets)).toBe(true);
-    expect(parsed.templates).toHaveLength(15);
+    expect(parsed.templates).toHaveLength(16);
     expect(parsed.presets).toHaveLength(5);
   });
 

@@ -23,13 +23,14 @@ describe('TEMPLATES', () => {
     'astro',
     'vanilla',
     'lit-vite',
+    'wc-storybook',
     'preact-vite',
     'stencil',
     'ember',
   ];
 
-  it('defines exactly 15 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(15);
+  it('defines exactly 16 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(16);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {

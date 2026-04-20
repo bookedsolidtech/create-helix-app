@@ -379,6 +379,9 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
       case 'lit-vite':
         await scaffoldLitVite(options);
         break;
+      case 'wc-storybook':
+        await scaffoldWcStorybook(options);
+        break;
       case 'preact-vite':
         await scaffoldPreactVite(options);
         break;
@@ -578,6 +581,22 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         build: 'ember build',
         test: 'ember test',
       };
+    case 'wc-storybook':
+      return {
+        storybook:
+          'pnpm build:tokens && concurrently -n tokens,sb -c blue,magenta "pnpm watch:tokens" "storybook dev -p 6006"',
+        'build-storybook': 'pnpm build:tokens && storybook build',
+        build: 'pnpm build:tokens && vite build',
+        test: 'vitest run',
+        'test:ui': 'vitest --ui',
+        'type-check': 'tsc --noEmit',
+        'cem:analyze': 'cem analyze --globs "src/**/*.ts"',
+        'build:tokens': 'tsx scripts/build-tokens.ts',
+        'watch:tokens': 'tsx scripts/build-tokens.ts --watch',
+        'tokens:sync': 'tsx scripts/sync-tokens.ts',
+        'tokens:refresh-platform':
+          "node -e \"const{createRequire}=require('module');const r=createRequire(__filename);const fs=require('fs');fs.copyFileSync(r.resolve('@helixui/tokens/tokens.json'),'src/tokens/tokens.json');console.log('tokens.json reset from @helixui/tokens');\"",
+      };
     case 'vanilla':
       return {
         dev: 'npx http-server . -p 3000 -o',
@@ -752,8 +771,13 @@ async function writePrettierConfig(options: ProjectOptions): Promise<void> {
 }
 
 async function writeTsConfig(options: ProjectOptions): Promise<void> {
-  if (options.framework === 'react-next' || options.framework === 'remix') {
-    // These frameworks manage their own tsconfig
+  if (
+    options.framework === 'react-next' ||
+    options.framework === 'remix' ||
+    options.framework === 'wc-storybook'
+  ) {
+    // These frameworks manage their own tsconfig (wc-storybook writes its own
+    // inside scaffoldWcStorybook with experimentalDecorators + useDefineForClassFields:false)
     return;
   }
 
@@ -827,6 +851,7 @@ dist/
 .nuxt/
 .svelte-kit/
 .astro/
+storybook-static/
 .env
 .env.local
 *.log
@@ -847,6 +872,16 @@ trim_trailing_whitespace = true
 insert_final_newline = true
 `;
   await safeWriteFile(path.join(options.directory, '.editorconfig'), content);
+}
+
+// ─── Shared utilities ─────────────────────────────────────────────────────────
+
+/** Convert a kebab-case design system name to PascalCase class prefix. */
+function toPascalCase(str: string): string {
+  return str
+    .split('-')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join('');
 }
 
 // ─── Framework-specific scaffolding ───────────────────────────────────────────
@@ -7936,6 +7971,1550 @@ body {
   color: var(--hx-color-text, #1a1a1a);
 }
 `,
+  );
+}
+
+// ─── wc-storybook: Design System Factory ─────────────────────────────────────
+
+async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
+  const ds = options.dsName ?? 'my-ds';
+  const prefix = options.tokenPrefix ?? '--hx';
+  const ClassName = toPascalCase(ds);
+  const BaseClass = `${ClassName}Element`;
+  const dsTitle = ds
+    .split('-')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ');
+
+  const storybookDir = path.join(options.directory, '.storybook');
+  const srcDir = path.join(options.directory, 'src');
+  const baseDir = path.join(srcDir, 'base');
+  const componentsDir = path.join(srcDir, 'components');
+  const buttonDir = path.join(componentsDir, `${ds}-button`);
+  const cardDir = path.join(componentsDir, `${ds}-card`);
+  const tokensDir = path.join(srcDir, 'tokens');
+  const storiesDir = path.join(srcDir, 'stories');
+  const designTokensStoriesDir = path.join(storiesDir, 'design-tokens');
+
+  await safeEnsureDir(storybookDir);
+  await safeEnsureDir(srcDir);
+  await safeEnsureDir(baseDir);
+  await safeEnsureDir(buttonDir);
+  await safeEnsureDir(cardDir);
+  await safeEnsureDir(tokensDir);
+  await safeEnsureDir(storiesDir);
+  await safeEnsureDir(designTokensStoriesDir);
+
+  // ── .storybook/main.ts ───────────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(storybookDir, 'main.ts'),
+    `import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+import type { StorybookConfig } from '@storybook/web-components-vite';
+
+const config: StorybookConfig = {
+  stories: [
+    '../src/**/*.stories.@(ts|tsx)',
+    '../src/**/*.mdx',
+  ],
+  addons: [
+    getAbsolutePath('@storybook/addon-a11y'),
+    getAbsolutePath('@storybook/addon-docs'),
+    getAbsolutePath('@storybook/addon-vitest'),
+    getAbsolutePath('@storybook/addon-themes'),
+  ],
+  framework: {
+    name: getAbsolutePath('@storybook/web-components-vite'),
+    options: {},
+  },
+  core: {
+    disableTelemetry: true,
+  },
+  viteFinal: async (config) => {
+    // Ensure Vite's esbuild can parse Lit decorator syntax
+    config.optimizeDeps ??= {};
+    config.optimizeDeps.esbuildOptions ??= {};
+    config.optimizeDeps.esbuildOptions.tsconfigRaw = {
+      compilerOptions: {
+        experimentalDecorators: true,
+        useDefineForClassFields: false,
+      },
+    };
+    return config;
+  },
+};
+
+export default config;
+
+function getAbsolutePath(value: string): string {
+  return dirname(fileURLToPath(import.meta.resolve(\`\${value}/package.json\`)));
+}
+`,
+  );
+
+  // ── .storybook/preview.ts ────────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(storybookDir, 'preview.ts'),
+    `import type { Preview } from '@storybook/web-components';
+import { setCustomElementsManifest } from '@storybook/web-components';
+import { withThemeByDataAttribute } from '@storybook/addon-themes';
+import { html } from 'lit';
+import '@helixui/library';
+import '../src/tokens/tokens.css';
+
+// Load the Custom Elements Manifest so autodocs API tables are populated
+// with properties, events, slots, CSS parts, and CSS custom properties.
+// Run \`pnpm run cem:analyze\` to regenerate after adding new components.
+import customElements from '../custom-elements.json';
+
+setCustomElementsManifest(customElements as Record<string, unknown>);
+
+const preview: Preview = {
+  decorators: [
+    // Global padding so stories do not render edge-to-edge
+    (story) => html\`<div style="padding: 2rem;">\${story()}</div>\`,
+
+    // Theme switching via data-theme attribute on <html>
+    withThemeByDataAttribute({
+      themes: {
+        light: 'light',
+        dark: 'dark',
+      },
+      defaultTheme: 'light',
+      attributeName: 'data-theme',
+    }),
+  ],
+
+  initialGlobals: {
+    backgrounds: { value: 'light' },
+    theme: 'light',
+  },
+
+  parameters: {
+    controls: {
+      expanded: true,
+      sort: 'requiredFirst',
+      matchers: {
+        color: /(background|color)$/i,
+        date: /Date$/i,
+      },
+    },
+    backgrounds: {
+      options: {
+        light: { name: 'light', value: '#ffffff' },
+        grey: { name: 'grey', value: '#f8f9fa' },
+        dark: { name: 'dark', value: '#1a1a2e' },
+      },
+    },
+    docs: {
+      toc: {
+        headingSelector: 'h2, h3',
+        title: 'Table of Contents',
+      },
+    },
+    options: {
+      storySort: {
+        order: [
+          'Welcome',
+          'Design Tokens',
+          ['Colors', ['Primary', 'Secondary', 'Accent', 'Neutral', 'Semantic', 'Full Palette'], 'Borders', 'Shadows', 'Spacing', '*'],
+          'Components',
+          '*',
+        ],
+      },
+    },
+    a11y: {
+      config: {
+        rules: [{ id: 'color-contrast', enabled: true }],
+      },
+    },
+  },
+};
+
+export default preview;
+`,
+  );
+
+  // ── .storybook/manager.ts ────────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(storybookDir, 'manager.ts'),
+    `import { addons } from 'storybook/manager-api';
+import { create } from 'storybook/theming';
+
+const dsTheme = create({
+  base: 'light',
+  brandTitle: '${dsTitle} Design System',
+  brandTarget: '_self',
+  colorPrimary: '#0066cc',
+  colorSecondary: '#0052a3',
+  appBg: '#f8f9fa',
+  appContentBg: '#ffffff',
+  appBorderColor: '#dee2e6',
+  appBorderRadius: 6,
+  textColor: '#212529',
+  textInverseColor: '#ffffff',
+  barTextColor: '#6c757d',
+  barSelectedColor: '#0066cc',
+  barBg: '#ffffff',
+});
+
+addons.setConfig({
+  theme: dsTheme,
+});
+`,
+  );
+
+  // ── src/base/{ds}-element.ts ─────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(baseDir, `${ds}-element.ts`),
+    `import { HelixElement } from '@helixui/library';
+
+/**
+ * Base element for the ${dsTitle} design system.
+ * Extends HelixElement to inherit form association, ElementInternals,
+ * and ARIA delegation foundation from the HELiX platform.
+ *
+ * Inheritance chain: ${BaseClass} → HelixElement → LitElement → HTMLElement
+ */
+export class ${BaseClass} extends HelixElement {}
+`,
+  );
+
+  // ── src/components/{ds}-button ───────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(buttonDir, `${ds}-button.styles.ts`),
+    `import { css } from 'lit';
+
+// All 6 variants inherited from HelixButton — re-exported for consumer convenience
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'danger' | 'ghost' | 'outline';
+
+/**
+ * ${dsTitle} button styles.
+ *
+ * Bridge layer: maps the ${prefix}-* brand tokens emitted by scripts/build-tokens.ts
+ * into the --hx-* variable names HelixButton's shadow DOM CSS reads internally.
+ * Applied at :host so it wins over @helixui/library's document-level
+ * adoptedStyleSheets (which override any :root declarations in tokens.css).
+ *
+ * Keep this file reserved for the bridge and any genuinely ${ds}-specific CSS
+ * that does not fit the token model.
+ */
+export const ${ClassName}ButtonStyles = css\`
+  :host {
+    --hx-color-primary-50: var(${prefix}-color-primary-50);
+    --hx-color-primary-100: var(${prefix}-color-primary-100);
+    --hx-color-primary-200: var(${prefix}-color-primary-200);
+    --hx-color-primary-300: var(${prefix}-color-primary-300);
+    --hx-color-primary-400: var(${prefix}-color-primary-400);
+    --hx-color-primary-500: var(${prefix}-color-primary-500);
+    --hx-color-primary-600: var(${prefix}-color-primary-600);
+    --hx-color-primary-700: var(${prefix}-color-primary-700);
+    --hx-color-primary-800: var(${prefix}-color-primary-800);
+    --hx-color-primary-900: var(${prefix}-color-primary-900);
+    --hx-color-primary-950: var(${prefix}-color-primary-950);
+
+    --hx-color-neutral-0: var(${prefix}-color-neutral-0, #ffffff);
+    --hx-color-neutral-50: var(${prefix}-color-neutral-50);
+    --hx-color-neutral-100: var(${prefix}-color-neutral-100);
+    --hx-color-neutral-200: var(${prefix}-color-neutral-200);
+    --hx-color-neutral-300: var(${prefix}-color-neutral-300);
+    --hx-color-neutral-400: var(${prefix}-color-neutral-400);
+    --hx-color-neutral-500: var(${prefix}-color-neutral-500);
+    --hx-color-neutral-600: var(${prefix}-color-neutral-600);
+    --hx-color-neutral-700: var(${prefix}-color-neutral-700);
+    --hx-color-neutral-800: var(${prefix}-color-neutral-800);
+    --hx-color-neutral-900: var(${prefix}-color-neutral-900);
+
+    --hx-color-error-500: var(${prefix}-color-error-500);
+    --hx-color-error-600: var(${prefix}-color-error-600);
+  }
+\`;
+`,
+  );
+
+  await safeWriteFile(
+    path.join(buttonDir, `${ds}-button.ts`),
+    `import { HelixButton } from '@helixui/library';
+import { ${ClassName}ButtonStyles } from './${ds}-button.styles.js';
+
+/**
+ * ${dsTitle} Button — brand extension of hx-button.
+ *
+ * TRACK 1 COMPONENT: extends HelixButton directly because @helixui/library
+ * exports HelixButton. The full platform API (variants, sizes, slots, parts,
+ * form association, loading, href/anchor, keyboard, ARIA) is inherited at zero
+ * cost. This component's only job is brand: CSS custom property overrides in
+ * ${ds}-button.styles.ts.
+ *
+ * DO NOT add a render() method, variant logic, or slot definitions here.
+ * If you need a component with NO platform counterpart, extend ${BaseClass}
+ * from '../../base/${ds}-element.js' instead (Track 2).
+ *
+ * Inheritance: ${ClassName}Button → HelixButton → LitElement → HTMLElement
+ *
+ * @summary Brand-styled button. Same API as hx-button, ${dsTitle} tokens applied.
+ *
+ * @tag ${ds}-button
+ *
+ * ─── Inherited from HelixButton ───────────────────────────────────────────
+ *
+ * @attr {'primary'|'secondary'|'tertiary'|'danger'|'ghost'|'outline'} variant
+ *   Visual style variant. Default: 'primary'.
+ *
+ * @attr {'sm'|'md'|'lg'} size
+ *   Button size — controls padding and font-size. Default: 'md'.
+ *
+ * @attr {boolean} disabled
+ *   Disables the button. Prevents interaction and form submission.
+ *
+ * @attr {boolean} loading
+ *   Shows spinner, sets aria-busy. Does not set disabled.
+ *
+ * @attr {'button'|'submit'|'reset'} type
+ *   Native button type. Ignored when href is set. Default: 'button'.
+ *
+ * @attr {string} href
+ *   When set, renders an anchor element instead of a button.
+ *
+ * @attr {string} target
+ *   Anchor target. Only used when href is set.
+ *
+ * @attr {string} name
+ *   Form field name submitted via ElementInternals on form submit.
+ *
+ * @attr {string} value
+ *   Form field value submitted via ElementInternals on form submit.
+ *
+ * @attr {boolean} full
+ *   Stretches button to fill container width.
+ *
+ * @attr {boolean} inverted
+ *   Flips colours for dark or gradient backgrounds.
+ *
+ * @slot - Button label text or content.
+ * @slot prefix - Icon or content before the label.
+ * @slot suffix - Icon or content after the label.
+ *
+ * @csspart button  - The native button or anchor element.
+ * @csspart label   - The label text wrapper span.
+ * @csspart prefix  - The prefix slot container span.
+ * @csspart suffix  - The suffix slot container span.
+ * @csspart spinner - The loading spinner SVG element.
+ *
+ * @cssprop [--hx-button-bg] - Button background color.
+ * @cssprop [--hx-button-hover-bg] - Hover background override.
+ * @cssprop [--hx-button-color] - Button text color.
+ * @cssprop [--hx-button-border-color] - Button border color.
+ * @cssprop [--hx-button-border-radius] - Button border radius.
+ * @cssprop [--hx-button-font-family] - Button font family.
+ * @cssprop [--hx-button-font-weight] - Button font weight.
+ * @cssprop [--hx-button-focus-ring-color] - Focus ring color.
+ * @cssprop [--hx-button-inverted-color] - Text color when inverted.
+ * @cssprop [--hx-button-inverted-ghost-hover-bg] - Ghost hover bg when inverted.
+ * @cssprop [--hx-button-inverted-focus-ring-color] - Focus ring when inverted.
+ *
+ * @fires {CustomEvent<{originalEvent: MouseEvent}>} hx-click
+ *   Dispatched when clicked and neither disabled nor loading.
+ */
+export class ${ClassName}Button extends HelixButton {
+  static styles = [...HelixButton.styles, ${ClassName}ButtonStyles];
+}
+
+// Guard against duplicate registration during Storybook HMR and module re-evaluation
+if (!customElements.get('${ds}-button')) {
+  customElements.define('${ds}-button', ${ClassName}Button);
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    '${ds}-button': ${ClassName}Button;
+  }
+}
+`,
+  );
+
+  await safeWriteFile(
+    path.join(buttonDir, `${ds}-button.stories.ts`),
+    `import type { Meta, StoryObj } from '@storybook/web-components';
+import { expect, userEvent, within } from 'storybook/test';
+import { html } from 'lit';
+import './${ds}-button.js';
+import type { ${ClassName}Button } from './${ds}-button.js';
+
+const meta: Meta<${ClassName}Button> = {
+  title: 'Components/${ClassName}Button',
+  component: '${ds}-button',
+  tags: ['autodocs'],
+  argTypes: {
+    variant: {
+      control: { type: 'select' },
+      options: ['primary', 'secondary', 'tertiary', 'danger', 'ghost', 'outline'],
+    },
+    size: {
+      control: { type: 'select' },
+      options: ['sm', 'md', 'lg'],
+    },
+    disabled: { control: 'boolean' },
+    loading: { control: 'boolean' },
+  },
+  args: {
+    variant: 'primary',
+    size: 'md',
+    disabled: false,
+    loading: false,
+  },
+};
+
+export default meta;
+type Story = StoryObj<${ClassName}Button>;
+
+export const Primary: Story = {
+  args: { variant: 'primary' },
+  render: ({ variant, size, disabled, loading }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Primary</${ds}-button>\`,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const button = await canvas.findByRole('button');
+    await expect(button).toBeInTheDocument();
+    await expect(button).not.toBeDisabled();
+  },
+};
+
+export const Secondary: Story = {
+  args: { variant: 'secondary' },
+  render: ({ variant, size, disabled, loading }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Secondary</${ds}-button>\`,
+};
+
+export const Tertiary: Story = {
+  args: { variant: 'tertiary' },
+  render: ({ variant, size, disabled, loading }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Tertiary</${ds}-button>\`,
+};
+
+export const Danger: Story = {
+  args: { variant: 'danger' },
+  render: ({ variant, size, disabled, loading }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Danger</${ds}-button>\`,
+};
+
+export const Ghost: Story = {
+  args: { variant: 'ghost' },
+  render: ({ variant, size, disabled, loading }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Ghost</${ds}-button>\`,
+};
+
+export const Outline: Story = {
+  args: { variant: 'outline' },
+  render: ({ variant, size, disabled, loading }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Outline</${ds}-button>\`,
+};
+
+export const Disabled: Story = {
+  args: { variant: 'primary', disabled: true },
+  render: ({ variant, size }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} disabled>Disabled</${ds}-button>\`,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const button = await canvas.findByRole('button');
+    await expect(button).toBeDisabled();
+    await userEvent.click(button, { pointerEventsCheck: 0 });
+  },
+};
+
+export const Loading: Story = {
+  args: { variant: 'primary', loading: true },
+  render: ({ variant, size }) =>
+    html\`<${ds}-button variant=\${variant} size=\${size} loading>Saving…</${ds}-button>\`,
+};
+
+export const AllVariants: Story = {
+  render: () => html\`
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; padding: 1rem;">
+      <${ds}-button variant="primary">Primary</${ds}-button>
+      <${ds}-button variant="secondary">Secondary</${ds}-button>
+      <${ds}-button variant="tertiary">Tertiary</${ds}-button>
+      <${ds}-button variant="danger">Danger</${ds}-button>
+      <${ds}-button variant="ghost">Ghost</${ds}-button>
+      <${ds}-button variant="outline">Outline</${ds}-button>
+    </div>
+  \`,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const buttons = await canvas.findAllByRole('button');
+    await expect(buttons).toHaveLength(6);
+  },
+};
+
+export const AllSizes: Story = {
+  render: () => html\`
+    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem;">
+      <${ds}-button variant="primary" size="sm">Small</${ds}-button>
+      <${ds}-button variant="primary" size="md">Medium</${ds}-button>
+      <${ds}-button variant="primary" size="lg">Large</${ds}-button>
+    </div>
+  \`,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const buttons = await canvas.findAllByRole('button');
+    await expect(buttons).toHaveLength(3);
+  },
+};
+`,
+  );
+
+  // ── src/components/{ds}-card ─────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(cardDir, `${ds}-card.styles.ts`),
+    `import { css } from 'lit';
+
+export const ${ClassName}CardStyles = css\`
+  :host {
+    display: block;
+  }
+
+  .card {
+    background: var(--hx-color-surface-default, #ffffff);
+    border: var(--hx-border-width-thin, 1px) solid var(--hx-color-border-default, #e0e0e0);
+    border-radius: var(--hx-border-radius-lg, 0.5rem);
+    padding: var(--hx-space-6, 1.5rem);
+    box-shadow: var(--hx-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
+  }
+
+  .header ::slotted(*) {
+    margin: 0;
+  }
+
+  .header {
+    margin-bottom: var(--hx-space-4, 1rem);
+    padding-bottom: var(--hx-space-2, 0.5rem);
+    border-bottom: var(--hx-border-width-thin, 1px) solid var(--hx-color-border-default, #e0e0e0);
+  }
+
+  .footer {
+    margin-top: var(--hx-space-4, 1rem);
+    padding-top: var(--hx-space-2, 0.5rem);
+    border-top: var(--hx-border-width-thin, 1px) solid var(--hx-color-border-default, #e0e0e0);
+  }
+\`;
+`,
+  );
+
+  await safeWriteFile(
+    path.join(cardDir, `${ds}-card.ts`),
+    `import { html } from 'lit';
+import { property } from 'lit/decorators.js';
+import { ${BaseClass} } from '../../base/${ds}-element.js';
+import { ${ClassName}CardStyles } from './${ds}-card.styles.js';
+
+/**
+ * ${dsTitle} Card component.
+ * @tag ${ds}-card
+ */
+export class ${ClassName}Card extends ${BaseClass} {
+  static styles = [${ClassName}CardStyles];
+
+  /** Optional card heading */
+  @property()
+  heading = '';
+
+  render() {
+    return html\`
+      <div class="card" part="card">
+        <div class="header" part="header">
+          <slot name="header">\${this.heading}</slot>
+        </div>
+        <slot></slot>
+        <div class="footer" part="footer">
+          <slot name="footer"></slot>
+        </div>
+      </div>
+    \`;
+  }
+}
+
+// Guard against duplicate registration during Storybook HMR and module re-evaluation
+if (!customElements.get('${ds}-card')) {
+  customElements.define('${ds}-card', ${ClassName}Card);
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    '${ds}-card': ${ClassName}Card;
+  }
+}
+`,
+  );
+
+  await safeWriteFile(
+    path.join(cardDir, `${ds}-card.stories.ts`),
+    `import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+import './${ds}-card.js';
+import type { ${ClassName}Card } from './${ds}-card.js';
+
+const meta: Meta<${ClassName}Card> = {
+  title: 'Components/${ClassName}Card',
+  component: '${ds}-card',
+  tags: ['autodocs'],
+  argTypes: {
+    heading: { control: 'text' },
+  },
+};
+
+export default meta;
+type Story = StoryObj<${ClassName}Card>;
+
+export const Default: Story = {
+  args: { heading: 'Card Title' },
+  render: ({ heading }) => html\`
+    <${ds}-card heading=\${heading}>
+      <p>Card content goes here. Use slots to project your own markup.</p>
+      <div slot="footer">Footer content</div>
+    </${ds}-card>
+  \`,
+};
+
+export const WithSlots: Story = {
+  render: () => html\`
+    <${ds}-card>
+      <div slot="header"><strong>Custom Header</strong></div>
+      <p>Body content via default slot.</p>
+      <div slot="footer">Footer via slot</div>
+    </${ds}-card>
+  \`,
+};
+`,
+  );
+
+  // ── src/stories/Welcome.stories.ts ───────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(storiesDir, 'Welcome.stories.ts'),
+    `import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+
+const meta: Meta = {
+  title: 'Welcome',
+  parameters: {
+    layout: 'fullscreen',
+    docs: { page: null },
+  },
+};
+
+export default meta;
+type Story = StoryObj;
+
+export const Introduction: Story = {
+  render: () => html\`
+    <div style="
+      font-family: system-ui, sans-serif;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+      color: #212529;
+    ">
+      <div style="
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+      ">
+        <div style="
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #0066cc, #0052a3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 700;
+          font-size: 1.25rem;
+        ">${ClassName.charAt(0)}</div>
+        <div>
+          <h1 style="margin: 0; font-size: 1.75rem; font-weight: 700;">${dsTitle} Design System</h1>
+          <p style="margin: 0; color: #6c757d; font-size: 0.9rem;">Built on HELiX + Lit 3 + Storybook 10</p>
+        </div>
+      </div>
+
+      <p style="font-size: 1.1rem; line-height: 1.7; margin-bottom: 2rem; color: #495057;">
+        Welcome to the <strong>${dsTitle}</strong> design system — a component library factory
+        powered by <a href="https://lit.dev" target="_blank" rel="noopener">Lit 3</a>,
+        <a href="https://helixui.dev" target="_blank" rel="noopener">HELiX</a>,
+        and <a href="https://storybook.js.org" target="_blank" rel="noopener">Storybook 10</a>.
+      </p>
+
+      <div style="
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2.5rem;
+      ">
+        <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 1.25rem;">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🧱</div>
+          <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">Components</h3>
+          <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">
+            Browse ${ds}-button, ${ds}-card, and add your own components.
+          </p>
+        </div>
+        <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 1.25rem;">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎨</div>
+          <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">Design Tokens</h3>
+          <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">
+            Customize the <code>${prefix}-*</code> CSS custom properties in
+            <code>src/tokens/tokens.css</code>.
+          </p>
+        </div>
+        <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 1.25rem;">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🧪</div>
+          <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">Story Tests</h3>
+          <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">
+            Run <code>pnpm test</code> to execute Playwright interaction tests
+            for every story.
+          </p>
+        </div>
+      </div>
+
+      <h2 style="font-size: 1.25rem; margin-bottom: 1rem;">Quick Start</h2>
+      <pre style="
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 1rem;
+        font-size: 0.875rem;
+        overflow: auto;
+      "># Start Storybook
+pnpm storybook
+
+# Run interaction tests
+pnpm test
+
+# Build component library
+pnpm build
+
+# Generate Custom Elements Manifest (for autodocs)
+pnpm cem:analyze</pre>
+
+      <p style="margin-top: 2rem; font-size: 0.85rem; color: #adb5bd;">
+        Scaffolded with
+        <a href="https://www.npmjs.com/package/create-helix" target="_blank" rel="noopener">create-helix</a>
+        — a HELiX enterprise design system factory.
+      </p>
+    </div>
+  \`,
+};
+`,
+  );
+
+  // ── src/stories/design-tokens/Colors.stories.ts ──────────────────────────
+
+  await safeWriteFile(
+    path.join(designTokensStoriesDir, 'Colors.stories.ts'),
+    `import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+import tokens from '../../tokens/tokens.json';
+
+type TokenEntry = { value: string };
+type ColorScale = Record<string, TokenEntry>;
+type ColorTokens = Record<string, ColorScale | TokenEntry>;
+
+const colorTokens = tokens.color as ColorTokens;
+
+function colorSwatchGrid(group: string, scale: ColorScale) {
+  const entries = Object.entries(scale).filter(
+    ([, v]) => typeof v === 'object' && 'value' in v,
+  );
+  return html\`
+    <div style="font-family: var(--hx-font-sans, sans-serif); margin-bottom: 2rem;">
+      <h3 style="margin: 0 0 1rem; text-transform: capitalize; font-size: 1rem; font-weight: 600;">\${group}</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;">
+        \${entries.map(([scale, token]) => {
+          const cssVar = \`--hx-color-\${group}-\${scale}\`;
+          const rawValue = (token as TokenEntry).value;
+          return html\`
+            <div>
+              <div style="height: 64px; border-radius: 6px; background: var(\${cssVar}, \${rawValue}); border: 1px solid rgba(0,0,0,0.1);"></div>
+              <div style="margin-top: 4px; font-size: 11px; color: #666;">\${scale}</div>
+              <div style="font-size: 10px; color: #999; font-family: monospace;">\${cssVar}</div>
+              <div style="font-size: 10px; color: #aaa;">\${rawValue}</div>
+            </div>
+          \`;
+        })}
+      </div>
+    </div>
+  \`;
+}
+
+const meta: Meta = {
+  title: 'Design Tokens/Colors',
+  tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Color tokens from \`@helixui/tokens\`. Swatches use live CSS variables — update the token CSS and the swatches refresh.',
+      },
+    },
+  },
+};
+export default meta;
+
+type Story = StoryObj;
+
+const paletteGroups = ['primary', 'secondary', 'accent', 'neutral'] as const;
+const semanticGroups = ['success', 'warning', 'error', 'info'] as const;
+
+export const Primary: Story = {
+  name: 'Primary',
+  render: () => colorSwatchGrid('primary', colorTokens['primary'] as ColorScale),
+};
+
+export const Secondary: Story = {
+  name: 'Secondary',
+  render: () => colorSwatchGrid('secondary', colorTokens['secondary'] as ColorScale),
+};
+
+export const Accent: Story = {
+  name: 'Accent',
+  render: () => colorSwatchGrid('accent', colorTokens['accent'] as ColorScale),
+};
+
+export const Neutral: Story = {
+  name: 'Neutral',
+  render: () => colorSwatchGrid('neutral', colorTokens['neutral'] as ColorScale),
+};
+
+export const Semantic: Story = {
+  name: 'Semantic',
+  render: () => html\`
+    <div style="font-family: var(--hx-font-sans, sans-serif);">
+      \${semanticGroups.map((group) => colorSwatchGrid(group, colorTokens[group] as ColorScale))}
+    </div>
+  \`,
+};
+
+export const Palette: Story = {
+  name: 'Full Palette',
+  render: () => html\`
+    <div style="font-family: var(--hx-font-sans, sans-serif);">
+      \${paletteGroups.map((group) => colorSwatchGrid(group, colorTokens[group] as ColorScale))}
+    </div>
+  \`,
+};
+`,
+  );
+
+  // ── src/stories/design-tokens/Borders.stories.ts ─────────────────────────
+
+  await safeWriteFile(
+    path.join(designTokensStoriesDir, 'Borders.stories.ts'),
+    `import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+import tokens from '../../tokens/tokens.json';
+
+type TokenEntry = { value: string };
+
+const borderTokens = tokens.border as {
+  radius: Record<string, TokenEntry>;
+  width: Record<string, TokenEntry>;
+};
+
+const meta: Meta = {
+  title: 'Design Tokens/Borders',
+  tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'Border radius and width tokens from \`@helixui/tokens\`. Rendered live from CSS variables.',
+      },
+    },
+  },
+};
+export default meta;
+
+type Story = StoryObj;
+
+export const Radius: Story = {
+  name: 'Border Radius',
+  render: () => {
+    const entries = Object.entries(borderTokens.radius);
+    return html\`
+      <div style="font-family: var(--hx-font-sans, sans-serif);">
+        <h3 style="margin: 0 0 1.5rem; font-size: 1rem; font-weight: 600;">Border Radius</h3>
+        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+          \${entries.map(([key, token]) => {
+            const cssVar = \`--hx-border-radius-\${key}\`;
+            return html\`
+              <div style="display: flex; align-items: center; gap: 1.5rem;">
+                <div style="width: 80px; height: 48px; background: var(--hx-color-primary-500, #2563EB); border-radius: var(\${cssVar}, \${token.value}); flex-shrink: 0;"></div>
+                <div>
+                  <div style="font-size: 13px; font-weight: 500;">\${key}</div>
+                  <div style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</div>
+                  <div style="font-size: 11px; color: #aaa;">\${token.value}</div>
+                </div>
+              </div>
+            \`;
+          })}
+        </div>
+      </div>
+    \`;
+  },
+};
+
+export const Width: Story = {
+  name: 'Border Width',
+  render: () => {
+    const entries = Object.entries(borderTokens.width);
+    return html\`
+      <div style="font-family: var(--hx-font-sans, sans-serif);">
+        <h3 style="margin: 0 0 1.5rem; font-size: 1rem; font-weight: 600;">Border Width</h3>
+        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+          \${entries.map(([key, token]) => {
+            const cssVar = \`--hx-border-width-\${key}\`;
+            return html\`
+              <div style="display: flex; align-items: center; gap: 1.5rem;">
+                <div style="width: 160px; height: 0; border-top: var(\${cssVar}, \${token.value}) solid var(--hx-color-primary-500, #2563EB); flex-shrink: 0;"></div>
+                <div>
+                  <div style="font-size: 13px; font-weight: 500;">\${key}</div>
+                  <div style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</div>
+                  <div style="font-size: 11px; color: #aaa;">\${token.value}</div>
+                </div>
+              </div>
+            \`;
+          })}
+        </div>
+      </div>
+    \`;
+  },
+};
+`,
+  );
+
+  // ── src/stories/design-tokens/Shadows.stories.ts ─────────────────────────
+
+  await safeWriteFile(
+    path.join(designTokensStoriesDir, 'Shadows.stories.ts'),
+    `import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+import tokens from '../../tokens/tokens.json';
+
+type TokenEntry = { value: string };
+
+const shadowTokens = tokens.shadow as Record<string, TokenEntry>;
+
+const meta: Meta = {
+  title: 'Design Tokens/Shadows',
+  tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'Shadow tokens from \`@helixui/tokens\`. Each card uses \`var(--hx-shadow-*)\` live from the token CSS.',
+      },
+    },
+  },
+};
+export default meta;
+
+type Story = StoryObj;
+
+export const AllShadows: Story = {
+  name: 'All Shadows',
+  render: () => {
+    const entries = Object.entries(shadowTokens).filter(([k]) => k !== 'none');
+    return html\`
+      <div style="font-family: var(--hx-font-sans, sans-serif); display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 2rem; padding: 2rem; background: #f8fafc;">
+        \${entries.map(([key, token]) => {
+          const cssVar = \`--hx-shadow-\${key}\`;
+          return html\`
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+              <div style="width: 120px; height: 80px; background: white; border-radius: 8px; box-shadow: var(\${cssVar}, \${token.value});"></div>
+              <div style="text-align: center;">
+                <div style="font-size: 13px; font-weight: 500;">\${key}</div>
+                <div style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</div>
+              </div>
+            </div>
+          \`;
+        })}
+      </div>
+    \`;
+  },
+};
+`,
+  );
+
+  // ── src/stories/design-tokens/Spacing.stories.ts ─────────────────────────
+
+  await safeWriteFile(
+    path.join(designTokensStoriesDir, 'Spacing.stories.ts'),
+    `import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+import tokens from '../../tokens/tokens.json';
+
+type TokenEntry = { value: string };
+
+const spaceTokens = tokens.space as Record<string, TokenEntry>;
+
+const meta: Meta = {
+  title: 'Design Tokens/Spacing',
+  tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'Spacing tokens from \`@helixui/tokens\`. Bar widths use live \`var(--hx-space-*)\` values.',
+      },
+    },
+  },
+};
+export default meta;
+
+type Story = StoryObj;
+
+export const SpaceScale: Story = {
+  name: 'Space Scale',
+  render: () => {
+    const entries = Object.entries(spaceTokens);
+    return html\`
+      <div style="font-family: var(--hx-font-sans, sans-serif); padding: 1rem;">
+        <h3 style="margin: 0 0 1.5rem; font-size: 1rem; font-weight: 600;">Spacing Scale</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          \${entries.map(([key, token]) => {
+            const cssVar = \`--hx-space-\${key}\`;
+            return html\`
+              <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: var(\${cssVar}, \${token.value}); min-width: 4px; height: 24px; background: var(--hx-color-primary-500, #2563EB); border-radius: 3px; flex-shrink: 0;"></div>
+                <div style="display: flex; gap: 1rem; align-items: baseline;">
+                  <span style="font-size: 13px; font-weight: 500; min-width: 2rem;">\${key}</span>
+                  <span style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</span>
+                  <span style="font-size: 11px; color: #aaa;">\${token.value}</span>
+                </div>
+              </div>
+            \`;
+          })}
+        </div>
+      </div>
+    \`;
+  },
+};
+`,
+  );
+
+  // ── .storybook/vitest.setup.ts ───────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(storybookDir, 'vitest.setup.ts'),
+    `import { setProjectAnnotations } from '@storybook/web-components';
+import * as projectAnnotations from './preview';
+
+// Apply project-level annotations (decorators, parameters, global types) so that
+// Storybook's addon-vitest internal setup can call beforeAll on them correctly.
+// https://storybook.js.org/docs/api/portable-stories/portable-stories-vitest#setprojectannotations
+setProjectAnnotations([projectAnnotations]);
+`,
+  );
+
+  // ── vitest.config.ts ─────────────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(options.directory, 'vitest.config.ts'),
+    `import { defineConfig } from 'vitest/config';
+import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export default defineConfig({
+  plugins: [
+    storybookTest({
+      configDir: path.join(dirname, '.storybook'),
+    }),
+  ],
+  optimizeDeps: {
+    esbuildOptions: {
+      tsconfigRaw: {
+        compilerOptions: {
+          experimentalDecorators: true,
+          useDefineForClassFields: false,
+        },
+      },
+    },
+  },
+  test: {
+    name: 'storybook',
+    browser: {
+      enabled: true,
+      provider: 'playwright',
+      headless: true,
+      instances: [{ browser: 'chromium' }],
+    },
+    setupFiles: [path.join(dirname, '.storybook/vitest.setup.ts')],
+    // Run story files sequentially to prevent browser OOM crashes
+    fileParallelism: false,
+    testTimeout: 30000,
+    teardownTimeout: 30000,
+  },
+});
+`,
+  );
+
+  // ── src/tokens/tokens.css — auto-generated placeholder ───────────────────
+
+  // Written here as a stub so Vite's file graph picks it up on first start.
+  // scripts/build-tokens.ts overwrites this file whenever tokens.json changes
+  // and whenever \`pnpm build:tokens\` runs (chained into storybook/build/test).
+  await safeWriteFile(
+    path.join(tokensDir, 'tokens.css'),
+    `/* AUTO-GENERATED from src/tokens/tokens.json — do not edit by hand.
+ *
+ * Regenerate:  pnpm build:tokens
+ * Watch mode:  pnpm watch:tokens   (runs during \`pnpm storybook\`)
+ *
+ * On first \`pnpm storybook\` / \`pnpm build\`, this file is rewritten with all
+ * ${prefix}-* CSS custom properties flattened from tokens.json.
+ */
+
+@import '@helixui/tokens/tokens.css';
+
+:root {
+  /* tokens.json values will be emitted here on first build */
+}
+`,
+  );
+
+  // ── scripts/build-tokens.ts — the generator ──────────────────────────────
+
+  const scriptsDir = path.join(options.directory, 'scripts');
+  await safeEnsureDir(scriptsDir);
+  await safeWriteFile(
+    path.join(scriptsDir, 'build-tokens.ts'),
+    `// Generates src/tokens/tokens.css from src/tokens/tokens.json.
+//
+// Walks the nested token tree ({category}.{group}?.{scale}.value) and emits
+// \`${prefix}-{path}: {value};\` under \`:root\`. Imports @helixui/tokens first so
+// the generated overrides win via cascade order.
+//
+// Usage:
+//   tsx scripts/build-tokens.ts            # one-shot build
+//   tsx scripts/build-tokens.ts --watch    # rebuild on tokens.json change
+//
+// Called by package.json scripts: \`build:tokens\` and \`watch:tokens\`.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT   = path.resolve(__dirname, '..');
+const INPUT  = path.join(ROOT, 'src/tokens/tokens.json');
+const OUTPUT = path.join(ROOT, 'src/tokens/tokens.css');
+
+const PREFIX = '${prefix}';
+
+// Top-level keys that are theme variants — skipped; handled separately if ever.
+const SKIP_ROOT: ReadonlySet<string> = new Set(['dark', 'high-contrast']);
+
+type TokenLeaf = { value: string | number };
+type TokenNode = TokenLeaf | { [k: string]: TokenNode };
+
+function isLeaf(n: unknown): n is TokenLeaf {
+  return (
+    typeof n === 'object' &&
+    n !== null &&
+    'value' in n &&
+    (typeof (n as TokenLeaf).value === 'string' || typeof (n as TokenLeaf).value === 'number')
+  );
+}
+
+type CssVar = { name: string; value: string };
+
+function walk(node: TokenNode, segments: string[], out: CssVar[]): void {
+  if (isLeaf(node)) {
+    const name = PREFIX + '-' + segments.join('-');
+    out.push({ name, value: String(node.value) });
+    return;
+  }
+  if (typeof node !== 'object' || node === null) return;
+  for (const [key, child] of Object.entries(node)) {
+    walk(child as TokenNode, [...segments, key], out);
+  }
+}
+
+function build(): { vars: number; output: string } {
+  const raw = fs.readFileSync(INPUT, 'utf-8');
+  const tokens = JSON.parse(raw) as Record<string, TokenNode>;
+
+  const cssVars: CssVar[] = [];
+  for (const [topKey, node] of Object.entries(tokens)) {
+    if (SKIP_ROOT.has(topKey)) continue;
+    walk(node, [topKey], cssVars);
+  }
+
+  // Group by top-level category for readable output
+  const byCategory: Map<string, CssVar[]> = new Map();
+  for (const v of cssVars) {
+    const cat = v.name.slice(PREFIX.length + 1).split('-')[0];
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat)!.push(v);
+  }
+
+  const lines: string[] = [];
+  lines.push('/* AUTO-GENERATED from src/tokens/tokens.json — do not edit by hand.');
+  lines.push(' *');
+  lines.push(' * Regenerate:  pnpm build:tokens');
+  lines.push(' * Watch mode:  pnpm watch:tokens   (runs during \`pnpm storybook\`)');
+  lines.push(' */');
+  lines.push('');
+  lines.push("@import '@helixui/tokens/tokens.css';");
+  lines.push('');
+  lines.push(':root {');
+
+  const categoryOrder = ['color', 'space', 'font', 'line-height', 'letter-spacing', 'border', 'shadow', 'duration', 'easing', 'transition', 'focus', 'opacity', 'size', 'button'];
+  const ordered: string[] = [...categoryOrder.filter(c => byCategory.has(c)), ...Array.from(byCategory.keys()).filter(c => !categoryOrder.includes(c))];
+
+  for (const cat of ordered) {
+    lines.push(\`  /* \${cat} */\`);
+    for (const v of byCategory.get(cat)!) {
+      lines.push(\`  \${v.name}: \${v.value};\`);
+    }
+    lines.push('');
+  }
+
+  lines.push('}');
+  lines.push('');
+
+  return { vars: cssVars.length, output: lines.join('\\n') };
+}
+
+function buildAndWrite(): void {
+  const { vars, output } = build();
+  fs.writeFileSync(OUTPUT, output, 'utf-8');
+  const rel = path.relative(ROOT, OUTPUT);
+  console.log(\`[build-tokens] \${vars} CSS variables → \${rel}\`);
+}
+
+buildAndWrite();
+
+if (process.argv.includes('--watch')) {
+  console.log(\`[build-tokens] watching \${path.relative(ROOT, INPUT)}\`);
+  let rebuildTimer: NodeJS.Timeout | null = null;
+  fs.watch(INPUT, () => {
+    // Debounce: editors often fire multiple events during save
+    if (rebuildTimer) clearTimeout(rebuildTimer);
+    rebuildTimer = setTimeout(() => {
+      try {
+        buildAndWrite();
+      } catch (err) {
+        console.error('[build-tokens] error:', err instanceof Error ? err.message : err);
+      }
+    }, 80);
+  });
+}
+`,
+  );
+
+  // ── scripts/sync-tokens.ts — Figma REST pull + transform ─────────────────
+
+  await safeWriteFile(
+    path.join(scriptsDir, 'sync-tokens.ts'),
+    `// Pulls design tokens from Figma via the Variables REST API, resolves
+// the alias chain, and writes the nested {category.group.scale.value} shape
+// this design system consumes.
+//
+// Requires .env with:
+//   FIGMA_TOKEN                    - personal access token with file_variables:read
+//   FIGMA_FILE_KEY                 - file key from the Figma URL
+//   FIGMA_PRIMITIVES_COLLECTION    - (optional) variable-collection name; defaults to "HELiX Primitives"
+//
+// Note: Figma's Variables REST API is Enterprise-gated. If your workspace is
+// not on Enterprise, use the HELiX Token Suite plugin's Custom HELiX Exporter
+// command instead — it does the same work in the plugin sandbox on any plan.
+//
+// Usage:
+//   tsx scripts/sync-tokens.ts
+//
+// Or via package.json:
+//   pnpm tokens:sync   # runs this, then regenerates tokens.css via build:tokens
+
+import 'dotenv/config';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT   = path.resolve(__dirname, '..');
+const OUTPUT = path.join(ROOT, 'src/tokens/tokens.json');
+
+const FIGMA_TOKEN         = process.env.FIGMA_TOKEN;
+const FIGMA_FILE_KEY      = process.env.FIGMA_FILE_KEY;
+const PRIMITIVES_NAME     = process.env.FIGMA_PRIMITIVES_COLLECTION ?? 'HELiX Primitives';
+
+if (!FIGMA_TOKEN || !FIGMA_FILE_KEY) {
+  console.error('[sync-tokens] Missing FIGMA_TOKEN or FIGMA_FILE_KEY in .env');
+  console.error('[sync-tokens] Copy .env.example to .env and fill in the values.');
+  process.exit(1);
+}
+
+console.log(\`[sync-tokens] Fetching variables from Figma file \${FIGMA_FILE_KEY}\`);
+
+const res = await fetch(
+  \`https://api.figma.com/v1/files/\${FIGMA_FILE_KEY}/variables/local\`,
+  { headers: { 'X-FIGMA-TOKEN': FIGMA_TOKEN } },
+);
+
+const data = (await res.json()) as Record<string, unknown>;
+
+if (!res.ok) {
+  const status = res.status;
+  console.error(\`[sync-tokens] Figma API error \${status}\`);
+  if (status === 403) {
+    console.error('[sync-tokens] 403 typically means the workspace is not on Figma Enterprise.');
+    console.error('[sync-tokens] Use the HELiX Token Suite plugin (Custom HELiX Exporter) instead.');
+  }
+  console.error(JSON.stringify(data, null, 2));
+  process.exit(1);
+}
+
+interface FigmaCollection {
+  name: string;
+  modes: Array<{ modeId: string; name: string }>;
+}
+interface FigmaVariable {
+  id: string;
+  name: string;
+  variableCollectionId: string;
+  resolvedType: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN';
+  valuesByMode: Record<string, unknown>;
+}
+
+const meta        = (data.meta ?? {}) as Record<string, unknown>;
+const collections = (meta.variableCollections ?? {}) as Record<string, FigmaCollection>;
+const variables   = (meta.variables           ?? {}) as Record<string, FigmaVariable>;
+
+// Locate the primitives collection by name.
+const primitivesEntry = Object.entries(collections).find(
+  ([, c]) => c.name === PRIMITIVES_NAME,
+);
+if (!primitivesEntry) {
+  console.error(\`[sync-tokens] Collection "\${PRIMITIVES_NAME}" not found in Figma file.\`);
+  console.error(\`[sync-tokens] Available collections: \${Object.values(collections).map(c => c.name).join(', ')}\`);
+  process.exit(1);
+}
+const [primitivesCollectionId, primitivesCollection] = primitivesEntry;
+const defaultModeId = primitivesCollection.modes[0]?.modeId;
+if (!defaultModeId) {
+  console.error(\`[sync-tokens] Collection "\${PRIMITIVES_NAME}" has no modes.\`);
+  process.exit(1);
+}
+
+// Resolve Figma's COLOR object to #rrggbb.
+function toHex(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as { r?: number; g?: number; b?: number };
+  if (typeof c.r !== 'number' || typeof c.g !== 'number' || typeof c.b !== 'number') return null;
+  const h = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
+  return '#' + h(c.r) + h(c.g) + h(c.b);
+}
+
+// Walk VARIABLE_ALIAS refs until we reach a literal leaf, bounded for safety.
+function resolveValue(raw: unknown, depth = 0): string | null {
+  if (depth > 8) return null;
+  if (raw == null) return null;
+
+  if (typeof raw === 'object' && (raw as { type?: string }).type === 'VARIABLE_ALIAS') {
+    const targetId = (raw as { id: string }).id;
+    const target = variables[targetId];
+    if (!target) return null;
+    const targetCollection = collections[target.variableCollectionId];
+    const targetMode = targetCollection?.modes[0]?.modeId;
+    if (!targetMode) return null;
+    return resolveValue(target.valuesByMode[targetMode], depth + 1);
+  }
+
+  const hex = toHex(raw);
+  if (hex) return hex;
+  if (typeof raw === 'number') return String(raw) + 'px';
+  if (typeof raw === 'string') return raw;
+  return null;
+}
+
+type TokenLeaf = { value: string };
+type TokenTree = TokenLeaf | { [k: string]: TokenTree };
+
+function setDeep(root: { [k: string]: TokenTree }, segments: string[], leaf: TokenLeaf): void {
+  let cursor = root;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const seg = segments[i];
+    const existing = cursor[seg];
+    if (!existing || 'value' in (existing as TokenLeaf)) {
+      cursor[seg] = {};
+    }
+    cursor = cursor[seg] as { [k: string]: TokenTree };
+  }
+  cursor[segments[segments.length - 1]] = leaf;
+}
+
+const output: { [k: string]: TokenTree } = {};
+let emitted = 0;
+let skipped = 0;
+
+for (const v of Object.values(variables)) {
+  if (v.variableCollectionId !== primitivesCollectionId) continue;
+  const segments = v.name.split('/').filter(Boolean);
+  if (segments.length < 2) { skipped++; continue; }
+
+  const value = resolveValue(v.valuesByMode[defaultModeId]);
+  if (value === null) { skipped++; continue; }
+
+  setDeep(output, segments, { value });
+  emitted++;
+}
+
+fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
+fs.writeFileSync(OUTPUT, JSON.stringify(output, null, 2) + '\\n', 'utf-8');
+
+const rel = path.relative(ROOT, OUTPUT);
+console.log(\`[sync-tokens] \${emitted} tokens written → \${rel}\`);
+if (skipped > 0) console.log(\`[sync-tokens] \${skipped} variables skipped (unresolvable aliases or single-segment names)\`);
+`,
+  );
+
+  // ── .env.example — Figma API credentials template ────────────────────────
+
+  await safeWriteFile(
+    path.join(options.directory, '.env.example'),
+    `# Figma API credentials for \`pnpm tokens:sync\`.
+# Copy this file to \`.env\` and fill in the values. \`.env\` is gitignored.
+
+# Personal access token with file_variables:read scope.
+# Create one at: https://www.figma.com/developers/api#access-tokens
+FIGMA_TOKEN=
+
+# File key from the Figma URL:
+#   https://www.figma.com/file/<KEY>/<name>
+FIGMA_FILE_KEY=
+
+# (Optional) Name of the variable collection that holds primitive leaves.
+# Defaults to "HELiX Primitives" — only override if your file names it differently.
+# FIGMA_PRIMITIVES_COLLECTION=HELiX Primitives
+`,
+  );
+
+  // ── src/tokens/tokens.json — local copy for Figma drop-in workflow ────────
+
+  // Copy tokens.json from @helixui/tokens so design-token stories read from
+  // a local file. Replace this file with a Figma export to see updates live.
+  await (async () => {
+    try {
+      const { createRequire } = await import('node:module');
+      const require = createRequire(import.meta.url);
+      const tokensJsonPath = require.resolve('@helixui/tokens/tokens.json');
+      const srcTokens = await import('fs-extra');
+      await srcTokens.copy(tokensJsonPath, path.join(tokensDir, 'tokens.json'));
+    } catch {
+      // If @helixui/tokens is not installed in the scaffolder's context, write
+      // a minimal stub so the project still type-checks. Includes button.* so
+      // HelixButton's font/focus fallbacks resolve without hardcoded overrides.
+      const stub = {
+        color: {},
+        space: {},
+        border: { radius: {}, width: {} },
+        shadow: {},
+        font: {
+          sans: { value: 'system-ui, sans-serif' },
+        },
+        button: {
+          'font-family': { value: 'system-ui, sans-serif' },
+          'font-weight': { value: '500' },
+          'focus-ring-color': { value: '#60a5fa' },
+        },
+      };
+      await safeWriteFile(
+        path.join(tokensDir, 'tokens.json'),
+        JSON.stringify(stub, null, 2) + '\n',
+      );
+    }
+  })();
+
+  // ── src/index.ts — barrel export ─────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(srcDir, 'index.ts'),
+    `// ${dsTitle} Design System — library entry point
+export { ${BaseClass} } from './base/${ds}-element.js';
+export { ${ClassName}Button } from './components/${ds}-button/${ds}-button.js';
+export { ${ClassName}ButtonStyles } from './components/${ds}-button/${ds}-button.styles.js';
+export type { ButtonVariant } from './components/${ds}-button/${ds}-button.styles.js';
+export { ${ClassName}Card } from './components/${ds}-card/${ds}-card.js';
+export { ${ClassName}CardStyles } from './components/${ds}-card/${ds}-card.styles.js';
+`,
+  );
+
+  // ── vite.config.ts — library mode ───────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(options.directory, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+
+export default defineConfig({
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      formats: ['es'],
+      fileName: 'index',
+    },
+    rollupOptions: {
+      external: ['lit', /^lit\\//],
+      output: {
+        preserveModules: true,
+      },
+    },
+  },
+});
+`,
+  );
+
+  // ── tsconfig.json — CRITICAL: both flags required for Lit decorators ─────
+  // Missing experimentalDecorators OR useDefineForClassFields:false causes
+  // components to register but render nothing (silent failure).
+
+  await safeWriteJson(
+    path.join(options.directory, 'tsconfig.json'),
+    {
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+        strict: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        forceConsistentCasingInFileNames: true,
+        resolveJsonModule: true,
+        experimentalDecorators: true,
+        useDefineForClassFields: false,
+      },
+      include: ['src', '.storybook'],
+      exclude: ['node_modules', 'dist', 'storybook-static'],
+    },
+    { spaces: 2 },
+  );
+
+  // ── custom-elements.json — CEM stub (populated by pnpm run cem:analyze) ──
+
+  await safeWriteJson(
+    path.join(options.directory, 'custom-elements.json'),
+    {
+      schemaVersion: '1.0.0',
+      readme: '',
+      modules: [],
+    },
+    { spaces: 2 },
   );
 }
 

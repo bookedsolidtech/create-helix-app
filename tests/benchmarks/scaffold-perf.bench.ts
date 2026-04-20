@@ -21,7 +21,7 @@ import type { Framework } from '../../src/types.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** All 15 supported frameworks. */
+/** All 16 supported frameworks. */
 const ALL_FRAMEWORKS: Framework[] = [
   'react-next',
   'react-vite',
@@ -35,6 +35,7 @@ const ALL_FRAMEWORKS: Framework[] = [
   'astro',
   'vanilla',
   'lit-vite',
+  'wc-storybook',
   'preact-vite',
   'stencil',
   'ember',

@@ -33,3 +33,13 @@ test-scaffold.ts
 
 # Session context (not committed)
 @RESTART.md
+
+# reagent — AI tooling (stays on developer machine, not committed)
+.claude/agents/
+.claude/hooks/
+.claude/settings.json
+RESTART.md
+
+# reagent task store (local state)
+.reagent/tasks.jsonl
+.reagent/tasks.lock
