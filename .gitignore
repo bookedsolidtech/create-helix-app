@@ -34,12 +34,20 @@ test-scaffold.ts
 # Session context (not committed)
 @RESTART.md
 
-# reagent — AI tooling (stays on developer machine, not committed)
-.claude/agents/
-.claude/hooks/
-.claude/settings.json
-RESTART.md
-
-# reagent task store (local state)
-.reagent/tasks.jsonl
-.reagent/tasks.lock
+# === rea managed — do not edit between markers ===
+.rea/audit.jsonl
+.rea/audit-*.jsonl
+.rea/HALT
+.rea/metrics.jsonl
+.rea/serve.pid
+.rea/serve.state.json
+.rea/fingerprints.json
+.rea/review-cache.jsonl
+.rea/*.tmp
+.rea/*.tmp.*
+.rea/install-manifest.json.bak
+.rea/install-manifest.json.tmp
+.gitignore.rea-tmp-*
+.rea.lock
+.rea/last-review.json
+# === end rea managed ===

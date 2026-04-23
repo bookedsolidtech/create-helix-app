@@ -7,6 +7,12 @@ import type {
   CustomTemplateConfig,
 } from './types.js';
 
+// Centralized Helix version pins. The wc-storybook template tracks current Helix (3.0);
+// the other framework templates intentionally target older Helix versions and keep their
+// own literal pins until each is individually upgraded.
+const HELIX_LIBRARY_VERSION = '^3.0.0';
+const HELIX_TOKENS_VERSION = '^3.0.0';
+
 export const TEMPLATES: TemplateConfig[] = [
   {
     id: 'react-next',
@@ -246,8 +252,8 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.magenta,
     dependencies: {
       lit: '^3.2.0',
-      '@helixui/library': '^2.1.2',
-      '@helixui/tokens': '^2.1.2',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
     },
     devDependencies: {
       storybook: '^10.2.8',

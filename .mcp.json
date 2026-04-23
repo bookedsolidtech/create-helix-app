@@ -1,12 +1,9 @@
 {
   "mcpServers": {
-    "reagent": {
+    "rea": {
       "type": "stdio",
       "command": "node",
-      "args": [
-        "node_modules/@bookedsolid/reagent/dist/cli/index.js",
-        "serve"
-      ]
+      "args": ["node_modules/@bookedsolid/rea/dist/cli/index.js", "serve"]
     },
     "obsidian": {
       "command": "npx",

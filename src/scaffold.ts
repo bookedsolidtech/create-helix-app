@@ -494,8 +494,13 @@ async function writePackageJson(
     ...(useEsm ? { type: 'module' } : {}),
     scripts: getScripts(options),
     dependencies: {
-      ...template.dependencies,
+      // wc-storybook pins Helix tokens at its own centralized 3.0 version via
+      // the template entry; other frameworks get the legacy 0.3.0 default when
+      // designTokens is opted in. Order matters: template spread wins for
+      // wc-storybook, the optional 0.3.0 wins for everything else only if the
+      // template hasn't already declared @helixui/tokens.
       ...(options.designTokens ? { '@helixui/tokens': '^0.3.0' } : {}),
+      ...template.dependencies,
     },
     devDependencies: {
       ...template.devDependencies,
@@ -584,13 +589,14 @@ function getScripts(options: ProjectOptions): Record<string, string> {
     case 'wc-storybook':
       return {
         storybook:
-          'pnpm build:tokens && concurrently -n tokens,sb -c blue,magenta "pnpm watch:tokens" "storybook dev -p 6006"',
-        'build-storybook': 'pnpm build:tokens && storybook build',
+          'pnpm build:tokens && pnpm cem:catalog && concurrently -n tokens,sb -c blue,magenta "pnpm watch:tokens" "storybook dev -p 6006"',
+        'build-storybook': 'pnpm build:tokens && pnpm cem:catalog && storybook build',
         build: 'pnpm build:tokens && vite build',
         test: 'vitest run',
         'test:ui': 'vitest --ui',
         'type-check': 'tsc --noEmit',
         'cem:analyze': 'cem analyze --globs "src/**/*.ts"',
+        'cem:catalog': 'tsx scripts/generate-catalog.ts',
         'build:tokens': 'tsx scripts/build-tokens.ts',
         'watch:tokens': 'tsx scripts/build-tokens.ts --watch',
         'tokens:sync': 'tsx scripts/sync-tokens.ts',
@@ -845,6 +851,7 @@ export {};
 }
 
 async function writeGitignore(options: ProjectOptions): Promise<void> {
+  const wcStorybookExtras = options.framework === 'wc-storybook' ? 'src/stories/catalog/\n' : '';
   const content = `node_modules/
 dist/
 .next/
@@ -852,7 +859,7 @@ dist/
 .svelte-kit/
 .astro/
 storybook-static/
-.env
+${wcStorybookExtras}.env
 .env.local
 *.log
 .DS_Store
@@ -7991,7 +7998,6 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   const baseDir = path.join(srcDir, 'base');
   const componentsDir = path.join(srcDir, 'components');
   const buttonDir = path.join(componentsDir, `${ds}-button`);
-  const cardDir = path.join(componentsDir, `${ds}-card`);
   const tokensDir = path.join(srcDir, 'tokens');
   const storiesDir = path.join(srcDir, 'stories');
   const designTokensStoriesDir = path.join(storiesDir, 'design-tokens');
@@ -8000,7 +8006,6 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   await safeEnsureDir(srcDir);
   await safeEnsureDir(baseDir);
   await safeEnsureDir(buttonDir);
-  await safeEnsureDir(cardDir);
   await safeEnsureDir(tokensDir);
   await safeEnsureDir(storiesDir);
   await safeEnsureDir(designTokensStoriesDir);
@@ -8376,7 +8381,7 @@ type Story = StoryObj<${ClassName}Button>;
 export const Primary: Story = {
   args: { variant: 'primary' },
   render: ({ variant, size, disabled, loading }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Primary</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Primary</${ds}-button>\`,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const button = await canvas.findByRole('button');
@@ -8388,37 +8393,37 @@ export const Primary: Story = {
 export const Secondary: Story = {
   args: { variant: 'secondary' },
   render: ({ variant, size, disabled, loading }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Secondary</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Secondary</${ds}-button>\`,
 };
 
 export const Tertiary: Story = {
   args: { variant: 'tertiary' },
   render: ({ variant, size, disabled, loading }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Tertiary</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Tertiary</${ds}-button>\`,
 };
 
 export const Danger: Story = {
   args: { variant: 'danger' },
   render: ({ variant, size, disabled, loading }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Danger</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Danger</${ds}-button>\`,
 };
 
 export const Ghost: Story = {
   args: { variant: 'ghost' },
   render: ({ variant, size, disabled, loading }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Ghost</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Ghost</${ds}-button>\`,
 };
 
 export const Outline: Story = {
   args: { variant: 'outline' },
   render: ({ variant, size, disabled, loading }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Outline</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Outline</${ds}-button>\`,
 };
 
 export const Disabled: Story = {
   args: { variant: 'primary', disabled: true },
   render: ({ variant, size }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} disabled>Disabled</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} disabled>Disabled</${ds}-button>\`,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const button = await canvas.findByRole('button');
@@ -8430,7 +8435,7 @@ export const Disabled: Story = {
 export const Loading: Story = {
   args: { variant: 'primary', loading: true },
   render: ({ variant, size }) =>
-    html\`<${ds}-button variant=\${variant} size=\${size} loading>Saving…</${ds}-button>\`,
+    html\`<${ds}-button variant=\${variant} hx-size=\${size} loading>Saving…</${ds}-button>\`,
 };
 
 export const AllVariants: Story = {
@@ -8454,9 +8459,9 @@ export const AllVariants: Story = {
 export const AllSizes: Story = {
   render: () => html\`
     <div style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem;">
-      <${ds}-button variant="primary" size="sm">Small</${ds}-button>
-      <${ds}-button variant="primary" size="md">Medium</${ds}-button>
-      <${ds}-button variant="primary" size="lg">Large</${ds}-button>
+      <${ds}-button variant="primary" hx-size="sm">Small</${ds}-button>
+      <${ds}-button variant="primary" hx-size="md">Medium</${ds}-button>
+      <${ds}-button variant="primary" hx-size="lg">Large</${ds}-button>
     </div>
   \`,
   play: async ({ canvasElement }) => {
@@ -8468,128 +8473,399 @@ export const AllSizes: Story = {
 `,
   );
 
-  // ── src/components/{ds}-card ─────────────────────────────────────────────
+  // ── src/stories/_catalog-helpers.ts ──────────────────────────────────────
+  // Pure utilities for walking @helixui/library's custom-elements.json and
+  // deriving Storybook metadata. Consumer-editable: fork this file to apply
+  // your own tier classification, arg-types policy, or exclusion rules.
 
   await safeWriteFile(
-    path.join(cardDir, `${ds}-card.styles.ts`),
-    `import { css } from 'lit';
+    path.join(storiesDir, '_catalog-helpers.ts'),
+    `/**
+ * Catalog helpers — read the Helix custom-elements manifest and classify
+ * components for Storybook display. See Figma Build Spec §5–§7 for the
+ * source-of-truth tier / exclusion rules.
+ */
 
-export const ${ClassName}CardStyles = css\`
-  :host {
-    display: block;
+export interface CemAttribute {
+  name: string;
+  fieldName?: string;
+  type?: { text?: string };
+  default?: string;
+  description?: string;
+}
+
+export interface CemDeclaration {
+  kind?: string;
+  name?: string;
+  tagName?: string;
+  customElement?: boolean;
+  attributes?: CemAttribute[];
+  cssProperties?: Array<{ name: string; description?: string; default?: string }>;
+  slots?: Array<{ name: string; description?: string }>;
+  description?: string;
+}
+
+export interface CemModule {
+  kind?: string;
+  path?: string;
+  declarations?: CemDeclaration[];
+}
+
+export interface Cem {
+  schemaVersion?: string;
+  modules?: CemModule[];
+}
+
+export type Tier = 'atoms' | 'molecules' | 'organisms';
+
+/** Yield every custom-element declaration in the manifest. */
+export function walkCem(cem: Cem): CemDeclaration[] {
+  const out: CemDeclaration[] = [];
+  for (const mod of cem.modules ?? []) {
+    for (const decl of mod.declarations ?? []) {
+      if (decl.customElement && decl.tagName) out.push(decl);
+    }
   }
-
-  .card {
-    background: var(--hx-color-surface-default, #ffffff);
-    border: var(--hx-border-width-thin, 1px) solid var(--hx-color-border-default, #e0e0e0);
-    border-radius: var(--hx-border-radius-lg, 0.5rem);
-    padding: var(--hx-space-6, 1.5rem);
-    box-shadow: var(--hx-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
-  }
-
-  .header ::slotted(*) {
-    margin: 0;
-  }
-
-  .header {
-    margin-bottom: var(--hx-space-4, 1rem);
-    padding-bottom: var(--hx-space-2, 0.5rem);
-    border-bottom: var(--hx-border-width-thin, 1px) solid var(--hx-color-border-default, #e0e0e0);
-  }
-
-  .footer {
-    margin-top: var(--hx-space-4, 1rem);
-    padding-top: var(--hx-space-2, 0.5rem);
-    border-top: var(--hx-border-width-thin, 1px) solid var(--hx-color-border-default, #e0e0e0);
-  }
-\`;
-`,
-  );
-
-  await safeWriteFile(
-    path.join(cardDir, `${ds}-card.ts`),
-    `import { html } from 'lit';
-import { property } from 'lit/decorators.js';
-import { ${BaseClass} } from '../../base/${ds}-element.js';
-import { ${ClassName}CardStyles } from './${ds}-card.styles.js';
+  return out;
+}
 
 /**
- * ${dsTitle} Card component.
- * @tag ${ds}-card
+ * Heuristic tier classification per Build Spec §7. Unrecognized tags default
+ * to 'molecules' so they show up somewhere sensible rather than being hidden.
  */
-export class ${ClassName}Card extends ${BaseClass} {
-  static styles = [${ClassName}CardStyles];
-
-  /** Optional card heading */
-  @property()
-  heading = '';
-
-  render() {
-    return html\`
-      <div class="card" part="card">
-        <div class="header" part="header">
-          <slot name="header">\${this.heading}</slot>
-        </div>
-        <slot></slot>
-        <div class="footer" part="footer">
-          <slot name="footer"></slot>
-        </div>
-      </div>
-    \`;
-  }
+export function classifyTier(decl: CemDeclaration): Tier {
+  const tag = decl.tagName ?? '';
+  const atoms = new Set([
+    'hx-button',
+    'hx-badge',
+    'hx-icon',
+    'hx-avatar',
+    'hx-chip',
+    'hx-tag',
+    'hx-link',
+    'hx-divider',
+    'hx-spinner',
+    'hx-progress',
+    'hx-skeleton',
+    'hx-kbd',
+    'hx-label',
+    'hx-text',
+    'hx-heading',
+  ]);
+  const organisms = new Set([
+    'hx-dialog',
+    'hx-drawer',
+    'hx-sidebar',
+    'hx-data-table',
+    'hx-table',
+    'hx-tabs',
+    'hx-stepper',
+    'hx-wizard',
+    'hx-navigation',
+    'hx-app-shell',
+    'hx-page-header',
+    'hx-banner',
+    'hx-hero',
+    'hx-card',
+  ]);
+  if (atoms.has(tag)) return 'atoms';
+  if (organisms.has(tag)) return 'organisms';
+  return 'molecules';
 }
 
-// Guard against duplicate registration during Storybook HMR and module re-evaluation
-if (!customElements.get('${ds}-card')) {
-  customElements.define('${ds}-card', ${ClassName}Card);
+/**
+ * HIPAA-adjacent exclusion — a tag is redacted if its name matches any of the
+ * protected-health patterns per Build Spec §5. Consumers may fork this file
+ * to widen or narrow the regex.
+ */
+export function isHipaaAdjacent(tag: string): boolean {
+  return /phi|pii|protected|sensitive/i.test(tag);
 }
 
-declare global {
-  interface HTMLElementTagNameMap {
-    '${ds}-card': ${ClassName}Card;
+/**
+ * Derive Storybook argTypes from CEM attributes. Enum unions become selects,
+ * booleans become checkboxes, labelly strings become text inputs, everything
+ * else is dropped from controls (still shown in docs).
+ */
+export function deriveArgTypes(
+  decl: CemDeclaration,
+): Record<string, unknown> {
+  const argTypes: Record<string, unknown> = {};
+  for (const attr of decl.attributes ?? []) {
+    const name = attr.fieldName ?? attr.name;
+    const text = attr.type?.text ?? '';
+    // enum union — split on |, strip quotes/whitespace
+    if (text.includes('|') && /'[^']+'/.test(text)) {
+      const options = Array.from(text.matchAll(/'([^']+)'/g)).map((m) => m[1]);
+      argTypes[name] = { control: { type: 'select' }, options };
+      continue;
+    }
+    if (text === 'boolean') {
+      argTypes[name] = { control: 'boolean' };
+      continue;
+    }
+    if (
+      text === 'string' &&
+      /label|heading|title|placeholder|helper|hint|error|content|text/i.test(name)
+    ) {
+      argTypes[name] = { control: 'text' };
+      continue;
+    }
+    // default: docs-only, no control
+    argTypes[name] = { table: { category: 'attributes' } };
   }
+  return argTypes;
+}
+
+/**
+ * Derive default args from CEM defaults. Strips surrounding single quotes the
+ * analyzer emits for literal strings.
+ */
+export function deriveArgs(decl: CemDeclaration): Record<string, unknown> {
+  const args: Record<string, unknown> = {};
+  for (const attr of decl.attributes ?? []) {
+    const name = attr.fieldName ?? attr.name;
+    if (attr.default === undefined) continue;
+    const raw = attr.default;
+    if (raw === 'true') args[name] = true;
+    else if (raw === 'false') args[name] = false;
+    else if (/^'[^']*'$/.test(raw)) args[name] = raw.slice(1, -1);
+    else if (/^\\d+$/.test(raw)) args[name] = Number(raw);
+    else args[name] = raw;
+  }
+  return args;
 }
 `,
   );
 
+  // ── src/stories/HelixCatalog.stories.ts ──────────────────────────────────
+  // Runtime CEM catalog: imports @helixui/library for side-effects (registers
+  // every hx-* element on customElements), reads the shipped custom-elements.json,
+  // and fans out one Storybook meta + Story per non-excluded declaration. No
+  // generated files are committed — the sidebar populates at dev-server start.
+
   await safeWriteFile(
-    path.join(cardDir, `${ds}-card.stories.ts`),
+    path.join(storiesDir, 'HelixCatalog.stories.ts'),
     `import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
-import './${ds}-card.js';
-import type { ${ClassName}Card } from './${ds}-card.js';
+// Side-effect import — registers every hx-* element on customElements.
+import '@helixui/library';
+// Direct JSON import — Vite resolves the manifest shipped at the package root
+// of @helixui/library 3.0.0 (package.json "files" includes custom-elements.json).
+import cem from '@helixui/library/custom-elements.json';
+import {
+  walkCem,
+  classifyTier,
+  isHipaaAdjacent,
+  type Cem,
+} from './_catalog-helpers.js';
 
-const meta: Meta<${ClassName}Card> = {
-  title: 'Components/${ClassName}Card',
-  component: '${ds}-card',
+/**
+ * HELiX catalog overview — lists every non-excluded hx-* component grouped by
+ * tier (atoms / molecules / organisms) with a single placeholder render of
+ * each. Individual per-component .stories.ts files are generated by
+ * \`pnpm cem:catalog\` (see scripts/generate-catalog.ts) which walks
+ * @helixui/library's custom-elements.json and emits one file per tag into
+ * src/stories/catalog/. Run it once after install; rerun after upgrading
+ * @helixui/library.
+ *
+ * This overview story stays runtime-driven so new Helix components appear
+ * automatically without regenerating. The per-component stories drive the
+ * detailed sidebar entries and autodocs pages.
+ *
+ * Build Spec references: §5 (HIPAA redaction), §7 (tier classification).
+ */
+
+const declarations = walkCem(cem as Cem)
+  .filter((d) => d.tagName && !isHipaaAdjacent(d.tagName))
+  .sort((a, b) => a.tagName!.localeCompare(b.tagName!));
+
+const byTier = {
+  atoms: declarations.filter((d) => classifyTier(d) === 'atoms'),
+  molecules: declarations.filter((d) => classifyTier(d) === 'molecules'),
+  organisms: declarations.filter((d) => classifyTier(d) === 'organisms'),
+};
+
+const meta: Meta = {
+  title: 'HELiX/Catalog Overview',
   tags: ['autodocs'],
-  argTypes: {
-    heading: { control: 'text' },
+  parameters: {
+    layout: 'padded',
+    docs: {
+      description: {
+        component:
+          'Every non-excluded hx-* component from @helixui/library, grouped by tier. Run \`pnpm cem:catalog\` to regenerate per-component story files under src/stories/catalog/. HIPAA-adjacent tags are filtered per Figma Build Spec §5.',
+      },
+    },
   },
 };
 
 export default meta;
-type Story = StoryObj<${ClassName}Card>;
 
-export const Default: Story = {
-  args: { heading: 'Card Title' },
-  render: ({ heading }) => html\`
-    <${ds}-card heading=\${heading}>
-      <p>Card content goes here. Use slots to project your own markup.</p>
-      <div slot="footer">Footer content</div>
-    </${ds}-card>
-  \`,
-};
+type Story = StoryObj;
 
-export const WithSlots: Story = {
+function renderGroup(label: string, decls: typeof declarations) {
+  return html\`
+    <section style="margin-bottom: 2rem;">
+      <h2 style="font-family: system-ui; font-size: 1.25rem; margin-bottom: 0.75rem;">
+        \${label} <span style="color: #6c757d; font-weight: normal;">(\${decls.length})</span>
+      </h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem;">
+        \${decls.map(
+          (d) => html\`
+            <div style="padding: 0.75rem; border: 1px solid #dee2e6; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 0.8125rem;">
+              \${d.tagName}
+            </div>
+          \`,
+        )}
+      </div>
+    </section>
+  \`;
+}
+
+export const Overview: Story = {
   render: () => html\`
-    <${ds}-card>
-      <div slot="header"><strong>Custom Header</strong></div>
-      <p>Body content via default slot.</p>
-      <div slot="footer">Footer via slot</div>
-    </${ds}-card>
+    <div style="font-family: system-ui; max-width: 960px; margin: 0 auto;">
+      <h1 style="font-size: 1.5rem; margin-bottom: 0.25rem;">HELiX component catalog</h1>
+      <p style="color: #495057; margin-bottom: 1.5rem;">
+        \${declarations.length} components available. Browse individual entries in
+        the sidebar under <code>HELiX/atoms</code>, <code>HELiX/molecules</code>,
+        and <code>HELiX/organisms</code>.
+      </p>
+      \${renderGroup('Atoms', byTier.atoms)}
+      \${renderGroup('Molecules', byTier.molecules)}
+      \${renderGroup('Organisms', byTier.organisms)}
+    </div>
   \`,
 };
+
+// Exposed for tests and tooling.
+export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
+`,
+  );
+
+  // ── scripts/generate-catalog.ts ──────────────────────────────────────────
+  // Walks node_modules/@helixui/library/custom-elements.json and emits one
+  // .stories.ts file per non-excluded hx-* component into src/stories/catalog/.
+  // Run manually or via the \`pnpm cem:catalog\` script wired in package.json.
+
+  await safeEnsureDir(path.join(options.directory, 'scripts'));
+  await safeWriteFile(
+    path.join(options.directory, 'scripts', 'generate-catalog.ts'),
+    `#!/usr/bin/env tsx
+/**
+ * Generate per-component Storybook .stories.ts files from the installed
+ * @helixui/library custom-elements manifest. Produces one file per non-
+ * excluded hx-* declaration under src/stories/catalog/<tier>/.
+ *
+ * Invoke with: pnpm cem:catalog
+ */
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  walkCem,
+  classifyTier,
+  deriveArgTypes,
+  deriveArgs,
+  isHipaaAdjacent,
+  type Cem,
+  type CemDeclaration,
+} from '../src/stories/_catalog-helpers.ts';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '..');
+const CEM_PATH = join(ROOT, 'node_modules', '@helixui', 'library', 'custom-elements.json');
+const OUT_DIR = join(ROOT, 'src', 'stories', 'catalog');
+
+function pascal(s: string): string {
+  return s
+    .split(/[-_]/)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join('');
+}
+
+function kebabSafe(s: string): string {
+  return s.replace(/[^a-z0-9]/gi, '_');
+}
+
+function renderStoryFile(decl: CemDeclaration): string {
+  const tag = decl.tagName!;
+  const tier = classifyTier(decl);
+  const className = pascal(tag);
+  const argTypes = deriveArgTypes(decl);
+  const args = { content: 'placeholder text', ...deriveArgs(decl) };
+  return \`// GENERATED by scripts/generate-catalog.ts — do not edit by hand.
+// Regenerate with: pnpm cem:catalog
+import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+import '@helixui/library';
+
+const meta: Meta = {
+  title: 'HELiX/\${tier}/\${tag}',
+  tags: ['autodocs'],
+  argTypes: \${JSON.stringify(argTypes, null, 2)},
+  args: \${JSON.stringify(args, null, 2)},
+  render: (args) => {
+    const tpl = document.createElement('template');
+    const attrs = Object.entries(args)
+      .filter(([k, v]) => k !== 'content' && v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => {
+        const attr = k.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+        return typeof v === 'boolean'
+          ? v ? attr : ''
+          : \\\`\\\${attr}="\\\${String(v).replace(/"/g, '&quot;')}"\\\`;
+      })
+      .filter(Boolean)
+      .join(' ');
+    const slot = (args as Record<string, unknown>).content ?? 'placeholder text';
+    tpl.innerHTML = \\\`<\${tag}\\\${attrs ? ' ' + attrs : ''}>\\\${slot}</\${tag}>\\\`;
+    return html\\\`\\\${tpl.content.cloneNode(true)}\\\`;
+  },
+};
+
+export default meta;
+type Story = StoryObj;
+
+export const Default: Story = {};
+\`;
+}
+
+async function main() {
+  let raw: string;
+  try {
+    raw = await readFile(CEM_PATH, 'utf8');
+  } catch (err) {
+    console.error(\`❌ Could not read \${CEM_PATH}. Run \\\`pnpm install\\\` first.\`);
+    process.exit(1);
+  }
+  const cem = JSON.parse(raw) as Cem;
+  const decls = walkCem(cem)
+    .filter((d) => d.tagName && !isHipaaAdjacent(d.tagName))
+    .sort((a, b) => a.tagName!.localeCompare(b.tagName!));
+
+  // Clean + recreate output directory
+  await rm(OUT_DIR, { recursive: true, force: true });
+  await mkdir(OUT_DIR, { recursive: true });
+
+  for (const decl of decls) {
+    const tier = classifyTier(decl);
+    const tierDir = join(OUT_DIR, tier);
+    await mkdir(tierDir, { recursive: true });
+    const outFile = join(tierDir, \`\${kebabSafe(decl.tagName!)}.stories.ts\`);
+    await writeFile(outFile, renderStoryFile(decl), 'utf8');
+  }
+
+  console.log(\`✓ Generated \${decls.length} Storybook entries under src/stories/catalog/\`);
+  console.log(\`  atoms: \${decls.filter((d) => classifyTier(d) === 'atoms').length}\`);
+  console.log(\`  molecules: \${decls.filter((d) => classifyTier(d) === 'molecules').length}\`);
+  console.log(\`  organisms: \${decls.filter((d) => classifyTier(d) === 'organisms').length}\`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
 `,
   );
 
@@ -8661,7 +8937,7 @@ export const Introduction: Story = {
           <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🧱</div>
           <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">Components</h3>
           <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">
-            Browse ${ds}-button, ${ds}-card, and add your own components.
+            Every HELiX component rendered under HELiX/* — plus ${ds}-button as an extension example.
           </p>
         </div>
         <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 1.25rem;">
@@ -9451,8 +9727,6 @@ export { ${BaseClass} } from './base/${ds}-element.js';
 export { ${ClassName}Button } from './components/${ds}-button/${ds}-button.js';
 export { ${ClassName}ButtonStyles } from './components/${ds}-button/${ds}-button.styles.js';
 export type { ButtonVariant } from './components/${ds}-button/${ds}-button.styles.js';
-export { ${ClassName}Card } from './components/${ds}-card/${ds}-card.js';
-export { ${ClassName}CardStyles } from './components/${ds}-card/${ds}-card.styles.js';
 `,
   );
 
