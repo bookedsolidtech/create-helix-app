@@ -9062,15 +9062,25 @@ pnpm cem:analyze</pre>
 import { html } from 'lit';
 import tokens from '../../tokens/tokens.json';
 
-type TokenEntry = { value: string };
+// Sprint 1.5b — accept BOTH the DTCG shape (\`{$value, $type}\`, default
+// from Custom Helix Exporter 0.6.0+) AND the legacy shape (\`{value}\`).
+// \`tokenValue()\` is the single read site so the rest of the story stays
+// shape-agnostic. The build-tokens.ts script logs a one-time deprecation
+// warning when it encounters legacy leaves; stories stay quiet.
+type TokenEntry = { $value: string; $type?: string } | { value: string };
 type ColorScale = Record<string, TokenEntry>;
 type ColorTokens = Record<string, ColorScale | TokenEntry>;
+
+function tokenValue(t: TokenEntry): string {
+  return '$value' in t ? t.$value : t.value;
+}
 
 const colorTokens = tokens.color as ColorTokens;
 
 function colorSwatchGrid(group: string, scale: ColorScale) {
   const entries = Object.entries(scale).filter(
-    ([, v]) => typeof v === 'object' && 'value' in v,
+    ([, v]) =>
+      typeof v === 'object' && v !== null && ('$value' in v || 'value' in v),
   );
   return html\`
     <div style="font-family: var(--hx-font-sans, sans-serif); margin-bottom: 2rem;">
@@ -9078,7 +9088,7 @@ function colorSwatchGrid(group: string, scale: ColorScale) {
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;">
         \${entries.map(([scale, token]) => {
           const cssVar = \`--hx-color-\${group}-\${scale}\`;
-          const rawValue = (token as TokenEntry).value;
+          const rawValue = tokenValue(token as TokenEntry);
           return html\`
             <div>
               <div style="height: 64px; border-radius: 6px; background: var(\${cssVar}, \${rawValue}); border: 1px solid rgba(0,0,0,0.1);"></div>
@@ -9160,7 +9170,11 @@ export const Palette: Story = {
 import { html } from 'lit';
 import tokens from '../../tokens/tokens.json';
 
-type TokenEntry = { value: string };
+// Sprint 1.5b — accept both DTCG ({$value, $type}) and legacy ({value}).
+type TokenEntry = { $value: string; $type?: string } | { value: string };
+function tokenValue(t: TokenEntry): string {
+  return '$value' in t ? t.$value : t.value;
+}
 
 const borderTokens = tokens.border as {
   radius: Record<string, TokenEntry>;
@@ -9194,11 +9208,11 @@ export const Radius: Story = {
             const cssVar = \`--hx-border-radius-\${key}\`;
             return html\`
               <div style="display: flex; align-items: center; gap: 1.5rem;">
-                <div style="width: 80px; height: 48px; background: var(--hx-color-primary-500, #2563EB); border-radius: var(\${cssVar}, \${token.value}); flex-shrink: 0;"></div>
+                <div style="width: 80px; height: 48px; background: var(--hx-color-primary-500, #2563EB); border-radius: var(\${cssVar}, \${tokenValue(token)}); flex-shrink: 0;"></div>
                 <div>
                   <div style="font-size: 13px; font-weight: 500;">\${key}</div>
                   <div style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</div>
-                  <div style="font-size: 11px; color: #aaa;">\${token.value}</div>
+                  <div style="font-size: 11px; color: #aaa;">\${tokenValue(token)}</div>
                 </div>
               </div>
             \`;
@@ -9221,11 +9235,11 @@ export const Width: Story = {
             const cssVar = \`--hx-border-width-\${key}\`;
             return html\`
               <div style="display: flex; align-items: center; gap: 1.5rem;">
-                <div style="width: 160px; height: 0; border-top: var(\${cssVar}, \${token.value}) solid var(--hx-color-primary-500, #2563EB); flex-shrink: 0;"></div>
+                <div style="width: 160px; height: 0; border-top: var(\${cssVar}, \${tokenValue(token)}) solid var(--hx-color-primary-500, #2563EB); flex-shrink: 0;"></div>
                 <div>
                   <div style="font-size: 13px; font-weight: 500;">\${key}</div>
                   <div style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</div>
-                  <div style="font-size: 11px; color: #aaa;">\${token.value}</div>
+                  <div style="font-size: 11px; color: #aaa;">\${tokenValue(token)}</div>
                 </div>
               </div>
             \`;
@@ -9246,7 +9260,11 @@ export const Width: Story = {
 import { html } from 'lit';
 import tokens from '../../tokens/tokens.json';
 
-type TokenEntry = { value: string };
+// Sprint 1.5b — accept both DTCG ({$value, $type}) and legacy ({value}).
+type TokenEntry = { $value: string; $type?: string } | { value: string };
+function tokenValue(t: TokenEntry): string {
+  return '$value' in t ? t.$value : t.value;
+}
 
 const shadowTokens = tokens.shadow as Record<string, TokenEntry>;
 
@@ -9275,7 +9293,7 @@ export const AllShadows: Story = {
           const cssVar = \`--hx-shadow-\${key}\`;
           return html\`
             <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
-              <div style="width: 120px; height: 80px; background: white; border-radius: 8px; box-shadow: var(\${cssVar}, \${token.value});"></div>
+              <div style="width: 120px; height: 80px; background: white; border-radius: 8px; box-shadow: var(\${cssVar}, \${tokenValue(token)});"></div>
               <div style="text-align: center;">
                 <div style="font-size: 13px; font-weight: 500;">\${key}</div>
                 <div style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</div>
@@ -9298,7 +9316,11 @@ export const AllShadows: Story = {
 import { html } from 'lit';
 import tokens from '../../tokens/tokens.json';
 
-type TokenEntry = { value: string };
+// Sprint 1.5b — accept both DTCG ({$value, $type}) and legacy ({value}).
+type TokenEntry = { $value: string; $type?: string } | { value: string };
+function tokenValue(t: TokenEntry): string {
+  return '$value' in t ? t.$value : t.value;
+}
 
 const spaceTokens = tokens.space as Record<string, TokenEntry>;
 
@@ -9329,11 +9351,11 @@ export const SpaceScale: Story = {
             const cssVar = \`--hx-space-\${key}\`;
             return html\`
               <div style="display: flex; align-items: center; gap: 1rem;">
-                <div style="width: var(\${cssVar}, \${token.value}); min-width: 4px; height: 24px; background: var(--hx-color-primary-500, #2563EB); border-radius: 3px; flex-shrink: 0;"></div>
+                <div style="width: var(\${cssVar}, \${tokenValue(token)}); min-width: 4px; height: 24px; background: var(--hx-color-primary-500, #2563EB); border-radius: 3px; flex-shrink: 0;"></div>
                 <div style="display: flex; gap: 1rem; align-items: baseline;">
                   <span style="font-size: 13px; font-weight: 500; min-width: 2rem;">\${key}</span>
                   <span style="font-size: 11px; color: #888; font-family: monospace;">\${cssVar}</span>
-                  <span style="font-size: 11px; color: #aaa;">\${token.value}</span>
+                  <span style="font-size: 11px; color: #aaa;">\${tokenValue(token)}</span>
                 </div>
               </div>
             \`;
@@ -9459,26 +9481,69 @@ const OUTPUT = path.join(ROOT, 'src/tokens/tokens.css');
 const PREFIX = '${prefix}';
 
 // Top-level keys that are theme variants — skipped; handled separately if ever.
-const SKIP_ROOT: ReadonlySet<string> = new Set(['dark', 'high-contrast']);
+// 'pluginVersion' is reserved by the Custom Helix Exporter envelope (S2.4)
+// — never a token path, so always skip at the root.
+const SKIP_ROOT: ReadonlySet<string> = new Set(['dark', 'high-contrast', 'pluginVersion']);
 
-type TokenLeaf = { value: string | number };
+// Sprint 1.5b — read BOTH the DTCG shape (\`{$value, $type}\`, default
+// from Custom Helix Exporter 0.6.0+) AND the legacy shape (\`{value}\`,
+// pre-0.6 exporter and any tokens.json that hasn't been migrated yet).
+// Single reader handles both during the 0.6.x deprecation window; the
+// legacy branch emits a one-time deprecation warning so engineers see
+// the migration window closing. 0.7.x will remove the legacy branch.
+type DtcgLeaf = { $value: string | number; $type?: string };
+type LegacyLeaf = { value: string | number };
+type TokenLeaf = DtcgLeaf | LegacyLeaf;
 type TokenNode = TokenLeaf | { [k: string]: TokenNode };
 
-function isLeaf(n: unknown): n is TokenLeaf {
+function isDtcgLeaf(n: unknown): n is DtcgLeaf {
+  return (
+    typeof n === 'object' &&
+    n !== null &&
+    '$value' in n &&
+    (typeof (n as DtcgLeaf).$value === 'string' ||
+      typeof (n as DtcgLeaf).$value === 'number')
+  );
+}
+
+function isLegacyLeaf(n: unknown): n is LegacyLeaf {
   return (
     typeof n === 'object' &&
     n !== null &&
     'value' in n &&
-    (typeof (n as TokenLeaf).value === 'string' || typeof (n as TokenLeaf).value === 'number')
+    !('$value' in n) &&
+    (typeof (n as LegacyLeaf).value === 'string' ||
+      typeof (n as LegacyLeaf).value === 'number')
+  );
+}
+
+function leafValue(n: TokenLeaf): string | number {
+  if ('$value' in n) return n.$value;
+  return n.value;
+}
+
+// One-shot deprecation warning per build — repeated warnings on every
+// leaf would drown the build log without adding signal. Hoisted to module
+// scope so the watch-mode rebuild path also fires it on each rebuild.
+let legacyWarned = false;
+function warnLegacyOnce(): void {
+  if (legacyWarned) return;
+  legacyWarned = true;
+  console.warn(
+    '[build-tokens] DEPRECATION: tokens.json uses the legacy {value} shape. ' +
+      'The Custom Helix Exporter emits W3C DTCG ({$value, $type}) by default ' +
+      'starting plugin 0.6.0. Legacy support will be removed in 0.7.x. ' +
+      'Migrate via: \`tsx <figma-tokens>/scripts/migrate-tokens-to-dtcg.ts src/tokens/tokens.json\`',
   );
 }
 
 type CssVar = { name: string; value: string };
 
 function walk(node: TokenNode, segments: string[], out: CssVar[]): void {
-  if (isLeaf(node)) {
+  if (isDtcgLeaf(node) || isLegacyLeaf(node)) {
+    if (isLegacyLeaf(node)) warnLegacyOnce();
     const name = PREFIX + '-' + segments.join('-');
-    out.push({ name, value: String(node.value) });
+    out.push({ name, value: String(leafValue(node)) });
     return;
   }
   if (typeof node !== 'object' || node === null) return;
