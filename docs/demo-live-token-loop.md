@@ -146,6 +146,18 @@ The whole point of the demo is to show this loop is repeatable:
 - Run **Build Helix Starter → Build Tokens** first to populate the file with the canonical 3.3.1 shape.
 - Or manually inspect the file's Variable collections: it needs `HELiX Primitives`, `HELiX Semantics`, and (optionally) `HELiX Components` collections.
 
+### "Build Helix Starter logs `string value on non-STRING variable: body/bg (COLOR) / Light — skipped`"
+
+- Resolved 2026-05-05 (figma-tokens commit `1d4bc23`). Helix has semantic-to-semantic aliases (`body/bg → color/surface/default`) that the prior single-pass resolver couldn't handle. Build Helix Starter is now a two-pass operation: pass 1 creates every variable + applies primitive aliases, pass 2 wires up semantic-to-semantic chains. Look for `[build-helix-starter] semantic-to-semantic aliases resolved: N / N` in the dev console.
+
+### "I want to swap the whole color scheme, not just primary"
+
+- Resolved 2026-05-05 (figma-tokens commit `1d4bc23`). The Apply Theme command now ships five fully-calibrated themes — each defines all 11 stops × primary + secondary + neutral (34 colors per theme), not the prior partial 7-stop overrides. Themes: **HELiX Default** (restore), **Royal Blue**, **Crimson**, **Forest**, **Mono Contrast**. UI shows a 5-stop swatch strip + description per theme card. Selected theme gets a teal border.
+
+### "Build Button Grid is gone from the menu"
+
+- Removed 2026-05-05 (figma-tokens commit `1d4bc23`). The 90-frame button matrix was superseded by Build Helix Starter + the registry-backed `buildOne('hx-button')` renderer. Three menu commands now: **Build Helix Starter**, **Apply Theme**, **Custom HELiX Exporter**.
+
 ### "Numeric tokens render as `500px` for font-weight"
 
 - Outdated plugin. The fix landed 2026-05-05 in `figma-tokens` repo. Pull latest, reimport plugin manifest in Figma Desktop.
