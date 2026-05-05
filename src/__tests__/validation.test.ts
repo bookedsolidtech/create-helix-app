@@ -5,9 +5,91 @@ import {
   validateFramework,
   validatePreset,
   validateThemeName,
+  validateDsName,
+  validateTokenPrefix,
   VALID_FRAMEWORKS,
   VALID_PRESETS,
 } from '../validation.js';
+
+// ---------------------------------------------------------------------------
+// validateDsName — wc-storybook design system codename
+// ---------------------------------------------------------------------------
+
+describe('validateDsName', () => {
+  it('accepts a simple lowercase name', () => {
+    expect(validateDsName('bolt')).toBeUndefined();
+  });
+
+  it('accepts a hyphenated name', () => {
+    expect(validateDsName('my-ds')).toBeUndefined();
+  });
+
+  it('accepts trailing digits', () => {
+    expect(validateDsName('ds2')).toBeUndefined();
+  });
+
+  it('rejects empty string', () => {
+    expect(validateDsName('')).toBe('Required');
+  });
+
+  it('rejects path-traversal-shaped input', () => {
+    expect(validateDsName('../../tmp')).toBeDefined();
+  });
+
+  it('rejects names starting with a digit', () => {
+    expect(validateDsName('123_app')).toBeDefined();
+  });
+
+  it('rejects underscores (unlike validateProjectName)', () => {
+    expect(validateDsName('my_ds')).toBeDefined();
+  });
+
+  it('rejects uppercase letters', () => {
+    expect(validateDsName('MyDs')).toBeDefined();
+  });
+
+  it('rejects whitespace', () => {
+    expect(validateDsName('my ds')).toBeDefined();
+  });
+
+  it('rejects slashes (path-traversal)', () => {
+    expect(validateDsName('foo/bar')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateTokenPrefix — wc-storybook CSS custom property prefix
+// ---------------------------------------------------------------------------
+
+describe('validateTokenPrefix', () => {
+  it('accepts the default --hx', () => {
+    expect(validateTokenPrefix('--hx')).toBeUndefined();
+  });
+
+  it('accepts a hyphenated suffix', () => {
+    expect(validateTokenPrefix('--my-ds')).toBeUndefined();
+  });
+
+  it('rejects empty string', () => {
+    expect(validateTokenPrefix('')).toBe('Required');
+  });
+
+  it('rejects single dash prefix', () => {
+    expect(validateTokenPrefix('-bolt')).toBeDefined();
+  });
+
+  it('rejects no leading dashes', () => {
+    expect(validateTokenPrefix('bolt')).toBeDefined();
+  });
+
+  it('rejects digit-leading suffix', () => {
+    expect(validateTokenPrefix('--1bolt')).toBeDefined();
+  });
+
+  it('rejects uppercase suffix', () => {
+    expect(validateTokenPrefix('--Bolt')).toBeDefined();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // validateProjectName

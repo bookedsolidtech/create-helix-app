@@ -112,6 +112,39 @@ export function validatePreset(preset: string): preset is (typeof VALID_PRESETS)
 }
 
 /**
+ * Validates a wc-storybook design system codename (the `dsName` slot).
+ * Allows lowercase letters, digits, and hyphens; must start with a letter.
+ * Returns an error message string on failure, or undefined if valid.
+ *
+ * Hoisted out of the interactive prompt so the same rule applies when
+ * dsName arrives via --ds-name flag or JSON-mode input. Without this,
+ * inputs like `../../tmp` or `123_app` interpolated verbatim into
+ * scaffold output paths and class names — a path-traversal hazard plus
+ * an invalid-identifier hazard.
+ */
+export function validateDsName(name: string): string | undefined {
+  if (!name) return 'Required';
+  if (!/^[a-z][a-z0-9-]*$/.test(name))
+    return 'Lowercase letters, numbers, and hyphens only (must start with a letter)';
+  return undefined;
+}
+
+/**
+ * Validates a wc-storybook CSS token prefix (the `tokenPrefix` slot).
+ * Must start with `--` followed by a lowercase identifier (e.g. `--bolt`).
+ * Returns an error message string on failure, or undefined if valid.
+ *
+ * Hoisted for the same reason as validateDsName — flag/JSON paths used
+ * to skip the regex applied in the interactive prompt.
+ */
+export function validateTokenPrefix(prefix: string): string | undefined {
+  if (!prefix) return 'Required';
+  if (!/^--[a-z][a-z0-9-]*$/.test(prefix))
+    return 'Must start with -- followed by a lowercase identifier (e.g. --bolt)';
+  return undefined;
+}
+
+/**
  * Validates a Drupal theme machine name.
  * Allows lowercase letters, digits, hyphens, and underscores; max 128 chars.
  * Returns an error message string on failure, or undefined if valid.

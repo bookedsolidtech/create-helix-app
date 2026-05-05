@@ -14,6 +14,8 @@ import {
   validateFramework,
   validatePreset,
   validateDirectory,
+  validateDsName,
+  validateTokenPrefix,
 } from './validation.js';
 import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
@@ -260,6 +262,35 @@ export async function runJsonScaffold(
 
   const bundles: ComponentBundle[] =
     opts.bundlesFromFlag ?? (['core', 'forms'] as ComponentBundle[]);
+
+  // JSON-mode bypasses the interactive prompt entirely — apply the same
+  // dsName / tokenPrefix regex here so wc-storybook scaffolds can't get a
+  // path-traversal-shaped or invalid-identifier-shaped value through JSON
+  // inputs that the interactive flow would have rejected.
+  if (templateArg === 'wc-storybook') {
+    if (opts.dsNameFromArgs !== null && opts.dsNameFromArgs !== undefined) {
+      const err = validateDsName(opts.dsNameFromArgs);
+      if (err) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --ds-name "${opts.dsNameFromArgs}": ${err}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+    if (opts.tokenPrefixFromArgs !== null && opts.tokenPrefixFromArgs !== undefined) {
+      const err = validateTokenPrefix(opts.tokenPrefixFromArgs);
+      if (err) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --token-prefix "${opts.tokenPrefixFromArgs}": ${err}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+  }
 
   const options: import('./types.js').ProjectOptions = {
     name,
@@ -694,17 +725,22 @@ ${presetList}
           return Promise.resolve(projectName ?? 'my-ds');
         }
         if (dsNameFromArgs !== null) {
+          // Flag/JSON path used to interpolate the value verbatim — guard with
+          // the same regex the interactive prompt enforces. Inputs like
+          // `../../tmp` and `123_app` would otherwise reach scaffold output
+          // paths and class names unchecked.
+          const err = validateDsName(dsNameFromArgs);
+          if (err) {
+            console.error(`Invalid --ds-name "${dsNameFromArgs}": ${err}`);
+            process.exit(1);
+          }
           return Promise.resolve(dsNameFromArgs);
         }
         return p.text({
           message: 'Design system codename',
           placeholder: 'my-ds',
           initialValue: projectName ?? 'my-ds',
-          validate(v) {
-            if (!v) return 'Required';
-            if (!/^[a-z][a-z0-9-]*$/.test(v))
-              return 'Lowercase letters, numbers, and hyphens only (must start with a letter)';
-          },
+          validate: (v) => validateDsName(v),
         });
       },
 
@@ -714,17 +750,19 @@ ${presetList}
           return Promise.resolve('--hx');
         }
         if (tokenPrefixFromArgs !== null) {
+          // See validateDsName comment — same flag/JSON validation gap.
+          const err = validateTokenPrefix(tokenPrefixFromArgs);
+          if (err) {
+            console.error(`Invalid --token-prefix "${tokenPrefixFromArgs}": ${err}`);
+            process.exit(1);
+          }
           return Promise.resolve(tokenPrefixFromArgs);
         }
         return p.text({
           message: 'CSS token prefix',
           placeholder: '--hx',
           initialValue: '--hx',
-          validate(v) {
-            if (!v) return 'Required';
-            if (!/^--[a-z][a-z0-9-]*$/.test(v))
-              return 'Must start with -- followed by a lowercase identifier (e.g. --bolt)';
-          },
+          validate: (v) => validateTokenPrefix(v),
         });
       },
 
