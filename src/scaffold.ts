@@ -9663,8 +9663,29 @@ function toHex(raw: unknown): string | null {
   return '#' + h(c.r) + h(c.g) + h(c.b);
 }
 
+// Token name patterns that resolve to unitless numbers in CSS (font-weight,
+// opacity, line-height, z-index, *-duration-*, *-density-*). Append nothing
+// for these — appending 'px' would emit invalid CSS like \`font-weight: 600px\`.
+// Path-aware so it matches both flat (\`font-weight\`) and nested
+// (\`font/weight/regular\`) Figma variable names.
+const UNITLESS_PATTERNS: readonly RegExp[] = [
+  /(?:^|[/-])font[-/]weight(?:$|[/-])/i,
+  /(?:^|[/-])opacity(?:$|[/-])/i,
+  /(?:^|[/-])line[-/]height(?:$|[/-])/i,
+  /(?:^|[/-])z[-/]index(?:$|[/-])/i,
+  /(?:^|[/-])duration(?:$|[/-])/i,
+  /(?:^|[/-])density(?:$|[/-])/i,
+];
+
+function isUnitlessName(name: string): boolean {
+  return UNITLESS_PATTERNS.some((re) => re.test(name));
+}
+
 // Walk VARIABLE_ALIAS refs until we reach a literal leaf, bounded for safety.
-function resolveValue(raw: unknown, depth = 0): string | null {
+// \`name\` is the originating variable's full Figma path — used to decide whether
+// a numeric leaf should be coerced to \`{n}px\` (default) or emitted bare (when
+// the name pattern marks it as unitless).
+function resolveValue(raw: unknown, name: string, depth = 0): string | null {
   if (depth > 8) return null;
   if (raw == null) return null;
 
@@ -9675,12 +9696,14 @@ function resolveValue(raw: unknown, depth = 0): string | null {
     const targetCollection = collections[target.variableCollectionId];
     const targetMode = targetCollection?.modes[0]?.modeId;
     if (!targetMode) return null;
-    return resolveValue(target.valuesByMode[targetMode], depth + 1);
+    // Carry the originating variable's name down so the unitless decision is
+    // anchored on what the consumer asked for, not the alias target's name.
+    return resolveValue(target.valuesByMode[targetMode], name, depth + 1);
   }
 
   const hex = toHex(raw);
   if (hex) return hex;
-  if (typeof raw === 'number') return String(raw) + 'px';
+  if (typeof raw === 'number') return isUnitlessName(name) ? String(raw) : String(raw) + 'px';
   if (typeof raw === 'string') return raw;
   return null;
 }
@@ -9710,7 +9733,7 @@ for (const v of Object.values(variables)) {
   const segments = v.name.split('/').filter(Boolean);
   if (segments.length < 2) { skipped++; continue; }
 
-  const value = resolveValue(v.valuesByMode[defaultModeId]);
+  const value = resolveValue(v.valuesByMode[defaultModeId], v.name);
   if (value === null) { skipped++; continue; }
 
   setDeep(output, segments, { value });

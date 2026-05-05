@@ -349,6 +349,30 @@ describe('wc-storybook integration', () => {
     expect(sync).not.toContain('/Volumes/');
   });
 
+  it('scripts/sync-tokens.ts preserves unitless numbers (no px coercion on font-weight, opacity, line-height, z-index, duration, density)', async () => {
+    const o = opts('wcs-sync-unitless');
+    await scaffoldProject(o);
+    const sync = await readText(o.directory, 'scripts/sync-tokens.ts');
+    // The unitless pattern table must be present and cover every CSS property
+    // that takes a bare number — appending 'px' to font-weight, opacity, etc.
+    // emits invalid CSS like \`font-weight: 600px\`.
+    expect(sync).toContain('UNITLESS_PATTERNS');
+    expect(sync).toContain('isUnitlessName');
+    expect(sync).toMatch(/font[-/]weight/);
+    expect(sync).toMatch(/opacity/);
+    expect(sync).toMatch(/line[-/]height/);
+    expect(sync).toMatch(/z[-/]index/);
+    expect(sync).toMatch(/duration/);
+    expect(sync).toMatch(/density/);
+    // The numeric branch must consult isUnitlessName before appending 'px'.
+    expect(sync).toContain("isUnitlessName(name) ? String(raw) : String(raw) + 'px'");
+    // The originating variable name has to thread down through alias resolution
+    // so the decision is anchored on what the consumer asked for, not the
+    // alias target's name.
+    expect(sync).toContain('resolveValue(v.valuesByMode[defaultModeId], v.name)');
+    expect(sync).toContain('resolveValue(target.valuesByMode[targetMode], name, depth + 1)');
+  });
+
   it('.env.example documents the Figma credentials required by tokens:sync', async () => {
     const o = opts('wcs-envexample');
     await scaffoldProject(o);
