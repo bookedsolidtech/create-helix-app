@@ -507,6 +507,10 @@ describe('wc-storybook integration', () => {
     expect(pkg.devDependencies['@custom-elements-manifest/analyzer']).toBeDefined();
     expect(pkg.devDependencies['vitest']).toBeDefined();
     expect(pkg.devDependencies['@vitest/browser']).toBeDefined();
+    // playwright is required by @vitest/browser when provider is 'playwright'
+    // (vitest.config.ts ships with that setting). Pin in devDeps so vitest
+    // boots without a fail-on-first-run after install.
+    expect(pkg.devDependencies['playwright']).toBeDefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
     // Token generator runtime + parallel watcher
     expect(pkg.devDependencies['tsx']).toBeDefined();

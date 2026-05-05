@@ -269,6 +269,11 @@ export const TEMPLATES: TemplateConfig[] = [
       tsx: '^4.19.0',
       vitest: '^3.0.0',
       '@vitest/browser': '^3.0.0',
+      // playwright is required by @vitest/browser when browser.provider is
+      // 'playwright' (vitest.config.ts ships with that setting). Pinning here
+      // avoids a fail-on-first-run when consumers boot vitest right after
+      // scaffold + install.
+      playwright: '^1.50.0',
       vite: '^6.4.0',
       typescript: '^5.7.0',
     },
