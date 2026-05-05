@@ -9697,8 +9697,27 @@ FIGMA_FILE_KEY=
       // If @helixui/tokens is not installed in the scaffolder's context, write
       // a minimal stub so the project still type-checks. Includes button.* so
       // HelixButton's font/focus fallbacks resolve without hardcoded overrides.
+      //
+      // Semantic groups mirror Helix 3.3.1's tokens.json shape:
+      //   color.{text,border,surface,action,...}
+      // Components consume `--{prefix}-color-{group}-{role}` (e.g.
+      // `--{prefix}-color-text-on-primary-strong`); the build-tokens walker
+      // flattens the nested tree into those CSS custom property names.
       const stub = {
-        color: {},
+        color: {
+          // text.* — body, headings, on-{role}, on-{role}-strong (added in 3.2.1
+          // for the white-on-darker-{role} contrast remediation).
+          text: {
+            'on-primary-strong': { value: 'var(--hx-color-neutral-0)' },
+            'on-error-strong': { value: 'var(--hx-color-neutral-0)' },
+          },
+          // border.* — neutral borders + on-dark-* family for inverted surfaces.
+          border: {
+            'on-dark-strong': { value: 'var(--hx-color-overlay-white-70)' },
+            'on-dark-default': { value: 'var(--hx-color-overlay-white-50)' },
+            'on-dark-subtle': { value: 'var(--hx-color-overlay-white-30)' },
+          },
+        },
         space: {},
         border: { radius: {}, width: {} },
         shadow: {},

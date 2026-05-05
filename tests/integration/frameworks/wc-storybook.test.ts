@@ -319,6 +319,31 @@ describe('wc-storybook integration', () => {
     }
   });
 
+  it('src/tokens/tokens.json stub emits Helix 3.3.1 semantic groups (text.on-*-strong, border.on-dark-*)', async () => {
+    const o = opts('wcs-semantic-groups');
+    await scaffoldProject(o);
+    const tokens = await readJson<{
+      color?: {
+        text?: Record<string, { value: string }>;
+        border?: Record<string, { value: string }>;
+      };
+      button?: Record<string, { value: string }>;
+    }>(o.directory, 'src/tokens/tokens.json');
+    // Skip the assertion when the upstream @helixui/tokens JSON wins (its own
+    // shape carries the semantic groups via different paths). Run the assertion
+    // only when our stub fallback is what landed on disk — detected by the
+    // stub-only marker `button.font-family = system-ui...`.
+    const isStub = tokens.button?.['font-family']?.value === 'system-ui, sans-serif';
+    if (!isStub) return;
+    // 3.2.1 token-cascade campaign — white-on-darker-{role} foregrounds.
+    expect(tokens.color?.text?.['on-primary-strong']?.value).toBeDefined();
+    expect(tokens.color?.text?.['on-error-strong']?.value).toBeDefined();
+    // on-dark-* border family for inverted surfaces.
+    expect(tokens.color?.border?.['on-dark-strong']?.value).toBeDefined();
+    expect(tokens.color?.border?.['on-dark-default']?.value).toBeDefined();
+    expect(tokens.color?.border?.['on-dark-subtle']?.value).toBeDefined();
+  });
+
   it('tsconfig.json has experimentalDecorators:true and useDefineForClassFields:false', async () => {
     const o = opts('wcs-tsconfig');
     await scaffoldProject(o);
