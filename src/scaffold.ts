@@ -8703,6 +8703,111 @@ export function deriveArgs(decl: CemDeclaration): Record<string, unknown> {
 `,
   );
 
+  // ── src/stories/_slot-props.ts ───────────────────────────────────────────
+  //
+  // Layout Rule 13 — INSTANCE_SWAP slot prop naming convention.
+  //
+  // Figma INSTANCE_SWAP slot names (`Action 1`, `Item 2`, `Header Cell 3`)
+  // map to TypeScript / Lit reactive-property names via:
+  //
+  //     slot-name → kebab-case → camelCase
+  //
+  //     'Action 1'      → 'action-1'      → 'action1'
+  //     'Item 2'        → 'item-2'        → 'item2'
+  //     'Header Cell 3' → 'header-cell-3' → 'headerCell3'
+  //
+  // This file is the single source of truth for that mapping in the
+  // scaffolded project. Component generators (when they fan out compounds
+  // with slot props) MUST call \`slotNameToProp()\` so the same algorithm
+  // produces names everywhere. Keep this in lockstep with the figma-tokens
+  // plugin's \`declareSwapSlot\` helper — round-trip integrity depends on it.
+  //
+  // Source: Layout Rules — Renderer & Component Authoring Contract, Rule 13
+  // (figma-dx-specialist 5/5 review round-2 D2).
+
+  await safeWriteFile(
+    path.join(storiesDir, '_slot-props.ts'),
+    `/**
+ * Layout Rule 13 — INSTANCE_SWAP slot prop naming convention.
+ *
+ * Figma slot names map to TypeScript / Lit prop names via:
+ *
+ *     slot-name → kebab-case → camelCase
+ *
+ *     'Action 1'      → 'action-1'      → 'action1'
+ *     'Item 2'        → 'item-2'        → 'item2'
+ *     'Header Cell 3' → 'header-cell-3' → 'headerCell3'
+ *
+ * REJECTED ALTERNATIVES (do not introduce):
+ *   - \`primaryAction\`  — semantic per-component translation does not
+ *     scale across the ~35 compound components in the kit and loses the
+ *     positional contract Code Connect needs (\`figma.children('Action 1')\`).
+ *   - \`action1Slot\`     — \`Slot\` suffix is redundant; the prop type
+ *     already conveys it.
+ *   - \`actions: Item[]\` — Figma exposes discrete \`Action 1\` / \`Action 2\`
+ *     INSTANCE_SWAP slots; an array prop loses Code Connect's discrete
+ *     mapping.
+ *
+ * OPEN-SLOT COMPOUNDS (grid, stack, container, popup, popover, tooltip —
+ * anywhere the CEM declares an unnamed default \`<slot>\`) use slot name
+ * \`Items\` mapping to React \`children\` / Lit default slot.
+ *
+ * Keep in lockstep with the figma-tokens plugin's \`declareSwapSlot\`
+ * helper. Round-trip integrity (Figma → tokens.json → scaffold → Code
+ * Connect) depends on identical naming on both sides.
+ */
+
+/** Open-slot compounds collapse their unnamed CEM slot to this name. */
+export const OPEN_SLOT_PROP = 'children';
+
+/** Figma slot label that maps to the open-slot prop. */
+export const OPEN_SLOT_FIGMA_NAME = 'Items';
+
+/**
+ * Convert a Figma slot label to the kebab-case intermediate.
+ * Strips runs of non-alphanumerics and collapses them to single hyphens.
+ */
+export function slotNameToKebab(slotName: string): string {
+  return slotName
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Convert a kebab-case slot identifier to the camelCase TypeScript prop
+ * name. Pure string transform — no semantic substitution.
+ */
+export function kebabToCamel(kebab: string): string {
+  return kebab.replace(/-([a-z0-9])/g, (_match, ch: string) => ch.toUpperCase());
+}
+
+/**
+ * Canonical slot-name → prop-name pipeline (Layout Rule 13).
+ *
+ * The unnamed-default-slot case (\`Items\`) collapses to \`children\` so the
+ * prop matches the React \`children\` / Lit default-slot ergonomic.
+ */
+export function slotNameToProp(slotName: string): string {
+  if (slotName.trim() === OPEN_SLOT_FIGMA_NAME) return OPEN_SLOT_PROP;
+  return kebabToCamel(slotNameToKebab(slotName));
+}
+
+/**
+ * Bulk variant — derive the prop map for every slot on a compound.
+ * Returns \`{ [slotName]: propName }\` so generators can iterate without
+ * rebuilding the lookup at every call site.
+ */
+export function slotPropMap(slotNames: readonly string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const slot of slotNames) out[slot] = slotNameToProp(slot);
+  return out;
+}
+`,
+  );
+
   // ── src/stories/HelixCatalog.stories.ts ──────────────────────────────────
   // Runtime CEM catalog: imports @helixui/library for side-effects (registers
   // every hx-* element on customElements), reads the shipped custom-elements.json,
@@ -9923,6 +10028,117 @@ FIGMA_FILE_KEY=
       );
     }
   })();
+
+  // ── CLAUDE.md — per-project agent guidance ───────────────────────────────
+  //
+  // Documents the Layout Rule 13 INSTANCE_SWAP slot prop convention so any
+  // downstream agent (Claude Code, Cursor, etc.) generating new compound
+  // components in the scaffolded project follows the same naming algorithm
+  // the figma-tokens plugin uses on the Figma side. Without this, agents
+  // routinely invent semantic per-component prop names ("primaryAction") and
+  // break the round-trip into Code Connect.
+
+  await safeWriteFile(
+    path.join(options.directory, 'CLAUDE.md'),
+    `# ${dsTitle} Design System — agent guidance
+
+This is a HELiX-based design system factory scaffolded by
+[\`create-helix\`](https://www.npmjs.com/package/create-helix). Components are
+authored in Lit 3, exposed as web components, themed via CSS custom
+properties, and documented in Storybook 10.
+
+## Tech stack
+
+- **Lit 3** — reactive web components.
+- **HELiX** (\`@helixui/library\`) — the component primitive layer this DS
+  extends. The base class \`${BaseClass}\` (\`src/base/${ds}-element.ts\`)
+  extends \`HelixElement\` for form-association + ARIA delegation.
+- **Storybook 10** with the web-components-vite framework.
+- **Playwright** (via \`@vitest/browser\`) for story interaction tests.
+- **Custom Elements Manifest** (\`@custom-elements-manifest/analyzer\`) drives
+  Storybook's autodocs API tables.
+
+## Token cascade
+
+The token chain is \`${prefix}-* → --hx-* → component CSS\`. \`scripts/build-tokens.ts\`
+walks \`src/tokens/tokens.json\` and emits \`${prefix}-{path}: value;\` declarations
+into \`src/tokens/tokens.css\`. Component bridges (e.g.
+\`src/components/${ds}-button/${ds}-button.styles.ts\`) re-bind \`${prefix}-*\` to
+the \`--hx-*\` names HELiX's shadow DOM reads internally.
+
+Two-level var() fallback chain (do not collapse to a single level):
+
+\`\`\`css
+--hx-button-bg: var(${prefix}-button-bg, var(${prefix}-color-action-primary-bg));
+\`\`\`
+
+Setting the component-tier hook (\`${prefix}-button-bg\`) recolors only this
+button. Setting the semantic-tier hook (\`${prefix}-color-action-primary-bg\`)
+recolors every primary action surface across the system. The component-tier
+name has to be provided as the inner fallback because HELiX's internal CSS
+reads \`--hx-button-bg\` directly.
+
+## Layout Rule 13 — INSTANCE_SWAP slot prop naming
+
+Compound components with INSTANCE_SWAP slots in Figma map slot names to
+TypeScript / Lit reactive properties via a pure string transform:
+
+    slot-name → kebab-case → camelCase
+
+    'Action 1'      → 'action-1'      → 'action1'
+    'Item 2'        → 'item-2'        → 'item2'
+    'Header Cell 3' → 'header-cell-3' → 'headerCell3'
+
+\`src/stories/_slot-props.ts\` exports \`slotNameToProp()\` — the single source of
+truth. **Always** call it when generating slot props; do **not** hand-author
+names. The Figma plugin (\`figma-tokens/plugin/lib/instances.ts\`) uses the
+identical algorithm via \`declareSwapSlot()\`. Round-trip integrity through
+Code Connect depends on both sides agreeing.
+
+Rejected alternatives (do not introduce):
+
+- \`primaryAction\` — semantic per-component naming does not scale across the
+  ~35 compound components in the kit and loses the positional contract Code
+  Connect needs (\`figma.children('Action 1')\`).
+- \`action1Slot\` — the \`Slot\` suffix is redundant in TypeScript; the prop
+  type already conveys it.
+- \`actions: HxButton[]\` — Figma exposes discrete \`Action 1\` / \`Action 2\`
+  INSTANCE_SWAP slots; an array prop loses Code Connect's discrete mapping.
+
+Open-slot compounds (grid, stack, container, popup, popover, tooltip —
+anywhere the CEM declares an unnamed default slot) use slot name **\`Items\`**
+mapping to React \`children\` / Lit default slot.
+
+## Variant axes
+
+Each component with variant axes ships a co-located \`variants.ts\` exporting:
+
+\`\`\`ts
+export const VARIANT_VALUES = ['primary', 'secondary', /* ... */] as const;
+export type Variant = typeof VARIANT_VALUES[number];
+\`\`\`
+
+Use a **plain string union**, not a discriminated union. Storybook
+\`argTypes\` MUST read from \`VARIANT_VALUES\` so Code Connect's
+\`figma.enum('variant', ...)\` aligns with both runtime + story values.
+
+## Quick start
+
+\`\`\`bash
+pnpm storybook         # dev server with token + catalog watch
+pnpm test              # Playwright story interaction tests
+pnpm build             # tokens + library
+pnpm cem:analyze       # regenerate custom-elements.json (Storybook autodocs)
+pnpm cem:catalog       # regenerate per-component HELiX catalog stories
+\`\`\`
+
+## Source-of-truth references
+
+- \`src/stories/_slot-props.ts\` — Rule 13 algorithm (this project's authority).
+- \`figma-tokens/plugin/lib/instances.ts\` (\`declareSwapSlot\`) — Figma side.
+- Layout Rules — Renderer & Component Authoring Contract (\`bst-cto-kb\`).
+`,
+  );
 
   // ── src/index.ts — barrel export ─────────────────────────────────────────
 
