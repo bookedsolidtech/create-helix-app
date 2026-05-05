@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "profile": "bst-internal",
   "installed_at": "2026-04-20T15:54:27.610Z",
-  "upgraded_at": "2026-05-05T03:12:31.456Z",
+  "upgraded_at": "2026-05-05T03:32:50.565Z",
   "files": [
     {
       "path": ".claude/hooks/_lib/cmd-segments.sh",
@@ -130,8 +130,23 @@
       "source": "agent"
     },
     {
+      "path": ".claude/agents/data-architect.md",
+      "sha256": "8b23f6ca1d5b648f1fc98847312a94552ce7e811d412666f66c2175f5f6fae76",
+      "source": "agent"
+    },
+    {
+      "path": ".claude/agents/devex-architect.md",
+      "sha256": "5546c00dab675c9cc3a1ee08cb2947350de421a0d05e191ebe6caf4014f461ce",
+      "source": "agent"
+    },
+    {
       "path": ".claude/agents/frontend-specialist.md",
       "sha256": "6be714dc035b6c73c2d4524ac59f5c4e88e49b2509d6eab4373e5e728e81c408",
+      "source": "agent"
+    },
+    {
+      "path": ".claude/agents/platform-architect.md",
+      "sha256": "9eea80c21bde480bb58462d08dee29a0c345569a4e8c74266d6d00aeb974043f",
       "source": "agent"
     },
     {
@@ -151,7 +166,7 @@
     },
     {
       "path": ".claude/agents/rea-orchestrator.md",
-      "sha256": "1a123b7a3b7897897fac895c9d352bca6a829af713e4e1654e5614b3874c097d",
+      "sha256": "2664c31be5170abb1020930de779ef4bb484d4edcf9b513214b53b4a5fdb43e2",
       "source": "agent"
     },
     {

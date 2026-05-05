@@ -51,3 +51,9 @@ test-scaffold.ts
 .rea.lock
 .rea/last-review.json
 # === end rea managed ===
+
+# Runtime caches not yet covered by rea-managed block
+.rea/last-review.cache.json
+
+# Claude Code scheduled-task runtime state
+.claude/scheduled_tasks.lock
