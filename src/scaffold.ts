@@ -9717,6 +9717,40 @@ FIGMA_FILE_KEY=
             'on-dark-default': { value: 'var(--hx-color-overlay-white-50)' },
             'on-dark-subtle': { value: 'var(--hx-color-overlay-white-30)' },
           },
+          // action.* — 3.2.1 interactive-state semantic tier between the
+          // primitive ramp (color.{role}.{stop}) and component-tier overrides
+          // (--{prefix}-{component}-bg, etc). 4 roles × 4 states = 16 tokens.
+          // Components rebind their --{prefix}-{component}-bg through these
+          // semantics so theme overrides at the action.* tier propagate
+          // everywhere a role is consumed.
+          action: {
+            primary: {
+              bg: { value: 'var(--hx-color-primary-500)' },
+              'bg-hover': { value: 'var(--hx-color-primary-600)' },
+              'bg-active': { value: 'var(--hx-color-primary-700)' },
+              'bg-inverted-hover': { value: 'var(--hx-color-primary-400)' },
+            },
+            secondary: {
+              bg: { value: 'var(--hx-color-secondary-500)' },
+              'bg-hover': { value: 'var(--hx-color-secondary-600)' },
+              'bg-active': { value: 'var(--hx-color-secondary-700)' },
+              'bg-inverted-hover': { value: 'var(--hx-color-secondary-400)' },
+            },
+            ghost: {
+              bg: { value: 'transparent' },
+              'bg-hover': { value: 'var(--hx-color-primary-50)' },
+              'bg-active': { value: 'var(--hx-color-primary-100)' },
+              'bg-inverted-hover': {
+                value: 'var(--hx-color-surface-on-dark-overlay-default)',
+              },
+            },
+            danger: {
+              bg: { value: 'var(--hx-color-error-500)' },
+              'bg-hover': { value: 'var(--hx-color-error-600)' },
+              'bg-active': { value: 'var(--hx-color-error-700)' },
+              'bg-inverted-hover': { value: 'var(--hx-color-error-400)' },
+            },
+          },
         },
         space: {},
         border: { radius: {}, width: {} },

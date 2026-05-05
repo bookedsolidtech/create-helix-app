@@ -319,6 +319,26 @@ describe('wc-storybook integration', () => {
     }
   });
 
+  it('src/tokens/tokens.json stub emits Helix 3.3.1 action.* tier (4 roles x 4 states)', async () => {
+    const o = opts('wcs-action-tier');
+    await scaffoldProject(o);
+    const tokens = await readJson<{
+      color?: {
+        action?: Record<string, Record<string, { value: string }>>;
+      };
+      button?: Record<string, { value: string }>;
+    }>(o.directory, 'src/tokens/tokens.json');
+    const isStub = tokens.button?.['font-family']?.value === 'system-ui, sans-serif';
+    if (!isStub) return;
+    const action = tokens.color?.action;
+    expect(action).toBeDefined();
+    for (const role of ['primary', 'secondary', 'ghost', 'danger'] as const) {
+      for (const state of ['bg', 'bg-hover', 'bg-active', 'bg-inverted-hover'] as const) {
+        expect(action?.[role]?.[state]?.value).toBeDefined();
+      }
+    }
+  });
+
   it('src/tokens/tokens.json stub emits Helix 3.3.1 semantic groups (text.on-*-strong, border.on-dark-*)', async () => {
     const o = opts('wcs-semantic-groups');
     await scaffoldProject(o);
