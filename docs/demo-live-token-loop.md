@@ -154,6 +154,10 @@ The whole point of the demo is to show this loop is repeatable:
 
 - Resolved 2026-05-05 (figma-tokens commit `1d4bc23`). The Apply Theme command now ships five fully-calibrated themes — each defines all 11 stops × primary + secondary + neutral (34 colors per theme), not the prior partial 7-stop overrides. Themes: **HELiX Default** (restore), **Royal Blue**, **Crimson**, **Forest**, **Mono Contrast**. UI shows a 5-stop swatch strip + description per theme card. Selected theme gets a teal border.
 
+### "Where did Pages '2. Primitives' and '3. Semantics' go? Why are there 7 HELiX - * pages now?"
+
+- 2026-05-05 redesign (figma-tokens commit `fa821e5`). The empty Primitives/Semantics text-marker pages were dropped — the HELiX Primitives + Semantics Variable Collections live globally in the file and don't need a canvas page. The single 100-kit `4a. Components` dump page was split into seven family pages: **HELiX - Actions, Forms, Navigation, Feedback, Data Display, Layout & Surfaces, Media & Glyphs**. Each of the 100 components routes to its family page automatically via tag. The sandbox `4b. Custom Component Explorations` was renamed `Component Exploration` and promoted above the reference pages — exploration first, reference catalog after.
+
 ### "Build Button Grid is gone from the menu"
 
 - Removed 2026-05-05 (figma-tokens commit `1d4bc23`). The 90-frame button matrix was superseded by Build Helix Starter + the registry-backed `buildOne('hx-button')` renderer. Three menu commands now: **Build Helix Starter**, **Apply Theme**, **Custom HELiX Exporter**.
