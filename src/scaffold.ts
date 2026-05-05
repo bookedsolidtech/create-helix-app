@@ -8196,12 +8196,65 @@ export class ${BaseClass} extends HelixElement {}
 
   // ── src/components/{ds}-button ───────────────────────────────────────────
 
+  // ── src/components/{ds}-button/variants.ts ───────────────────────────────
+  //
+  // Variant axis values for the button. Generated as a `VARIANT_VALUES` const
+  // tuple plus a `Variant` string-union type, NOT a discriminated union
+  // (round-2 review D3 finding — discriminated unions force per-variant
+  // narrowing on consumers and break Code Connect's `figma.enum('variant', ...)`
+  // alignment between runtime values, story options, and Figma axis labels).
+  //
+  // Source of truth: figma-tokens `embedded-cem.json` → `hx-button.variantAxes`.
+  // The 6 values mirror HelixButton's `variant` attribute enum (primary,
+  // secondary, tertiary, danger, ghost, outline). The 3 size values mirror
+  // the `hx-size` attribute enum (sm, md, lg).
+  //
+  // The button's stories.ts and styles.ts both consume these constants — keeps
+  // the runtime, story args, and bridge layer in lockstep so a future axis
+  // expansion only edits one file.
+
+  await safeWriteFile(
+    path.join(buttonDir, 'variants.ts'),
+    `/**
+ * ${dsTitle} button variant axes.
+ *
+ * Source of truth for the runtime, Storybook \`argTypes\`, and downstream
+ * Code Connect alignment. \`as const\` + \`typeof[number]\` produces a plain
+ * string union — not a discriminated union (review D3) — so consumers
+ * never have to narrow per variant and Storybook \`options\` can read from
+ * the same array Figma's \`figma.enum('variant', ...)\` mapping points at.
+ *
+ * Sourced from figma-tokens embedded-cem.json hx-button.variantAxes.
+ * Keep in lockstep with HelixButton's \`variant\` and \`hx-size\` attribute
+ * enums in @helixui/library.
+ */
+
+export const VARIANT_VALUES = [
+  'primary',
+  'secondary',
+  'tertiary',
+  'danger',
+  'ghost',
+  'outline',
+] as const;
+
+export type Variant = (typeof VARIANT_VALUES)[number];
+
+export const SIZE_VALUES = ['sm', 'md', 'lg'] as const;
+
+export type Size = (typeof SIZE_VALUES)[number];
+`,
+  );
+
   await safeWriteFile(
     path.join(buttonDir, `${ds}-button.styles.ts`),
     `import { css } from 'lit';
+import type { Variant } from './variants.js';
 
-// All 6 variants inherited from HelixButton — re-exported for consumer convenience
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'danger' | 'ghost' | 'outline';
+// All 6 variants inherited from HelixButton — re-exported for consumer convenience.
+// Backed by VARIANT_VALUES in ./variants.ts so the runtime list, Storybook
+// argTypes, and Code Connect figma.enum('variant', ...) stay in lockstep.
+export type ButtonVariant = Variant;
 
 /**
  * ${dsTitle} button styles.
@@ -8415,6 +8468,10 @@ import { expect, userEvent, within } from 'storybook/test';
 import { html } from 'lit';
 import './${ds}-button.js';
 import type { ${ClassName}Button } from './${ds}-button.js';
+// Read from variants.ts so Storybook argTypes options align with the runtime
+// Variant/Size unions AND with Code Connect's figma.enum() mappings. Editing
+// the variant set in one place propagates to runtime, stories, and Figma.
+import { VARIANT_VALUES, SIZE_VALUES } from './variants.js';
 
 const meta: Meta<${ClassName}Button> = {
   title: 'Components/${ClassName}Button',
@@ -8423,11 +8480,11 @@ const meta: Meta<${ClassName}Button> = {
   argTypes: {
     variant: {
       control: { type: 'select' },
-      options: ['primary', 'secondary', 'tertiary', 'danger', 'ghost', 'outline'],
+      options: [...VARIANT_VALUES],
     },
     size: {
       control: { type: 'select' },
-      options: ['sm', 'md', 'lg'],
+      options: [...SIZE_VALUES],
     },
     disabled: { control: 'boolean' },
     loading: { control: 'boolean' },
