@@ -258,6 +258,25 @@ describe('wc-storybook integration', () => {
     expect(gen).toContain('AUTO-GENERATED');
   });
 
+  it('scripts/build-tokens.ts walker recurses into nested action.* paths', async () => {
+    const o = opts('wcs-walker-action');
+    await scaffoldProject(o);
+    const gen = await readText(o.directory, 'scripts/build-tokens.ts');
+    // The walker must invoke itself with the next segment appended — this is
+    // what allows arbitrarily nested paths like color.action.primary.bg to
+    // flatten into --{prefix}-color-action-primary-bg. Lock the recursion
+    // contract so a future refactor that swaps generic recursion for a
+    // hand-rolled depth-2 unrolled loop fails this test.
+    expect(gen).toMatch(
+      /walk\(\s*child[^,]*,\s*\[\s*\.\.\.\s*segments\s*,\s*key\s*\]\s*,\s*out\s*\)/,
+    );
+    // The recursion has to be a real generic walk, not a special-case branch
+    // for known categories. Reject any explicit `if (key === 'action')`-style
+    // hardcoding that would break on future semantic groups.
+    expect(gen).not.toMatch(/if\s*\(\s*key\s*===\s*['"]action['"]/);
+    expect(gen).not.toMatch(/if\s*\(\s*key\s*===\s*['"]surface['"]/);
+  });
+
   it('scripts/sync-tokens.ts pulls from Figma REST with .env credentials', async () => {
     const o = opts('wcs-sync');
     await scaffoldProject(o);
