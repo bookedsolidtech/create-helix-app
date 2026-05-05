@@ -6,3 +6,4 @@ pnpm-lock.yaml
 .pnpm-store
 .mcp.json
 .rea/
+.claude/

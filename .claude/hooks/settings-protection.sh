@@ -33,13 +33,11 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ── 3. HALT check ────────────────────────────────────────────────────────────
-REA_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-HALT_FILE="${REA_ROOT}/.rea/HALT"
-if [ -f "$HALT_FILE" ]; then
-  printf 'REA HALT: %s\nAll agent operations suspended. Run: rea unfreeze\n' \
-    "$(head -c 1024 "$HALT_FILE" 2>/dev/null || echo 'Reason unknown')" >&2
-  exit 2
-fi
+# 0.16.0: HALT check sourced from shared _lib/halt-check.sh.
+# shellcheck source=_lib/halt-check.sh
+source "$(dirname "$0")/_lib/halt-check.sh"
+check_halt
+REA_ROOT=$(rea_root)
 
 # ── 4. Extract file path from payload ─────────────────────────────────────────
 FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
@@ -130,17 +128,121 @@ if [[ "$raw_has_traversal" -eq 1 ]] || [[ "$norm_has_traversal" -eq 1 ]]; then
   exit 2
 fi
 
+# Compute lower-cased path early so the §5b allow-list (and §6/§6b matchers
+# below) all reference a single normalized variable.
+LOWER_NORM=$(printf '%s' "$NORMALIZED" | tr '[:upper:]' '[:lower:]')
+
+# ── 5b. Extension-surface allow-list ──────────────────────────────────────────
+# `.husky/commit-msg.d/*` and `.husky/pre-push.d/*` are the documented
+# consumer extension surface (Fix H / 0.13.0). Consumers — and the agents
+# that govern those consumers — are expected to write here freely so they
+# can layer commitlint, lint-staged, branch-policy, act-CI, etc. without
+# losing rea coverage on `rea upgrade`.
+#
+# The §6 PROTECTED_PATTERNS list below has `.husky/` as a prefix block,
+# which (correctly) keeps `.husky/pre-push`, `.husky/commit-msg`, and
+# the `.husky/_/*` runtime stubs out of agent reach. But the same prefix
+# also caught `.husky/pre-push.d/00-act-ci` and `.husky/commit-msg.d/*`
+# until 0.13.2 — the very directories advertised as the extension
+# surface. This early allow-list closes that contract gap.
+#
+# Anchored on the literal `.d/` segment (not `.d`) so `.husky/pre-push.d.bak/`
+# or `.husky/pre-push.dump` still hit the prefix block. Nested fragments
+# (e.g. `pre-push.d/sub/file`) are allowed so the surface composes naturally.
+#
+# SECURITY: runs AFTER §5a (path-traversal reject), so a clever
+# `.husky/pre-push.d/../pre-push` cannot bypass §6's protection of the
+# package-managed body — §5a kills it before this matcher runs.
+#
+# SECURITY (defense-in-depth): symlinks INSIDE the .d/ surface are
+# refused — both final-component AND intermediate-directory symlinks.
+# A fragment is a short shell script authored in place; consumers do
+# not need symlinks here. Without these checks the gate has two
+# bypass shapes:
+#
+#   (a) Final-component symlink:
+#       ln -s ../pre-push .husky/pre-push.d/00-evil; write 00-evil
+#       — caught by `[ -L "$FILE_PATH" ]`.
+#
+#   (b) Intermediate-directory symlink (helix Finding 2 / 0.15.0):
+#       mkdir .husky/pre-push.d; ln -s ../ .husky/pre-push.d/linkdir
+#       write .husky/pre-push.d/linkdir/pre-push
+#       — `[ -L $FILE_PATH ]` only inspects the FINAL component, so a
+#       not-yet-existing target whose parent contains a symlink resolves
+#       to outside the surface (here: `.husky/pre-push`), letting the
+#       attacker write through to the package-managed body.
+#
+# Resolve the realpath of the parent directory and require it to live
+# under the literal extension surface. Use a portable `cd ... && pwd -P`
+# subshell pattern (no Python or readlink -f dependency required).
+# Closes the path-string→symlink bypass completely.
+case "$LOWER_NORM" in
+  .husky/commit-msg.d/*|.husky/pre-push.d/*)
+    if [ -L "$FILE_PATH" ]; then
+      {
+        printf 'SETTINGS PROTECTION: symlink in extension surface refused\n'
+        printf '\n'
+        printf '  File: %s\n' "$SAFE_FILE_PATH"
+        printf '  Rule: .husky/commit-msg.d/* and .husky/pre-push.d/* must be\n'
+        printf '        regular files (a symlink could resolve to a protected\n'
+        printf '        package-managed body and bypass §6 protection).\n'
+      } >&2
+      exit 2
+    fi
+    # Resolve the parent directory's realpath. If any intermediate
+    # component is a symlink whose target leaves the surface, the
+    # resolved path no longer contains `/.husky/<surface>.d/` and we
+    # refuse. The parent dir must already exist for this check; if it
+    # doesn't, the write is creating the parent, in which case there
+    # is no intermediate symlink to follow yet.
+    parent_dir=$(dirname -- "$FILE_PATH")
+    if [ -d "$parent_dir" ]; then
+      resolved_parent=$(cd -P -- "$parent_dir" 2>/dev/null && pwd -P 2>/dev/null) || resolved_parent=""
+      if [ -n "$resolved_parent" ]; then
+        # 0.20.1 helix-021 #3: directory-boundary on the case glob.
+        # Pre-fix `*"/.husky/commit-msg.d"*` matched `.husky/commit-msg.d.bak/`
+        # too (substring without trailing-slash anchor). A symlink
+        # `.husky/pre-push.d/linkdir -> ../pre-push.d.bak` then resolved
+        # to `.husky/pre-push.d.bak/...` and slipped through.
+        # The trailing `/` on each pattern (and the explicit
+        # exact-match arm) requires a real directory boundary.
+        case "$resolved_parent" in
+          */.husky/commit-msg.d|*/.husky/commit-msg.d/*|*/.husky/pre-push.d|*/.husky/pre-push.d/*) : ;;
+          *)
+            {
+              printf 'SETTINGS PROTECTION: extension path resolves outside surface\n'
+              printf '\n'
+              printf '  Logical:  %s\n' "$SAFE_FILE_PATH"
+              printf '  Resolved: %s\n' "$resolved_parent"
+              printf '  Rule: an intermediate directory of the extension path is a\n'
+              printf '        symlink whose target leaves .husky/{commit-msg,pre-push}.d/.\n'
+              printf '        Refused to prevent symlinked-parent bypass of the\n'
+              printf '        package-managed body protection.\n'
+            } >&2
+            exit 2
+          ;;
+        esac
+      fi
+    fi
+    # Documented extension surface — agents can write here freely.
+    exit 0
+    ;;
+esac
+
 # ── 6. Protected path patterns ────────────────────────────────────────────────
 # §6 runs BEFORE the patch-session allowlist so hook-patch sessions cannot
 # reach .rea/policy.yaml, .rea/HALT, or .claude/settings.json via any glob
 # creativity.
-PROTECTED_PATTERNS=(
-  '.claude/settings.json'
-  '.claude/settings.local.json'
-  '.husky/'
-  '.rea/policy.yaml'
-  '.rea/HALT'
-)
+#
+# 0.16.3 F7: list is sourced from `_lib/protected-paths.sh`, which honors
+# the `protected_paths_relax` policy key (kill-switch invariants always
+# stay protected — see the lib for the always-protected subset).
+# shellcheck source=_lib/protected-paths.sh
+source "$(dirname "$0")/_lib/protected-paths.sh"
+# Trigger lazy load now so PROTECTED_PATTERNS reflects the relaxed list
+# from the start of this hook process.
+rea_path_is_protected "/__rea_force_load__" >/dev/null 2>&1 || true
+PROTECTED_PATTERNS=("${REA_PROTECTED_PATTERNS[@]}")
 
 # Patterns that are protected from general agent edits but can be unlocked by
 # REA_HOOK_PATCH_SESSION. Kept separate from the hard-protected list above so
@@ -149,7 +251,7 @@ PATCH_SESSION_PATTERNS=(
   '.claude/hooks/'
 )
 
-LOWER_NORM=$(printf '%s' "$NORMALIZED" | tr '[:upper:]' '[:lower:]')
+# LOWER_NORM was computed in §5b above and is reused here.
 
 # Match $NORMALIZED against PROTECTED_PATTERNS (exact or prefix for patterns
 # ending in '/'). Sets $PROTECTED_MATCH to the matched pattern; exit 0 on hit.
@@ -239,6 +341,63 @@ if match_protected_ci; then
     printf '  Matched: %s\n' "$PROTECTED_MATCH"
   } >&2
   exit 2
+fi
+
+# ── 6c. Intermediate-symlink resolution (0.16.0 fix H.1) ──────────────────────
+# Helix Finding 2 reborn against the hard-protected list. The §5b
+# extension-surface fix (0.13.2) resolved parent realpath for the
+# `.husky/{commit-msg,pre-push}.d/*` allowlist; §6 was never given the
+# same protection. Attack:
+#
+#   mkdir innocuous_path
+#   ln -s ../.husky innocuous_path/maybe   # symlink resolves to .husky/
+#   write innocuous_path/maybe/pre-push    # writes through to .husky/pre-push
+#
+# §5a (`..` traversal) doesn't catch — the path string has no `..`.
+# §6 PROTECTED_PATTERNS sees `innocuous_path/maybe/pre-push` — doesn't
+# match `.husky/` prefix. The write succeeds and the package-managed
+# pre-push body is overwritten.
+#
+# Fix: when the parent directory of the target exists, resolve its
+# realpath via cd -P && pwd -P (same shape as §5b) and check whether
+# the resolved path falls inside any protected directory. Only resolve
+# when the parent already exists — a write that creates the parent has
+# nothing to follow.
+if [[ -e "$FILE_PATH" || -d "$(dirname -- "$FILE_PATH")" ]]; then
+  parent_dir=$(dirname -- "$FILE_PATH")
+  if [[ -d "$parent_dir" ]]; then
+    resolved_parent=$(cd -P -- "$parent_dir" 2>/dev/null && pwd -P 2>/dev/null) || resolved_parent=""
+    if [[ -n "$resolved_parent" ]]; then
+      # If the resolved parent is inside REA_ROOT, compute the project-
+      # relative path and test it against the protected patterns.
+      if [[ "$resolved_parent" == "$REA_ROOT"/* ]]; then
+        relative_resolved="${resolved_parent#"$REA_ROOT"/}"
+        # Walk every PROTECTED_PATTERN that's a directory prefix and
+        # check whether the resolved parent falls inside it. Direct
+        # filename matches against PROTECTED_PATTERNS for the resolved
+        # final path (parent + basename).
+        resolved_target="${relative_resolved}/$(basename -- "$FILE_PATH")"
+        resolved_target_lc=$(printf '%s' "$resolved_target" | tr '[:upper:]' '[:lower:]')
+        for pattern in "${PROTECTED_PATTERNS[@]}"; do
+          pattern_lc=$(printf '%s' "$pattern" | tr '[:upper:]' '[:lower:]')
+          if [[ "$resolved_target_lc" == "$pattern_lc" ]] || \
+             { [[ "$pattern_lc" == */ ]] && [[ "$resolved_target_lc" == "$pattern_lc"* ]]; }; then
+            {
+              printf 'SETTINGS PROTECTION: intermediate-symlink resolution blocked\n'
+              printf '\n'
+              printf '  Logical:  %s\n' "$SAFE_FILE_PATH"
+              printf '  Resolved: %s\n' "$resolved_target"
+              printf '  Matched:  %s\n' "$pattern"
+              printf '  Rule: an intermediate directory of the target path is a\n'
+              printf '        symlink whose target falls inside a hard-protected\n'
+              printf '        path. Refused to prevent symlinked-parent bypass.\n'
+            } >&2
+            exit 2
+          fi
+        done
+      fi
+    fi
+  fi
 fi
 
 # ── 6b. Hook-patch session (Defect I / rea#76) ───────────────────────────────

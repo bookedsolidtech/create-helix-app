@@ -4,8 +4,8 @@ version: "1"
 profile: "bst-internal"
 installed_by: "himerus"
 installed_at: "2026-04-20T15:54:27.553Z"
-autonomy_level: L1
-max_autonomy_level: L2
+autonomy_level: L3
+max_autonomy_level: L3
 promotion_requires_human_approval: true
 block_ai_attribution: true
 blocked_paths:
