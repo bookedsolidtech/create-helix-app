@@ -69,6 +69,7 @@ In Figma Desktop:
    ```
    [export-tokens] collections: HELiX Primitives + HELiX Semantics + HELiX Components · action.*: 14 · 3.3.1 semantics: 6/6
    ```
+   With the full manifest landed, expect Build Helix Starter to log totals near `Primitives: 276 · Semantics: 71 × 3 modes · Components: 831 / 831 tokens across 72 components`.
 4. Click **Download tokens.json**.
 
 The downloaded file is a nested `{category.group.scale.value}` tree containing color primitives, the `action.*` semantic tier, and all 13 semantic groups. Length-typed values are emitted as `${n}px`; unitless values (`font-weight`, `opacity`, `line-height`, `z-index`) emit raw numbers.
