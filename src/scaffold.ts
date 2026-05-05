@@ -8237,6 +8237,33 @@ export const ${ClassName}ButtonStyles = css\`
 
     --hx-color-error-500: var(${prefix}-color-error-500);
     --hx-color-error-600: var(${prefix}-color-error-600);
+
+    /* ── Two-level var() fallback for component-tier hooks ─────────────────
+     *
+     * Pattern (mirrors hx-button's own @cssprop defaults at hx-button.ts:38–79):
+     *   --hx-{component}-{prop}:
+     *     var(${prefix}-{component}-{prop},
+     *         var(${prefix}-color-action-{role}-{state}))
+     *
+     * Result — consumer overrides compose:
+     *   - Set ${prefix}-button-bg (component-tier) to recolor only this button.
+     *   - Set ${prefix}-color-action-primary-bg (semantic-tier) to recolor every
+     *     primary action surface across the system; the button picks it up via
+     *     the inner var() fallback unless the component-tier hook is also set.
+     *
+     * The component-tier name has to be provided as a fallback (not just bound
+     * to itself) because Helix internal CSS reads --hx-button-bg directly,
+     * and the bridge has to satisfy both rebinding paths in one declaration.
+     */
+    --hx-button-bg: var(${prefix}-button-bg, var(${prefix}-color-action-primary-bg));
+    --hx-button-hover-bg: var(${prefix}-button-hover-bg, var(${prefix}-color-action-primary-bg-hover));
+    --hx-button-active-bg: var(${prefix}-button-active-bg, var(${prefix}-color-action-primary-bg-active));
+    --hx-button-color: var(${prefix}-button-color, var(${prefix}-color-text-on-primary));
+    --hx-button-border-color: var(${prefix}-button-border-color, var(${prefix}-color-action-secondary-border));
+    --hx-button-border-radius: var(${prefix}-button-border-radius, var(${prefix}-border-radius-md));
+    --hx-button-font-family: var(${prefix}-button-font-family, var(${prefix}-font-family-sans));
+    --hx-button-font-weight: var(${prefix}-button-font-weight, var(${prefix}-font-weight-semibold));
+    --hx-button-focus-ring-color: var(${prefix}-button-focus-ring-color, var(${prefix}-focus-ring-color));
   }
 \`;
 `,

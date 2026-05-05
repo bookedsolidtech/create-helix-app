@@ -238,6 +238,28 @@ describe('wc-storybook integration', () => {
     expect(styles).not.toMatch(/--bolt-color-primary-500:\s*#/);
   });
 
+  it('button styles bridge uses two-level var() fallback chain (component → semantic action.*)', async () => {
+    const o = opts('wcs-fallback-chain');
+    await scaffoldProject(o);
+    const styles = await readText(o.directory, 'src/components/bolt-button/bolt-button.styles.ts');
+    // Component-tier hook (--bolt-button-bg) is the outer name; if unset, the
+    // inner var() resolves to the semantic action.* tier. Mirrors the pattern
+    // hx-button itself uses internally (hx-button.ts:38–79).
+    expect(styles).toContain(
+      '--hx-button-bg: var(--bolt-button-bg, var(--bolt-color-action-primary-bg));',
+    );
+    expect(styles).toContain(
+      '--hx-button-hover-bg: var(--bolt-button-hover-bg, var(--bolt-color-action-primary-bg-hover));',
+    );
+    expect(styles).toContain(
+      '--hx-button-active-bg: var(--bolt-button-active-bg, var(--bolt-color-action-primary-bg-active));',
+    );
+    // Foreground + chrome route through their semantic groups too.
+    expect(styles).toContain('--hx-button-color: var(--bolt-button-color,');
+    expect(styles).toContain('--hx-button-border-color: var(--bolt-button-border-color,');
+    expect(styles).toContain('--hx-button-border-radius: var(--bolt-button-border-radius,');
+  });
+
   it('src/tokens/tokens.css is AUTO-GENERATED with platform import', async () => {
     const o = opts('wcs-tokens');
     await scaffoldProject(o);
