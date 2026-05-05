@@ -33,6 +33,14 @@ export interface TemplateConfig {
   color: (text: string) => string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  /**
+   * Optional peer-dependency pins. Used by design-system-factory templates
+   * (e.g. wc-storybook) to communicate the cascade-token contract version
+   * the consumer host MUST satisfy. Plain `dependencies` still cover the
+   * dev-time install; `peerDependencies` document the consumer-facing
+   * version range.
+   */
+  peerDependencies?: Record<string, string>;
   features: string[];
 }
 
@@ -49,6 +57,7 @@ export interface CustomTemplateConfig {
   color: (text: string) => string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  peerDependencies?: Record<string, string>;
   features: string[];
   isCustom: true;
 }

@@ -487,6 +487,7 @@ async function writePackageJson(
   // Ember uses CommonJS tooling (ember-cli-build.js, config/environment.js) —
   // setting "type": "module" would cause ReferenceError: require is not defined.
   const useEsm = options.framework !== 'ember';
+  const peerDependencies = template.peerDependencies;
   const pkg = {
     name: options.name,
     version: '0.1.0',
@@ -494,7 +495,7 @@ async function writePackageJson(
     ...(useEsm ? { type: 'module' } : {}),
     scripts: getScripts(options),
     dependencies: {
-      // wc-storybook pins Helix tokens at its own centralized 3.0 version via
+      // wc-storybook pins Helix tokens at its own centralized 3.3.1 version via
       // the template entry; other frameworks get the legacy 0.3.0 default when
       // designTokens is opted in. Order matters: template spread wins for
       // wc-storybook, the optional 0.3.0 wins for everything else only if the
@@ -505,6 +506,12 @@ async function writePackageJson(
     devDependencies: {
       ...template.devDependencies,
     },
+    // Only emit peerDependencies when the template declares them — keeps the
+    // generated package.json minimal for app-style frameworks (react-next,
+    // svelte-kit, etc) where the consumer is the end-user app, not a library.
+    ...(peerDependencies && Object.keys(peerDependencies).length > 0
+      ? { peerDependencies }
+      : {}),
   };
 
   await safeWriteJson(path.join(options.directory, 'package.json'), pkg, {

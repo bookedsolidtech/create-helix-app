@@ -7,11 +7,14 @@ import type {
   CustomTemplateConfig,
 } from './types.js';
 
-// Centralized Helix version pins. The wc-storybook template tracks current Helix (3.0);
-// the other framework templates intentionally target older Helix versions and keep their
-// own literal pins until each is individually upgraded.
-const HELIX_LIBRARY_VERSION = '^3.0.0';
-const HELIX_TOKENS_VERSION = '^3.0.0';
+// Centralized Helix version pins. The wc-storybook template tracks current
+// Helix (3.3.1 — the version that emits the cascade tokens this scaffold
+// expects: action.* semantic tier, on-{role}-strong text tokens, on-dark-*
+// border tokens). The other framework templates intentionally target older
+// Helix versions and keep their own literal pins until each is individually
+// upgraded.
+const HELIX_LIBRARY_VERSION = '^3.3.1';
+const HELIX_TOKENS_VERSION = '^3.3.1';
 
 export const TEMPLATES: TemplateConfig[] = [
   {
@@ -252,6 +255,18 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.magenta,
     dependencies: {
       lit: '^3.2.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+    },
+    // peerDeps document the cascade-token contract version the consumer host
+    // MUST satisfy. The wc-storybook factory ships components that bridge
+    // --{prefix}-* tokens into Helix's --hx-* names — that bridge ASSUMES
+    // the action.* semantic tier, on-{role}-strong text tokens, and the
+    // on-dark-* border family that Helix 3.3.1 introduced. Pinning these as
+    // peerDeps surfaces the version contract in `npm ls` output and trips
+    // pnpm's strict-peer-deps check if a downstream installs an
+    // older Helix that doesn't export the cascade.
+    peerDependencies: {
       '@helixui/library': HELIX_LIBRARY_VERSION,
       '@helixui/tokens': HELIX_TOKENS_VERSION,
     },

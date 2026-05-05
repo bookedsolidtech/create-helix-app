@@ -583,18 +583,38 @@ describe('wc-storybook integration', () => {
     expect(exists).toBe(false);
   });
 
-  it('pins Helix 3.0 in package.json dependencies', async () => {
+  it('pins Helix 3.3.1 in package.json dependencies', async () => {
     const o = opts('wcs-helix3');
     await scaffoldProject(o);
     const pkg = await readJson<{ dependencies: Record<string, string> }>(
       o.directory,
       'package.json',
     );
-    expect(pkg.dependencies['@helixui/library']).toBe('^3.0.0');
-    // @helixui/tokens: centralized pin is 3.0, but when designTokens=true the
-    // scaffold may layer an additional tokens entry; accept either explicit 3.0
+    // 3.3.1 is the version that emits the cascade tokens this scaffold
+    // expects (action.* semantic tier, on-{role}-strong text tokens,
+    // on-dark-* border tokens). Pinning the cascade contract version.
+    expect(pkg.dependencies['@helixui/library']).toBe('^3.3.1');
+    // @helixui/tokens: centralized pin is 3.3.1, but when designTokens=true the
+    // scaffold may layer an additional tokens entry; accept either explicit 3.3.1
     // or the default tokens pin.
     expect(pkg.dependencies['@helixui/tokens']).toBeDefined();
+  });
+
+  it('pins @helixui/library as a peerDependency at the cascade-contract version (^3.3.1)', async () => {
+    const o = opts('wcs-peerdep');
+    await scaffoldProject(o);
+    const pkg = await readJson<{
+      peerDependencies?: Record<string, string>;
+    }>(o.directory, 'package.json');
+    // wc-storybook ships components that bridge --{prefix}-* tokens into
+    // Helix's --hx-* names. That bridge ASSUMES the cascade contract that
+    // landed in Helix 3.3.1 (action.* semantic tier, on-{role}-strong text
+    // tokens, on-dark-* border family). The peerDep surfaces this version
+    // floor in `npm ls` output and trips pnpm's strict-peer-deps check if a
+    // downstream installs an older Helix that doesn't export the cascade.
+    expect(pkg.peerDependencies).toBeDefined();
+    expect(pkg.peerDependencies?.['@helixui/library']).toBe('^3.3.1');
+    expect(pkg.peerDependencies?.['@helixui/tokens']).toBe('^3.3.1');
   });
 
   it('does not scaffold the ${ds}-card demo component', async () => {
