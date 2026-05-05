@@ -36,7 +36,7 @@ The architecture proves a single-source-of-truth model: a primitive change in Fi
 3. Open the HELiX Tokens Figma file (or any file with the right Variable collections).
 4. **(One-time per file)** If the file is empty, populate it via the plugin first:
    - **Plugins → Development → HELiX Token Suite → Build Helix Starter → Build Tokens**.
-   - This upserts ~276 primitives + ~71 semantics × 3 modes + 47 component tokens. Non-destructive: existing variables of the same name are preserved.
+   - This upserts **276 primitives + 71 semantics × 3 modes + 831 component-tier CSS-var entries across 72 components**. Non-destructive: existing variables of the same name are preserved. Component variables are created empty — runtime CSS cascade provides defaults; designers fill values to override per-component.
 
 ### Developer side
 
