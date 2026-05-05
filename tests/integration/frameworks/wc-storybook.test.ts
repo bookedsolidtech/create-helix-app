@@ -448,13 +448,16 @@ describe('wc-storybook integration', () => {
     const o = opts('wcs-scripts');
     await scaffoldProject(o);
     const pkg = await readJson<{ scripts: Record<string, string> }>(o.directory, 'package.json');
-    // storybook + build-storybook + build now chain through build:tokens first
-    expect(pkg.scripts['storybook']).toContain('pnpm build:tokens');
+    // storybook + build-storybook + build now chain through build:tokens first.
+    // Composite scripts inline the literal `tsx scripts/build-tokens.ts`
+    // command rather than `pnpm build:tokens` so the scaffold output runs
+    // under npm/pnpm/yarn without requiring pnpm to be installed.
+    expect(pkg.scripts['storybook']).toContain('tsx scripts/build-tokens.ts');
     expect(pkg.scripts['storybook']).toContain('storybook dev -p 6006');
     expect(pkg.scripts['storybook']).toContain('concurrently');
-    expect(pkg.scripts['build-storybook']).toContain('pnpm build:tokens');
+    expect(pkg.scripts['build-storybook']).toContain('tsx scripts/build-tokens.ts');
     expect(pkg.scripts['build-storybook']).toContain('storybook build');
-    expect(pkg.scripts['build']).toContain('pnpm build:tokens');
+    expect(pkg.scripts['build']).toContain('tsx scripts/build-tokens.ts');
     expect(pkg.scripts['build']).toContain('vite build');
     expect(pkg.scripts['test']).toBe('vitest run');
     expect(pkg.scripts['test:ui']).toBe('vitest --ui');
@@ -462,9 +465,17 @@ describe('wc-storybook integration', () => {
     expect(pkg.scripts['cem:analyze']).toBeDefined();
     // cem:catalog generates per-component Storybook files from installed CEM
     expect(pkg.scripts['cem:catalog']).toBe('tsx scripts/generate-catalog.ts');
-    // storybook + build-storybook must run cem:catalog before boot
-    expect(pkg.scripts['storybook']).toContain('pnpm cem:catalog');
-    expect(pkg.scripts['build-storybook']).toContain('pnpm cem:catalog');
+    // storybook + build-storybook must run cem:catalog before boot — inline
+    // the literal so npm/pnpm/yarn all execute the same command.
+    expect(pkg.scripts['storybook']).toContain('tsx scripts/generate-catalog.ts');
+    expect(pkg.scripts['build-storybook']).toContain('tsx scripts/generate-catalog.ts');
+    // No package-manager prefix should leak into composite script chains —
+    // those would break the scaffold under `npm run` or `yarn`.
+    expect(pkg.scripts['storybook']).not.toMatch(/\bpnpm\s+build:tokens\b/);
+    expect(pkg.scripts['storybook']).not.toMatch(/\bpnpm\s+cem:catalog\b/);
+    expect(pkg.scripts['storybook']).not.toMatch(/\bpnpm\s+watch:tokens\b/);
+    expect(pkg.scripts['build-storybook']).not.toMatch(/\bpnpm\s+/);
+    expect(pkg.scripts['build']).not.toMatch(/\bpnpm\s+/);
     // tokens:sync pulls from Figma REST. Single-purpose — build:tokens is a
     // separate step so callers compose (or rely on the `storybook` concurrent
     // watch:tokens) rather than paying for an implicit rebuild every sync.

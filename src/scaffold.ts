@@ -587,11 +587,16 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         test: 'ember test',
       };
     case 'wc-storybook':
+      // Compose scripts by inlining the literal commands instead of chaining
+      // through `pnpm <script>` invocations. This keeps the scaffold output
+      // package-manager-agnostic — `npm run storybook`, `pnpm storybook`, and
+      // `yarn storybook` all work without requiring pnpm to be installed.
       return {
         storybook:
-          'pnpm build:tokens && pnpm cem:catalog && concurrently -n tokens,sb -c blue,magenta "pnpm watch:tokens" "storybook dev -p 6006"',
-        'build-storybook': 'pnpm build:tokens && pnpm cem:catalog && storybook build',
-        build: 'pnpm build:tokens && vite build',
+          'tsx scripts/build-tokens.ts && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
+        'build-storybook':
+          'tsx scripts/build-tokens.ts && tsx scripts/generate-catalog.ts && storybook build',
+        build: 'tsx scripts/build-tokens.ts && vite build',
         test: 'vitest run',
         'test:ui': 'vitest --ui',
         'type-check': 'tsc --noEmit',
