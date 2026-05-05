@@ -150,6 +150,14 @@ The whole point of the demo is to show this loop is repeatable:
 
 - Outdated plugin. The fix landed 2026-05-05 in `figma-tokens` repo. Pull latest, reimport plugin manifest in Figma Desktop.
 
+### "Color scale sorts wrong in Figma's Variables panel (50 lands between 400 and 500)"
+
+- Resolved 2026-05-05 (figma-tokens commit `d9de40b`). Variable display names are now zero-padded so `color/primary/050` sorts before `100`. Reimport the plugin manifest and re-run **Build Helix Starter → Build Tokens** — existing un-padded variables are renamed in place (no duplicates created). Reported by Charles Attisano 2026-04-28.
+
+### "Opacity variables show 0.5 but the name says 50 — designers can't tell which is which"
+
+- Resolved 2026-05-05 (figma-tokens commit `d9de40b`). Opacity primitives now carry a Figma description like `"50% opacity. Stored as 0.5 (decimal) for direct binding to Figma fill/stroke opacity."` — visible by hovering the variable in Figma's panel. Reimport the plugin manifest and re-run **Build Helix Starter → Build Tokens**. Reported by Charles Attisano 2026-04-29.
+
 ### "build-tokens.ts emits `--hx-*` even though I scaffolded with `--token-prefix=--well`"
 
 - Known issue (BUG draft `2026-05-05T040500Z-cli-token-prefix-leading-dashes.md`). The flag parser drops values that begin with `--`. Workaround: use the interactive prompt mode (`npx create-helix wellds --template wc-storybook` and let it ask), OR post-edit `scripts/build-tokens.ts` line `const PREFIX = '...'`.
