@@ -238,6 +238,28 @@ describe('wc-storybook integration', () => {
     expect(styles).not.toMatch(/--bolt-color-primary-500:\s*#/);
   });
 
+  it('bolt-button.ts JSDoc enriches CEM with action.* and component-tier @cssprop blocks', async () => {
+    const o = opts('wcs-jsdoc-cem');
+    await scaffoldProject(o);
+    const button = await readText(o.directory, 'src/components/bolt-button/bolt-button.ts');
+    // JSDoc IS the CEM data layer for Track 1 — annotate explicitly because
+    // cross-package CEM inheritance does not auto-resolve.
+    expect(button).toContain('JSDoc IS the CEM data layer');
+    // Component-tier hooks documented with their two-level fallback default.
+    expect(button).toContain('@cssprop [--bolt-button-bg=var(--bolt-color-action-primary-bg)]');
+    expect(button).toContain(
+      '@cssprop [--bolt-button-hover-bg=var(--bolt-color-action-primary-bg-hover)]',
+    );
+    expect(button).toContain(
+      '@cssprop [--bolt-button-active-bg=var(--bolt-color-action-primary-bg-active)]',
+    );
+    // Semantic action.* tier surfaced as override hooks.
+    expect(button).toContain('@cssprop [--bolt-color-action-primary-bg]');
+    expect(button).toContain('@cssprop [--bolt-color-action-danger-bg]');
+    expect(button).toContain('@cssprop [--bolt-color-text-on-primary-strong]');
+    expect(button).toContain('@cssprop [--bolt-color-text-on-error-strong]');
+  });
+
   it('button styles bridge uses two-level var() fallback chain (component → semantic action.*)', async () => {
     const o = opts('wcs-fallback-chain');
     await scaffoldProject(o);

@@ -8338,14 +8338,47 @@ import { ${ClassName}ButtonStyles } from './${ds}-button.styles.js';
  * @csspart suffix  - The suffix slot container span.
  * @csspart spinner - The loading spinner SVG element.
  *
- * @cssprop [--hx-button-bg] - Button background color.
- * @cssprop [--hx-button-hover-bg] - Hover background override.
- * @cssprop [--hx-button-color] - Button text color.
- * @cssprop [--hx-button-border-color] - Button border color.
- * @cssprop [--hx-button-border-radius] - Button border radius.
- * @cssprop [--hx-button-font-family] - Button font family.
- * @cssprop [--hx-button-font-weight] - Button font weight.
- * @cssprop [--hx-button-focus-ring-color] - Focus ring color.
+ * ─── Component-tier CSS hooks (consumer override surface) ─────────────────
+ *
+ * Each component-tier hook falls back to a semantic action.* token via the
+ * two-level var() chain in ${ds}-button.styles.ts. Set the component-tier
+ * name to recolor only this button; set the action.* name to recolor every
+ * primary action surface across the system.
+ *
+ * NOTE: JSDoc IS the CEM data layer for Track 1 components. Cross-package
+ * CEM inheritance does not auto-resolve, so @cssprop blocks are inlined
+ * here so @custom-elements-manifest/analyzer surfaces them on this tag.
+ *
+ * @cssprop [--${ds}-button-bg=var(--${ds}-color-action-primary-bg)] - Resting fill.
+ * @cssprop [--${ds}-button-hover-bg=var(--${ds}-color-action-primary-bg-hover)] - Hover fill.
+ * @cssprop [--${ds}-button-active-bg=var(--${ds}-color-action-primary-bg-active)] - Pressed fill.
+ * @cssprop [--${ds}-button-color=var(--${ds}-color-text-on-primary)] - Foreground color.
+ * @cssprop [--${ds}-button-border-color=var(--${ds}-color-action-secondary-border)] - Border color.
+ * @cssprop [--${ds}-button-border-radius=var(--${ds}-border-radius-md)] - Border radius.
+ * @cssprop [--${ds}-button-font-family=var(--${ds}-font-family-sans)] - Font family.
+ * @cssprop [--${ds}-button-font-weight=var(--${ds}-font-weight-semibold)] - Font weight.
+ * @cssprop [--${ds}-button-focus-ring-color=var(--${ds}-focus-ring-color)] - Focus ring color.
+ *
+ * ─── Semantic action.* tier (system-wide override surface) ────────────────
+ *
+ * @cssprop [--${ds}-color-action-primary-bg] - Primary resting fill (3.2.1 semantic).
+ * @cssprop [--${ds}-color-action-primary-bg-hover] - Primary hover fill.
+ * @cssprop [--${ds}-color-action-primary-bg-active] - Primary pressed fill.
+ * @cssprop [--${ds}-color-action-primary-bg-inverted-hover] - Primary hover fill on dark.
+ * @cssprop [--${ds}-color-action-secondary-bg] - Secondary resting fill.
+ * @cssprop [--${ds}-color-action-secondary-bg-hover] - Secondary hover fill.
+ * @cssprop [--${ds}-color-action-secondary-border] - Secondary outline border.
+ * @cssprop [--${ds}-color-action-ghost-bg-hover] - Ghost hover fill.
+ * @cssprop [--${ds}-color-action-danger-bg] - Danger resting fill.
+ * @cssprop [--${ds}-color-action-danger-bg-hover] - Danger hover fill.
+ * @cssprop [--${ds}-color-action-danger-bg-active] - Danger pressed fill.
+ * @cssprop [--${ds}-color-text-on-primary] - Foreground for primary fill (AA-tuned).
+ * @cssprop [--${ds}-color-text-on-primary-strong] - White override for primary-{600,700} fills.
+ * @cssprop [--${ds}-color-text-on-error] - Foreground for danger fill.
+ * @cssprop [--${ds}-color-text-on-error-strong] - White override for error-{600,700} fills.
+ *
+ * ─── Helix-internal hooks (advanced — bridge already maps these) ──────────
+ *
  * @cssprop [--hx-button-inverted-color] - Text color when inverted.
  * @cssprop [--hx-button-inverted-ghost-hover-bg] - Ghost hover bg when inverted.
  * @cssprop [--hx-button-inverted-focus-ring-color] - Focus ring when inverted.
