@@ -22,8 +22,8 @@ importers:
         version: 1.1.1
     devDependencies:
       '@bookedsolid/rea':
-        specifier: ^0.25.0
-        version: 0.25.0
+        specifier: ^0.27.0
+        version: 0.27.0
       '@changesets/cli':
         specifier: ^2.30.0
         version: 2.30.0(@types/node@22.19.15)
@@ -114,8 +114,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@bookedsolid/rea@0.25.0':
-    resolution: {integrity: sha512-GKFMGLuL18ZgY+fWUVaZrctu6dBzAyBxAxOc7zAB1AfvGT8xTZvVprmMJsWvB3mNtTcJgCmkCayXUH7DNaPFJw==}
+  '@bookedsolid/rea@0.27.0':
+    resolution: {integrity: sha512-DTD1iJnC4lFzDGK7zv3u8asRNraTeIatYFnraQCVrHkxfFpVoJ+SGp2K4/EY3ryxqt1ZbsfRgMmKrPYA5Udg2A==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -1371,8 +1371,8 @@ packages:
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
-  fast-uri@3.1.1:
-    resolution: {integrity: sha512-h2r7rcm6Ee/J8o0LD5djLuFVcfbZxhvho4vvsbeV0aMvXjUgqv4YpxpkEx0d68l6+IleVfLAdVEfhR7QNMkGHQ==}
+  fast-uri@3.1.2:
+    resolution: {integrity: sha512-rVjf7ArG3LTk+FS6Yw81V1DLuZl1bRbNrev6Tmd/9RaroeeRRJhAt7jg/6YFxbvAQXUCavSoZhPPj6oOx+5KjQ==}
 
   fast-wrap-ansi@0.2.0:
     resolution: {integrity: sha512-rLV8JHxTyhVmFYhBJuMujcrHqOT2cnO5Zxj37qROj23CP39GXubJRBUFF0z8KFK77Uc0SukZUf7JZhsVEQ6n8w==}
@@ -1535,8 +1535,8 @@ packages:
     resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.16:
-    resolution: {integrity: sha512-jN0ZewiNAWSe5khM3EyCmBb250+b40wWbwNILNfEvq84VREWwOIkuUsFONk/3i3nqkz7Oe1PcpM2mwQEK2L9Kg==}
+  hono@4.12.17:
+    resolution: {integrity: sha512-FbJJNb/XgX7YW0hX/V8w5oYLztKEsRLykCMZWt1WdLtsfjzMvmoqWBA4H4t5norinq8/rh20oiZYr+WSl4UzAQ==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@9.0.2:
@@ -2801,7 +2801,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@bookedsolid/rea@0.25.0':
+  '@bookedsolid/rea@0.27.0':
     dependencies:
       '@anthropic-ai/sdk': 0.90.0(zod@3.25.76)
       '@clack/prompts': 1.3.0
@@ -3242,9 +3242,9 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@hono/node-server@1.19.14(hono@4.12.16)':
+  '@hono/node-server@1.19.14(hono@4.12.17)':
     dependencies:
-      hono: 4.12.16
+      hono: 4.12.17
 
   '@humanfs/core@0.19.1': {}
 
@@ -3312,7 +3312,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.14(hono@4.12.16)
+      '@hono/node-server': 1.19.14(hono@4.12.17)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -3322,7 +3322,7 @@ snapshots:
       eventsource-parser: 3.0.8
       express: 5.2.1
       express-rate-limit: 8.5.0(express@5.2.1)
-      hono: 4.12.16
+      hono: 4.12.17
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -3694,7 +3694,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.1
+      fast-uri: 3.1.2
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -4232,7 +4232,7 @@ snapshots:
 
   fast-uri@3.1.0: {}
 
-  fast-uri@3.1.1: {}
+  fast-uri@3.1.2: {}
 
   fast-wrap-ansi@0.2.0:
     dependencies:
@@ -4408,7 +4408,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.16: {}
+  hono@4.12.17: {}
 
   hosted-git-info@9.0.2:
     dependencies:

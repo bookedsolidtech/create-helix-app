@@ -1,12 +1,12 @@
 {
-  "version": "0.25.0",
+  "version": "0.27.0",
   "profile": "bst-internal",
   "installed_at": "2026-04-20T15:54:27.610Z",
-  "upgraded_at": "2026-05-05T03:32:50.565Z",
+  "upgraded_at": "2026-05-05T19:19:59.262Z",
   "files": [
     {
       "path": ".claude/hooks/_lib/cmd-segments.sh",
-      "sha256": "32879325d90fc0358049ac05c6fade47029a75cee827310a6b0452c075e21fc7",
+      "sha256": "e1509d676a9b413de7bd8e7a571e4695e0c6e15719b8e6d0f000117354beb936",
       "source": "hook"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": ".claude/hooks/_lib/policy-read.sh",
-      "sha256": "07a06688f91d8fdde98785c586259d59769a6ed4a0e693ab66db66a24ae967bb",
+      "sha256": "7a2b54f5e4519026ff32db2c4f20af0c758bfd6338353b1fc446ae065a308258",
       "source": "hook"
     },
     {
@@ -85,6 +85,11 @@
       "source": "hook"
     },
     {
+      "path": ".claude/hooks/local-review-gate.sh",
+      "sha256": "6ffc20f0a8b93519d2692aa30af69a6582b9a884ad441932ae650a17bb68087d",
+      "source": "hook"
+    },
+    {
       "path": ".claude/hooks/pr-issue-link-gate.sh",
       "sha256": "a7d92d1c3e5c1f46c8bdc593575f5e1adb4f790485b6aaebdd15910503460e5c",
       "source": "hook"
@@ -115,6 +120,16 @@
       "source": "agent"
     },
     {
+      "path": ".claude/agents/adversarial-test-specialist.md",
+      "sha256": "417be3f030cc3818dac75137d53ca8627113975e2a6f88a03864409ef542db1b",
+      "source": "agent"
+    },
+    {
+      "path": ".claude/agents/ast-parser-specialist.md",
+      "sha256": "dfd6a8709d4a7c1ee0eee3305f002be9f94fa6ddee440a0b0eaa903465f2b729",
+      "source": "agent"
+    },
+    {
       "path": ".claude/agents/backend-engineer.md",
       "sha256": "6419fdcc1df769b4e24ec6a1d89ff271fb628358415f19ed2a32cef8c99005a1",
       "source": "agent"
@@ -126,7 +141,7 @@
     },
     {
       "path": ".claude/agents/codex-adversarial.md",
-      "sha256": "7d30f0040d16eb765abddc73263c5674337e7ffec1a90a00a8448d93f28aded3",
+      "sha256": "edf64c5a0454a755e2d01c2fa6ec72d58c7cecd28493cc1dd5ad363634252dbf",
       "source": "agent"
     },
     {
@@ -140,8 +155,23 @@
       "source": "agent"
     },
     {
+      "path": ".claude/agents/figma-dx-specialist.md",
+      "sha256": "2966c951bf423d2a55fbff0ab4d384f884b2a2264fafa4d3826a8d7fcfc52136",
+      "source": "agent"
+    },
+    {
       "path": ".claude/agents/frontend-specialist.md",
       "sha256": "6be714dc035b6c73c2d4524ac59f5c4e88e49b2509d6eab4373e5e728e81c408",
+      "source": "agent"
+    },
+    {
+      "path": ".claude/agents/mcp-protocol-specialist.md",
+      "sha256": "fc0464339d512e4b6e996490972b0f739c0b889fb19176db8b8abb2118da6b7f",
+      "source": "agent"
+    },
+    {
+      "path": ".claude/agents/observability-specialist.md",
+      "sha256": "db57f92e3857c181ebba6a9d83419e4d738cdde2149f6972387491df6ac8e97f",
       "source": "agent"
     },
     {
@@ -166,7 +196,7 @@
     },
     {
       "path": ".claude/agents/rea-orchestrator.md",
-      "sha256": "2664c31be5170abb1020930de779ef4bb484d4edcf9b513214b53b4a5fdb43e2",
+      "sha256": "726a15a32c3823850a218add1f2e5f0b4e09289de97b4e4d2a911e99ca52e5fc",
       "source": "agent"
     },
     {
@@ -185,6 +215,11 @@
       "source": "agent"
     },
     {
+      "path": ".claude/agents/shell-scripting-specialist.md",
+      "sha256": "ca87ff80dc51c40249d1d169953a89095d434ebb2ca60cc04f7008adb44d92a0",
+      "source": "agent"
+    },
+    {
       "path": ".claude/agents/technical-writer.md",
       "sha256": "c13badb1cac14b261970dbcbbaa5a6d39de8f6a9b2e9d70aac25f0f460c0e690",
       "source": "agent"
@@ -196,7 +231,7 @@
     },
     {
       "path": ".claude/commands/codex-review.md",
-      "sha256": "3a9885edcb838d81d0e299d0e755136acf907eeb228e46f40965b0f085155adb",
+      "sha256": "79ec827bcb559d62b87070cf2a2e77b085fd73be888b0783bcf855c26593ad70",
       "source": "command"
     },
     {
@@ -231,7 +266,7 @@
     },
     {
       "path": ".claude/settings.json#rea:desired",
-      "sha256": "04939eb3652472695ab23d1fa836e27310b4b256364731a6a44564da8d254aac",
+      "sha256": "864aaf3c6b4d341063d616d695dcdd359a7c8129eb1b9d6fcbca2be46deb410b",
       "source": "settings"
     },
     {
