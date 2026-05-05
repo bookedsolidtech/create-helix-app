@@ -9594,6 +9594,18 @@ export default defineConfig({
   // Written here as a stub so Vite's file graph picks it up on first start.
   // scripts/build-tokens.ts overwrites this file whenever tokens.json changes
   // and whenever \`pnpm build:tokens\` runs (chained into storybook/build/test).
+  //
+  // Paint-style utility classes — naming convention notes for the
+  // generated output (so devs reading the source-controlled stub still
+  // see the contract):
+  //
+  //   Figma paint style → CSS class
+  //   ────────────────────────────────────────────────
+  //   'Color / Surface / Default' → \`.color-surface-default\`
+  //   'Color / Text / Strong'     → \`.color-text-strong\`
+  //
+  // Conversion: lowercase, runs of slashes + spaces collapse to a single
+  // hyphen. Round-trips back to the originating Figma style name.
   await safeWriteFile(
     path.join(tokensDir, 'tokens.css'),
     `/* AUTO-GENERATED from src/tokens/tokens.json — do not edit by hand.
@@ -9602,7 +9614,17 @@ export default defineConfig({
  * Watch mode:  pnpm watch:tokens   (runs during \`pnpm storybook\`)
  *
  * On first \`pnpm storybook\` / \`pnpm build\`, this file is rewritten with all
- * ${prefix}-* CSS custom properties flattened from tokens.json.
+ * ${prefix}-* CSS custom properties flattened from tokens.json AND the
+ * paint-style utility classes derived from the color.* token tree.
+ *
+ * Paint-style class naming (source: Figma paint styles):
+ *   'Color / Surface / Default' → \`.color-surface-default\` + \`.bg-color-surface-default\`
+ *   'Color / Text / Strong'     → \`.color-text-strong\`     + \`.bg-color-text-strong\`
+ *
+ * Conversion: lowercase the Figma path, collapse runs of slashes + spaces
+ * to a single hyphen. The exact inverse of the Custom Helix Exporter's
+ * style-name emission, so paint styles round-trip cleanly between Figma
+ * and the generated CSS.
  */
 
 @import '@helixui/tokens/tokens.css';
@@ -9756,6 +9778,42 @@ function build(): { vars: number; output: string } {
 
   lines.push('}');
   lines.push('');
+
+  // ── Paint-style utility classes ─────────────────────────────────────────
+  //
+  // Source-of-truth: Figma paint styles (slash-separated path labels —
+  // e.g. \`Color / Surface / Default\`, \`Color / Text / Strong\`). The
+  // Custom Helix Exporter (figma-tokens plugin) emits those style names
+  // unchanged into tokens.json's nested color.* tree; we translate them
+  // here into kebab-case CSS class names that round-trip back to the
+  // exact paint style.
+  //
+  // Conversion rule (mirrors the inverse of figma-tokens' style-name
+  // emission): lowercase the path and replace runs of slashes + spaces
+  // with a single hyphen.
+  //
+  //   'Color / Surface / Default' → 'color-surface-default' → \`.color-surface-default\`
+  //   'Color / Text / Strong'     → 'color-text-strong'     → \`.color-text-strong\`
+  //
+  // For every \`color.{path}\` token we emit two classes:
+  //   - \`.color-{path}\`           — sets \`color\` (text/foreground)
+  //   - \`.bg-color-{path}\`        — sets \`background-color\`
+  // Both bind to the same CSS custom property generated above so paint
+  // updates from Figma propagate to both layers automatically.
+  const colorVars = byCategory.get('color') ?? [];
+  if (colorVars.length > 0) {
+    lines.push('/* Paint-style utility classes — source: Figma color paint styles.');
+    lines.push(' * Conversion: \`Color / X / Y\` → \`.color-x-y\` (lowercase, slash+space → single hyphen).');
+    lines.push(' * Each class binds to the matching --{prefix}-color-* var emitted above. */');
+    for (const v of colorVars) {
+      // v.name is like \`--bolt-color-surface-default\`. Strip the prefix
+      // and the leading 'color-' segment to get the class suffix.
+      const suffix = v.name.slice(PREFIX.length + 1); // 'color-surface-default'
+      lines.push(\`.\${suffix} { color: var(\${v.name}); }\`);
+      lines.push(\`.bg-\${suffix} { background-color: var(\${v.name}); }\`);
+    }
+    lines.push('');
+  }
 
   return { vars: cssVars.length, output: lines.join('\\n') };
 }
