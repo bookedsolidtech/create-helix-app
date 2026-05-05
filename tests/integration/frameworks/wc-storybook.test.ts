@@ -672,6 +672,64 @@ describe('wc-storybook integration', () => {
     expect(stories).not.toMatch(/(?:^|\s)size="(sm|md|lg)"/);
   });
 
+  // ── Helix 3.3.1 alignment: end-to-end scaffold → tokens.json ──────────
+  //
+  // Lightweight cousin of the E2E_SCAFFOLD smoke below — runs every CI tick
+  // (no install, no build) so the contract that action.* tier survives the
+  // full scaffold pipeline cannot regress silently. Cross-cuts C2a (semantic
+  // groups), C2b (action.* tier), C4 (fallback chain), C5 (Track 1
+  // inheritance), and C6 (CEM JSDoc) into a single end-to-end assertion.
+  describe('Helix 3.3.1 alignment (end-to-end scaffold → tokens.json)', () => {
+    it('scaffolds tokens.json with action.* tier, 13 semantic groups, and Track 1 inheritance + JSDoc CEM coverage', async () => {
+      const o = opts('wcs-helix-331-e2e');
+      await scaffoldProject(o);
+
+      // tokens.json — action.* + 13 semantic groups (when stub fallback wins).
+      const tokens = await readJson<{
+        color?: {
+          text?: Record<string, { value: string }>;
+          border?: Record<string, { value: string }>;
+          action?: Record<string, Record<string, { value: string }>>;
+        };
+        button?: Record<string, { value: string }>;
+      }>(o.directory, 'src/tokens/tokens.json');
+      const isStub = tokens.button?.['font-family']?.value === 'system-ui, sans-serif';
+      if (isStub) {
+        // action.primary.bg + .bg-hover + .bg-active + .bg-inverted-hover.
+        expect(tokens.color?.action?.primary?.['bg']?.value).toBeDefined();
+        expect(tokens.color?.action?.primary?.['bg-hover']?.value).toBeDefined();
+        expect(tokens.color?.action?.primary?.['bg-active']?.value).toBeDefined();
+        expect(tokens.color?.action?.primary?.['bg-inverted-hover']?.value).toBeDefined();
+        // 3 of the 4 action roles.
+        expect(tokens.color?.action?.danger?.['bg']?.value).toBeDefined();
+        expect(tokens.color?.action?.secondary?.['bg']?.value).toBeDefined();
+        expect(tokens.color?.action?.ghost?.['bg-hover']?.value).toBeDefined();
+        // 13 semantic groups — text.on-*-strong + border.on-dark-*.
+        expect(tokens.color?.text?.['on-primary-strong']?.value).toBeDefined();
+        expect(tokens.color?.text?.['on-error-strong']?.value).toBeDefined();
+        expect(tokens.color?.border?.['on-dark-strong']?.value).toBeDefined();
+      }
+
+      // Two-level fallback chain in the bridge (component → semantic action.*).
+      const styles = await readText(
+        o.directory,
+        'src/components/bolt-button/bolt-button.styles.ts',
+      );
+      expect(styles).toContain(
+        '--hx-button-bg: var(--bolt-button-bg, var(--bolt-color-action-primary-bg));',
+      );
+
+      // Track 1 inheritance — extends HelixButton (NOT ClientElement).
+      const button = await readText(o.directory, 'src/components/bolt-button/bolt-button.ts');
+      expect(button).toContain('extends HelixButton');
+      expect(button).not.toContain('ClientElement');
+
+      // CEM JSDoc enrichment — action.* @cssprop block surfaces on this tag.
+      expect(button).toContain('@cssprop [--bolt-color-action-primary-bg]');
+      expect(button).toContain('@cssprop [--bolt-color-text-on-primary-strong]');
+    });
+  });
+
   // ── Gated end-to-end smoke test ────────────────────────────────────────
   // Set E2E_SCAFFOLD=1 to actually install + build Storybook. Skipped in
   // default CI runs because pnpm install + storybook build is multi-minute
