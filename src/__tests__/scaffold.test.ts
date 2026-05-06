@@ -106,6 +106,80 @@ describe('scaffoldProject — optional features', () => {
     expect(content).toContain('data-theme="dark"');
   });
 
+  // ─── Responsive semantic mode (every consumer must declare one) ─────────────
+  //
+  // Per Charles Attisano (Helix design lead, _brainstorm canvas 329:1199 in
+  // wITXImaAPUCpBs2nRPv17k): every consumer of helix-tokens must declare its
+  // own responsive mode, since upstream cannot ship breakpoints. These tests
+  // are the regression guard.
+
+  it('generates helix-responsive.css when designTokens is true', async () => {
+    const opts = makeOptions({ name: 'responsive-true' });
+    await scaffoldProject(opts);
+    expect(await fs.pathExists(path.join(opts.directory, 'helix-responsive.css'))).toBe(true);
+  });
+
+  it('does NOT generate helix-responsive.css when designTokens is false', async () => {
+    const opts = makeOptions({ name: 'responsive-false', designTokens: false });
+    await scaffoldProject(opts);
+    expect(await fs.pathExists(path.join(opts.directory, 'helix-responsive.css'))).toBe(false);
+  });
+
+  it('seeds the responsive token paths in helix-responsive.css', async () => {
+    const opts = makeOptions({ name: 'responsive-seed' });
+    await scaffoldProject(opts);
+    const content = await fs.readFile(path.join(opts.directory, 'helix-responsive.css'), 'utf-8');
+    expect(content).toContain('--hx-responsive-grid-columns');
+    expect(content).toContain('--hx-responsive-stack-gap');
+    expect(content).toContain('--hx-responsive-font-size-scale');
+  });
+
+  it('declares at least three responsive breakpoints (mobile / tablet / desktop)', async () => {
+    const opts = makeOptions({ name: 'responsive-breakpoints' });
+    await scaffoldProject(opts);
+    const content = await fs.readFile(path.join(opts.directory, 'helix-responsive.css'), 'utf-8');
+    // mobile is the implicit :root default; tablet + desktop are min-width
+    // media queries. Both must be present.
+    expect(content).toMatch(/@media\s*\(\s*min-width:\s*768px\s*\)/);
+    expect(content).toMatch(/@media\s*\(\s*min-width:\s*1280px\s*\)/);
+  });
+
+  it('helix-tokens.css imports helix-responsive.css', async () => {
+    const opts = makeOptions({ name: 'responsive-imported' });
+    await scaffoldProject(opts);
+    const content = await fs.readFile(path.join(opts.directory, 'helix-tokens.css'), 'utf-8');
+    expect(content).toContain("@import './helix-responsive.css'");
+  });
+
+  it.each([
+    'react-next',
+    'react-vite',
+    'remix',
+    'vue-nuxt',
+    'vue-vite',
+    'solid-vite',
+    'qwik-vite',
+    'svelte-kit',
+    'angular',
+    'astro',
+    'vanilla',
+    'lit-vite',
+    'preact-vite',
+    'stencil',
+    'ember',
+  ] as const)(
+    'generates helix-responsive.css for framework %s',
+    async (framework) => {
+      const opts = makeOptions({
+        name: `responsive-${framework}`,
+        framework,
+      });
+      await scaffoldProject(opts);
+      expect(await fs.pathExists(path.join(opts.directory, 'helix-responsive.css'))).toBe(true);
+    },
+    30_000,
+  );
+
   it('generates eslint.config.js when eslint is true', async () => {
     const opts = makeOptions({ name: 'eslint-true' });
     await scaffoldProject(opts);
