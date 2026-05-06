@@ -509,9 +509,7 @@ async function writePackageJson(
     // Only emit peerDependencies when the template declares them — keeps the
     // generated package.json minimal for app-style frameworks (react-next,
     // svelte-kit, etc) where the consumer is the end-user app, not a library.
-    ...(peerDependencies && Object.keys(peerDependencies).length > 0
-      ? { peerDependencies }
-      : {}),
+    ...(peerDependencies && Object.keys(peerDependencies).length > 0 ? { peerDependencies } : {}),
   };
 
   await safeWriteJson(path.join(options.directory, 'package.json'), pkg, {
@@ -678,6 +676,35 @@ hx-button::part(button) {
 }
 \`\`\`
 
+### Responsive Mode
+
+Every project scaffolded by \`create-helix\` ships with a starter responsive
+semantic mode in \`helix-responsive.css\` (mobile / tablet / desktop). This
+exists because \`helix-tokens\` (upstream) ships theme/contrast modes but
+cannot ship breakpoints — every consumer has different breakpoint needs, so
+the consumer-side scaffolder owns the responsive defaults.
+
+Token paths seeded today:
+
+- \`--hx-responsive-grid-columns\` — grid system column count
+- \`--hx-responsive-stack-gap\` — default vertical rhythm gap
+- \`--hx-responsive-font-size-scale\` — multiplier on the type ramp
+
+Override any of them by editing \`helix-responsive.css\` or by re-declaring
+the variable inside your own media-query block:
+
+\`\`\`css
+@media (min-width: 1024px) {
+  :root {
+    --hx-responsive-grid-columns: 16;
+    --hx-responsive-stack-gap: 32px;
+  }
+}
+\`\`\`
+
+(Source: per Charles Attisano, Helix design lead — every starter must include
+a responsive semantic mode.)
+
 ### Component Import Patterns
 
 \`\`\`typescript
@@ -703,6 +730,7 @@ async function writeTokensConfig(options: ProjectOptions): Promise<void> {
 /* Import the base token layer, then override as needed */
 
 @import '@helixui/tokens/tokens.css';
+@import './helix-responsive.css';
 
 :root {
   /* === Brand Overrides === */
@@ -756,6 +784,68 @@ ${
 }
 `;
   await safeWriteFile(path.join(options.directory, 'helix-tokens.css'), content);
+  await writeResponsiveTokensConfig(options);
+}
+
+/**
+ * Writes the starter responsive semantic mode for the scaffolded project.
+ *
+ * Per Charles Attisano (Helix design lead, _brainstorm canvas 329:1199 in
+ * wITXImaAPUCpBs2nRPv17k): every starter must include a responsive semantic
+ * mode. helix-tokens (upstream) ships theme/contrast modes but cannot ship
+ * responsive breakpoints — every consumer has different breakpoint needs.
+ * Therefore the consumer-side scaffolder owns the default responsive seed.
+ *
+ * Shape: a single-axis viewport mode (mobile / tablet / desktop) expressed as
+ * CSS custom properties under min-width media queries. Three token paths only
+ * — grid columns, stack gap, and a font-size scale multiplier. Consumers
+ * override or extend by editing this file or replacing the values.
+ */
+async function writeResponsiveTokensConfig(options: ProjectOptions): Promise<void> {
+  const content = `/* HELiX Responsive Semantic Mode — Starter Defaults
+ *
+ * Per Charles Attisano (Helix design lead, _brainstorm canvas 329:1199 in
+ * wITXImaAPUCpBs2nRPv17k): every consumer of helix-tokens must declare a
+ * responsive semantic mode. helix-tokens upstream ships theme/contrast modes
+ * (default / dark / hc) but cannot ship breakpoints — every consumer
+ * (Drupal, Northwell, Jefferson, ...) has different breakpoint needs.
+ *
+ * Seeded defaults below are mobile-first. Override any token by setting it
+ * inside the matching breakpoint block — or rewrite the breakpoints entirely
+ * if your design system uses a different scale.
+ *
+ * Tokens defined here:
+ *   --hx-responsive-grid-columns       grid system column count
+ *   --hx-responsive-stack-gap          default vertical rhythm gap (px)
+ *   --hx-responsive-font-size-scale    multiplier on the type ramp
+ */
+
+:root {
+  /* mobile (default — applied below the first breakpoint) */
+  --hx-responsive-grid-columns: 4;
+  --hx-responsive-stack-gap: 8px;
+  --hx-responsive-font-size-scale: 0.875;
+}
+
+@media (min-width: 768px) {
+  :root {
+    /* tablet */
+    --hx-responsive-grid-columns: 8;
+    --hx-responsive-stack-gap: 16px;
+    --hx-responsive-font-size-scale: 1;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    /* desktop */
+    --hx-responsive-grid-columns: 12;
+    --hx-responsive-stack-gap: 24px;
+    --hx-responsive-font-size-scale: 1;
+  }
+}
+`;
+  await safeWriteFile(path.join(options.directory, 'helix-responsive.css'), content);
 }
 
 async function writeEslintConfig(options: ProjectOptions): Promise<void> {
@@ -10142,6 +10232,33 @@ FIGMA_FILE_KEY=
           'font-family': { value: 'system-ui, sans-serif' },
           'font-weight': { value: '500' },
           'focus-ring-color': { value: '#60a5fa' },
+        },
+        // responsive.* — starter responsive semantic mode (single-axis:
+        // mobile / tablet / desktop). Per Charles Attisano (Helix design
+        // lead, _brainstorm canvas 329:1199): every consumer of helix-tokens
+        // must declare its own responsive mode, since upstream cannot ship
+        // breakpoints — every consumer has different breakpoint needs.
+        // Override these values to match your breakpoint scheme.
+        responsive: {
+          grid: {
+            columns: {
+              mobile: { value: 4 },
+              tablet: { value: 8 },
+              desktop: { value: 12 },
+            },
+          },
+          stack: {
+            gap: {
+              mobile: { value: '8px' },
+              tablet: { value: '16px' },
+              desktop: { value: '24px' },
+            },
+          },
+          'font-size-scale': {
+            mobile: { value: 0.875 },
+            tablet: { value: 1 },
+            desktop: { value: 1 },
+          },
         },
       };
       await safeWriteFile(
