@@ -509,9 +509,7 @@ async function writePackageJson(
     // Only emit peerDependencies when the template declares them — keeps the
     // generated package.json minimal for app-style frameworks (react-next,
     // svelte-kit, etc) where the consumer is the end-user app, not a library.
-    ...(peerDependencies && Object.keys(peerDependencies).length > 0
-      ? { peerDependencies }
-      : {}),
+    ...(peerDependencies && Object.keys(peerDependencies).length > 0 ? { peerDependencies } : {}),
   };
 
   await safeWriteJson(path.join(options.directory, 'package.json'), pkg, {
