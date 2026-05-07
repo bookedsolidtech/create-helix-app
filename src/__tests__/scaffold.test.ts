@@ -990,3 +990,64 @@ describe('scaffoldProject — force flag', () => {
     expect(await fs.pathExists(path.join(opts.directory, 'package.json'))).toBe(true);
   });
 });
+
+// ─── wc-storybook scripts/build-tokens.ts watcher shape ──────────────────────
+//
+// Regression guard for the ~3s rebuild loop. The wc-storybook scaffold emits
+// scripts/build-tokens.ts as a template string from src/scaffold.ts. INPUT
+// (src/tokens/tokens.json) and OUTPUT (src/tokens/tokens.css) live in the
+// same directory; on macOS, fs.watch is backed by FSEvents which can fire
+// when *sibling* files change, so without a self-write guard the watcher
+// loops on its own write to tokens.css. The fix:
+//   - bump the debounce window from 80ms → 500ms (covers the macOS event
+//     burst from a single editor save without feeling laggy)
+//   - track lastWriteTime after every OUTPUT write; ignore fs.watch events
+//     that fire within SELF_WRITE_WINDOW_MS of our own write
+// These tests assert the emitter ships both pieces. Runtime verification
+// (does storybook stop flickering?) still requires the user to run the
+// scaffolded project — we cannot verify FSEvents behavior in unit tests.
+
+describe('scaffoldProject — wc-storybook build-tokens watcher', () => {
+  async function readBuildTokens(name: string): Promise<string> {
+    const opts = makeOptions({
+      name,
+      framework: 'wc-storybook',
+      dsName: 'bolt',
+      tokenPrefix: '--bolt',
+    });
+    await scaffoldProject(opts);
+    const buildTokensPath = path.join(opts.directory, 'scripts', 'build-tokens.ts');
+    expect(await fs.pathExists(buildTokensPath)).toBe(true);
+    return fs.readFile(buildTokensPath, 'utf-8');
+  }
+
+  it('emits a self-write guard so fs.watch ignores its own output write', async () => {
+    const content = await readBuildTokens('build-tokens-self-write');
+    // The guard must record the time of every OUTPUT write…
+    expect(content).toMatch(/lastWriteTime\s*=\s*Date\.now\(\)/);
+    // …and consult it inside the fs.watch callback before scheduling a rebuild.
+    expect(content).toContain('SELF_WRITE_WINDOW_MS');
+    expect(content).toMatch(/Date\.now\(\)\s*-\s*lastWriteTime\s*<\s*SELF_WRITE_WINDOW_MS/);
+  });
+
+  it('emits a debounce window long enough to cover the macOS fs-event burst', async () => {
+    const content = await readBuildTokens('build-tokens-debounce');
+    // The 80ms debounce we shipped previously was too short; 500ms is the
+    // floor we want to keep. Allow values >= 300ms to leave headroom for
+    // future tuning, but block any regression back to the sub-300ms range.
+    const debounceMatch = content.match(/REBUILD_DEBOUNCE_MS\s*=\s*(\d+)/);
+    expect(debounceMatch).not.toBeNull();
+    const debounceMs = Number(debounceMatch![1]);
+    expect(debounceMs).toBeGreaterThanOrEqual(300);
+    // And the setTimeout in the watcher callback must consume the constant,
+    // not a hard-coded number — guards against regressing back to a literal
+    // 80ms.
+    expect(content).toMatch(/setTimeout\([\s\S]+?,\s*REBUILD_DEBOUNCE_MS\)/);
+  });
+
+  it('still uses fs.watch on INPUT (no chokidar dep added)', async () => {
+    const content = await readBuildTokens('build-tokens-fs-watch');
+    expect(content).toContain('fs.watch(INPUT,');
+    expect(content).not.toMatch(/from\s+['"]chokidar['"]/);
+  });
+});

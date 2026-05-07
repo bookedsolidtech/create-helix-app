@@ -509,9 +509,7 @@ async function writePackageJson(
     // Only emit peerDependencies when the template declares them — keeps the
     // generated package.json minimal for app-style frameworks (react-next,
     // svelte-kit, etc) where the consumer is the end-user app, not a library.
-    ...(peerDependencies && Object.keys(peerDependencies).length > 0
-      ? { peerDependencies }
-      : {}),
+    ...(peerDependencies && Object.keys(peerDependencies).length > 0 ? { peerDependencies } : {}),
   };
 
   await safeWriteJson(path.join(options.directory, 'package.json'), pkg, {
@@ -9917,9 +9915,20 @@ function build(): { vars: number; output: string } {
   return { vars: cssVars.length, output: lines.join('\\n') };
 }
 
+// Track the last time we wrote OUTPUT so we can ignore filesystem events
+// triggered by our own write-back. INPUT and OUTPUT live in the same
+// directory (\`src/tokens/\`); on macOS, fs.watch is backed by FSEvents which
+// fires directory-level events, and Node has historically forwarded sibling
+// writes to file-targeted watchers. Without this guard the watcher loops on
+// its own output and rebuilds every ~3s.
+let lastWriteTime = 0;
+const SELF_WRITE_WINDOW_MS = 1000;
+const REBUILD_DEBOUNCE_MS = 500;
+
 function buildAndWrite(): void {
   const { vars, output } = build();
   fs.writeFileSync(OUTPUT, output, 'utf-8');
+  lastWriteTime = Date.now();
   const rel = path.relative(ROOT, OUTPUT);
   console.log(\`[build-tokens] \${vars} CSS variables → \${rel}\`);
 }
@@ -9930,7 +9939,13 @@ if (process.argv.includes('--watch')) {
   console.log(\`[build-tokens] watching \${path.relative(ROOT, INPUT)}\`);
   let rebuildTimer: NodeJS.Timeout | null = null;
   fs.watch(INPUT, () => {
-    // Debounce: editors often fire multiple events during save
+    // Ignore events that fire within SELF_WRITE_WINDOW_MS of our own
+    // OUTPUT write — without this, fs.watch on macOS loops on its own
+    // sibling write to tokens.css and rebuilds every ~3s.
+    if (Date.now() - lastWriteTime < SELF_WRITE_WINDOW_MS) return;
+    // Debounce: editors often fire multiple events during save (atomic
+    // replace = rename + change). 500ms covers the typical macOS burst
+    // without making the watcher feel laggy.
     if (rebuildTimer) clearTimeout(rebuildTimer);
     rebuildTimer = setTimeout(() => {
       try {
@@ -9938,7 +9953,7 @@ if (process.argv.includes('--watch')) {
       } catch (err) {
         console.error('[build-tokens] error:', err instanceof Error ? err.message : err);
       }
-    }, 80);
+    }, REBUILD_DEBOUNCE_MS);
   });
 }
 `,
