@@ -11,6 +11,35 @@ discovered_in: figma-tokens
 related: []
 ---
 
+## Helix-team triage 2026-05-07
+
+**Status: FALSE-POSITIVE-FOR-HELIX (existing token solves this, new tokens shouldn't ship as proposed).**
+
+**Three problems with the proposal to publish `color.text.inverse-strong` + `color.surface.inverse-strong`:**
+
+1. **`text.inverse` already does what you need.** Light-mode `text.inverse = neutral-0` (≈ `#FFFFFF`). On your `#121212` chrome surface that's ~16:1 contrast — well over WCAG AAA (7:1). The bug skipped evaluating the obvious existing token and jumped straight to a new-ramp-slot proposal. Try `text.inverse` first; report back if it doesn't resolve correctly.
+
+2. **`*-strong` naming collision with existing contract.** Helix's `surface.{success,danger,warning,info}-strong` are **brand-pinned non-flippers** (success-700 in both modes, etc.). Your proposed `surface.inverse-strong` would be **fundamentally different mode handling** — "static, never flips, always dark in BOTH light and dark" — which contradicts what `*-strong` means in the rest of the namespace. A consumer reading `surface.inverse` (flips light↔dark) and `surface.inverse-strong` (doesn't flip, opposite mode-handling) would reasonably assume the latter is a stronger version of the former. That's a naming-collision footgun.
+
+3. **The `#121212` page background is a literal you chose, not a helix token.** Helix is not obligated to publish semantic tokens to support arbitrary downstream literals. If your chrome surface is meant to be intentionally fixed-dark (no mode flip), that's a Figma-file-internal authoring choice — author file-local paint styles for it. Don't pollute the public semantic API with non-flipping inverse tokens to bail out an authored hex.
+
+**Workaround you can land today:**
+
+For light-mode chrome on `#121212`:
+```diff
+// section-heading paintStyleName
+- 'Color / Text / Strong'   // resolves to neutral-800 (≈ #1F2937) in light = 1.5:1 FAIL
++ 'Color / Text / Inverse'  // resolves to neutral-0 (≈ #FFFFFF) in light = 16:1 AAA PASS
+```
+
+If the chrome surface MUST stay dark in dark mode too (so `text.inverse`'s flipped value would now read white-on-light), author the page-bg + heading fill as **Figma file-local paint styles in figma-tokens** that explicitly do not flip. That's a chrome/branding concern, not a semantic-tier concern.
+
+**If a true static-dark chrome surface is justified later** (e.g. for a vendor-mandated brand requirement), propose under a different namespace that doesn't collide with the `*-strong` brand-pinning contract — e.g. `chrome.surface.dark` or `surface.fixed-dark`. That proposal would also require a concrete HC-mode value (not "defer to forced-colors"), full AAA contrast math against the paired text token, and a written rationale.
+
+**Closure:** swap to `text.inverse` first. If that doesn't work for your specific use case, reopen with the empirical contrast ratio and the specific scenario it fails in.
+
+---
+
 # HX-PAGE-BG — page-bg section headings render dark-on-dark in light-mode-default files
 
 ## Summary

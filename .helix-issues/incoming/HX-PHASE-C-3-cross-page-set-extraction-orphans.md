@@ -8,6 +8,22 @@ created: 2026-05-05T23:55Z
 status: open
 ---
 
+## Helix-team triage 2026-05-07
+
+**Status: PLUGIN-INTERNAL (wrong tracker — belongs in figma-tokens repo).**
+
+**Routing:** ComponentSet lookup in `plugin/lib/upsert.ts`. All cited paths are figma-tokens internal. The `findExistingComponentSet` function and the `searchPages` widening are entirely plugin-side concerns.
+
+**What this issue actually documents:** Plugin-side bug where cross-page ComponentSet lookup walks only the seed page (Actions) instead of all family pages. Real bug, but in your repo.
+
+**Helix-side action:** None. No helix code is named anywhere in the diagnosis.
+
+**Suggested plugin-side fix you already proposed:** widen `findExistingComponentSet` to accept `searchPages: ReadonlyArray<PageNode>` or walk `figma.root.children` filtered to non-`_`-prefixed pages. ~20-30 LOC in `upsert.ts`. Self-owned by figma-tokens team.
+
+**Closure:** Move to figma-tokens internal tracker. The fix you've scoped is correct; just land it in your repo.
+
+---
+
 # HX-PHASE-C-3 — Cross-page ComponentSet extraction orphans sets at top-of-page
 
 ## Symptom

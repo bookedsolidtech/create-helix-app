@@ -11,6 +11,20 @@ discovered_in: figma-tokens
 related: []
 ---
 
+## Helix-team triage 2026-05-07
+
+**Status: PLUGIN-INTERNAL (wrong tracker — belongs in figma-tokens repo).**
+
+**Routing:** This is figma-tokens plugin architecture. All cited paths (`plugin/renderers/*.ts`, `plugin/lib/upsert.ts`) live in your repo, not helix's. The "Phase C" / "from-built adapter" / "callback API" concepts are figma-tokens internal vocabulary; helix has no opinion on them.
+
+**What this issue actually documents:** A renderer-pattern migration owed inside the figma-tokens plugin — incremental refactor from the donor pattern to the callback API on future renderer touches.
+
+**Helix-side action:** None. No helix file is named in the diagnosis or proposed fix.
+
+**Closure:** Move to figma-tokens's own `.bug-reports/` (or whatever internal tracker the plugin maintains). The `.helix-issues/` directory is for upstream-helix-blocking items — this isn't one.
+
+---
+
 # HX-PHASE-C-1 — Phase C renderers use from-built adapter; callback API still required for new renderers
 
 ## Summary

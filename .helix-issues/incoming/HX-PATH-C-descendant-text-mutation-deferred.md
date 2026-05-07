@@ -11,6 +11,22 @@ discovered_in: figma-tokens
 related: []
 ---
 
+## Helix-team triage 2026-05-07
+
+**Status: PLUGIN-INTERNAL (wrong tracker — belongs in figma-tokens repo).**
+
+**Routing:** "Path B" / "Path C v2" are figma-tokens internal architectural choices about how the plugin mutates Figma instances. Helix has no opinion on which path the plugin takes.
+
+**What this issue actually documents:** Plugin design decision — should the plugin mutate descendant text on hx-card / hx-stat / hx-badge instances, OR push helix to add component-properties to those text slots? Either path is figma-tokens-internal architecture.
+
+**On the helix-side ask, if any:** if Figgy ultimately decides Path B (helix exposes TEXT component-properties on slots), that becomes a separate ticket per component with a concrete API proposal — `hx-card`'s heading slot exposed as a `text` prop, etc. **That's not this ticket.** This ticket is "we deferred the decision plugin-side."
+
+**Helix-side action right now:** None. The decision belongs to the figma-tokens team. Once made, the implementation is either entirely plugin-side (Path C v2) or partially helix-side (Path B) — and only Path B generates real helix tickets, which would land here as new individual issues per component.
+
+**Closure:** Move to figma-tokens internal tracker. Reopen / file new helix-side tickets only after Path B is chosen and specific component APIs are scoped.
+
+---
+
 # HX-PATH-C-1 — Path C cover/foundations: descendant-text mutation deferred to Path B
 
 ## Summary

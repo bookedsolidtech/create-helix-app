@@ -11,6 +11,24 @@ discovered_in: figma-tokens
 related: []
 ---
 
+## Helix-team triage 2026-05-07
+
+**Status: PROCESS GAP (not a code defect, no helix-side action).**
+
+**What this issue actually documents:** The figma-tokens plugin's `verify.ts` AAA contrast checker is code-complete. The first live measurement run hasn't happened yet — that's a one-off Figma activity, not a code change.
+
+**Routing:** Plugin-side measurement task, owned by whoever next opens the figma-tokens plugin in Figma + clicks "Verify Components." Output of that run feeds individual `HX-AAA-{component}-{context}.md` drafts here, which then get triaged as their own tickets.
+
+**Helix-side relevance:** Once Figgy's first live run produces a baseline, helix will receive concrete per-component AAA-shortfall tickets — those are the actionable artifacts. **This meta-tracker can close.**
+
+**Helpful context for when those per-component tickets arrive:**
+
+Helix is currently planning a parallel AAA certification epic that will track per-component AAA pass/fail directly (see plan: AAA Certification Epic, USWDS-anchored). The Figgy-side measurement is complementary — it measures what designers see in Figma kits, while the helix-side audit measures what consumers see at runtime. Both should converge.
+
+**Closure:** No helix-side commit. Move to plugin-internal tracker if Figgy maintains one; otherwise leave as historical context until the first live run produces real shortfall tickets.
+
+---
+
 # HX-AAA-validation-baseline-needs-live-figma-run — AAA contrast validation infra shipped — first live run needed to baseline shortfalls
 
 ## Summary

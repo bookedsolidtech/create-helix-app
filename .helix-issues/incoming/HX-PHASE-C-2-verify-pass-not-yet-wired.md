@@ -11,6 +11,20 @@ discovered_in: figma-tokens
 related: [HX-PHASE-C-1]
 ---
 
+## Helix-team triage 2026-05-07
+
+**Status: PLUGIN-INTERNAL (wrong tracker — belongs in figma-tokens repo).**
+
+**Routing:** Plugin verify-pass invocation in `code.ts:runRegistryBuild`. All cited paths are figma-tokens internal. Helix has no opinion on the figma-tokens build pipeline ordering.
+
+**What this issue actually documents:** The `checkIdempotencyAgainstPriorSnapshot` function exists in the plugin but isn't called from the registry build's verify-emit phase. Wire-up decision (during cleanup sweep vs. after) is a plugin-side architectural call.
+
+**Helix-side action:** None.
+
+**Closure:** Move to figma-tokens's internal tracker. This is your build pipeline, not ours.
+
+---
+
 # HX-PHASE-C-2 — Idempotency verify check landed but not wired into runRegistryBuild's verify-emit
 
 ## Summary
