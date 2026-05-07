@@ -22,5 +22,18 @@ helix-overrides:
       css/helix-overrides.css: {}
   dependencies:
     - ${themeName}/global
+
+# helix-responsive — starter responsive semantic mode (mobile / tablet /
+# desktop). Per Charles Attisano (Helix design lead): every consumer of
+# helix-tokens must declare a responsive mode. The CSS is loaded via @import
+# from style.css, but registering it as a library lets you override or
+# replace it with a custom breakpoint scheme without touching style.css.
+helix-responsive:
+  version: VERSION
+  css:
+    theme:
+      css/helix-responsive.css: {}
+  dependencies:
+    - ${themeName}/global
 `;
 }
