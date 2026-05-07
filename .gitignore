@@ -57,3 +57,6 @@ test-scaffold.ts
 
 # Claude Code scheduled-task runtime state
 .claude/scheduled_tasks.lock
+
+# Local-only Figma screenshots from MCP probes (figgy debugging)
+tmp-screenshots/
