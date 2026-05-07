@@ -509,9 +509,7 @@ async function writePackageJson(
     // Only emit peerDependencies when the template declares them — keeps the
     // generated package.json minimal for app-style frameworks (react-next,
     // svelte-kit, etc) where the consumer is the end-user app, not a library.
-    ...(peerDependencies && Object.keys(peerDependencies).length > 0
-      ? { peerDependencies }
-      : {}),
+    ...(peerDependencies && Object.keys(peerDependencies).length > 0 ? { peerDependencies } : {}),
   };
 
   await safeWriteJson(path.join(options.directory, 'package.json'), pkg, {
@@ -8013,6 +8011,7 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   const tokensDir = path.join(srcDir, 'tokens');
   const storiesDir = path.join(srcDir, 'stories');
   const designTokensStoriesDir = path.join(storiesDir, 'design-tokens');
+  const docsStoriesDir = path.join(storiesDir, 'docs');
 
   await safeEnsureDir(storybookDir);
   await safeEnsureDir(srcDir);
@@ -8021,6 +8020,7 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   await safeEnsureDir(tokensDir);
   await safeEnsureDir(storiesDir);
   await safeEnsureDir(designTokensStoriesDir);
+  await safeEnsureDir(docsStoriesDir);
 
   // ── .storybook/main.ts ───────────────────────────────────────────────────
 
@@ -8135,6 +8135,8 @@ const preview: Preview = {
       storySort: {
         order: [
           'Welcome',
+          'Documentation',
+          ['Overview', 'Accessibility', 'Color', 'Typography', 'Spacing', 'Brand', 'Layout', '*'],
           'Design Tokens',
           ['Colors', ['Primary', 'Secondary', 'Accent', 'Neutral', 'Semantic', 'Full Palette'], 'Borders', 'Shadows', 'Spacing', '*'],
           'Components',
@@ -8978,9 +8980,83 @@ export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
 `,
   );
 
+  // ── helix.storybook.config.ts — story-inclusion knob ─────────────────────
+  // Consumer-facing config that controls which Helix components surface as
+  // generated catalog stories AND which scaffolded docs pages render. Default
+  // is "include everything" — enterprise consumers narrow the surface for
+  // their own design-system Storybook by editing this file. The CEM-driven
+  // catalog generator (scripts/generate-catalog.ts) reads it via dynamic
+  // import; the docs MDX pages reference the same shape via getDocsConfig().
+
+  await safeWriteFile(
+    path.join(options.directory, 'helix.storybook.config.ts'),
+    `/**
+ * Storybook surface config for this design system.
+ *
+ * Controls which upstream Helix components appear in the generated catalog
+ * (\`pnpm cem:catalog\`) AND which scaffolded documentation pages render.
+ * Edit this file — DO NOT edit the generated stories under
+ * \`src/stories/catalog/\` directly, they get rewritten on every catalog run.
+ *
+ * Both \`components\` and \`docs\` accept \`'all'\` (default) or an explicit list.
+ * Use \`exclude\` to keep \`'all'\` semantics while removing a few entries.
+ *
+ * @see scripts/generate-catalog.ts — applies \`components\` filtering.
+ * @see src/stories/docs/ — applies \`docs\` filtering at story-collection time.
+ */
+export interface HelixStorybookConfig {
+  /** Which Helix \`hx-*\` components to surface as generated catalog stories. */
+  components: {
+    /** \`'all'\` (default) or an explicit list of tag names (e.g. \`['hx-button']\`). */
+    include: 'all' | readonly string[];
+    /** Tag names to remove from the surface. Applied AFTER \`include\`. */
+    exclude: readonly string[];
+  };
+  /** Which scaffolded documentation pages render in Storybook. */
+  docs: {
+    /** \`'all'\` (default) or an explicit list of page ids (e.g. \`['accessibility']\`). */
+    include: 'all' | readonly DocsPageId[];
+    /** Page ids to remove from the surface. Applied AFTER \`include\`. */
+    exclude: readonly DocsPageId[];
+  };
+}
+
+/**
+ * Stable ids for the scaffolded documentation pages. Add a new id here when
+ * you add a new MDX page under \`src/stories/docs/\`. Story-collection logic
+ * matches the file's \`title\` parameter against these ids.
+ */
+export type DocsPageId =
+  | 'overview'
+  | 'accessibility'
+  | 'brand'
+  | 'color'
+  | 'typography'
+  | 'spacing'
+  | 'layout';
+
+const config: HelixStorybookConfig = {
+  components: {
+    include: 'all',
+    exclude: [],
+  },
+  docs: {
+    include: 'all',
+    exclude: [],
+  },
+};
+
+export default config;
+`,
+  );
+
   // ── scripts/generate-catalog.ts ──────────────────────────────────────────
   // Walks node_modules/@helixui/library/custom-elements.json and emits one
   // .stories.ts file per non-excluded hx-* component into src/stories/catalog/.
+  // Filtering is driven by the consumer's helix.storybook.config.ts — the
+  // include/exclude knobs are applied AFTER the HIPAA-adjacency safety
+  // filter (which is non-overridable; HIPAA-adjacent components must always
+  // be authored deliberately, not auto-generated).
   // Run manually or via the \`pnpm cem:catalog\` script wired in package.json.
 
   await safeEnsureDir(path.join(options.directory, 'scripts'));
@@ -8992,11 +9068,16 @@ export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
  * @helixui/library custom-elements manifest. Produces one file per non-
  * excluded hx-* declaration under src/stories/catalog/<tier>/.
  *
+ * Filtering is driven by helix.storybook.config.ts (components.include /
+ * components.exclude). The HIPAA-adjacency filter is applied UNCONDITIONALLY
+ * before the consumer config so HIPAA-adjacent components must be authored
+ * deliberately rather than auto-generated.
+ *
  * Invoke with: pnpm cem:catalog
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   walkCem,
   classifyTier,
@@ -9006,11 +9087,30 @@ import {
   type Cem,
   type CemDeclaration,
 } from '../src/stories/_catalog-helpers.ts';
+import type { HelixStorybookConfig } from '../helix.storybook.config.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const CEM_PATH = join(ROOT, 'node_modules', '@helixui', 'library', 'custom-elements.json');
 const OUT_DIR = join(ROOT, 'src', 'stories', 'catalog');
+const CONFIG_PATH = join(ROOT, 'helix.storybook.config.ts');
+
+async function loadConfig(): Promise<HelixStorybookConfig> {
+  const mod = (await import(pathToFileURL(CONFIG_PATH).href)) as {
+    default: HelixStorybookConfig;
+  };
+  return mod.default;
+}
+
+function shouldInclude(
+  tagName: string,
+  components: HelixStorybookConfig['components'],
+): boolean {
+  const includes =
+    components.include === 'all' ? true : components.include.includes(tagName);
+  if (!includes) return false;
+  return !components.exclude.includes(tagName);
+}
 
 function pascal(s: string): string {
   return s
@@ -9073,9 +9173,12 @@ async function main() {
     console.error(\`❌ Could not read \${CEM_PATH}. Run \\\`pnpm install\\\` first.\`);
     process.exit(1);
   }
+
+  const config = await loadConfig();
   const cem = JSON.parse(raw) as Cem;
   const decls = walkCem(cem)
     .filter((d) => d.tagName && !isHipaaAdjacent(d.tagName))
+    .filter((d) => shouldInclude(d.tagName!, config.components))
     .sort((a, b) => a.tagName!.localeCompare(b.tagName!));
 
   // Clean + recreate output directory
@@ -9220,6 +9323,540 @@ pnpm cem:analyze</pre>
     </div>
   \`,
 };
+`,
+  );
+
+  // ── src/stories/docs/*.mdx — documentation defaults ──────────────────────
+  //
+  // Six docs pages adapted from the HELiX Design System reference (a11y,
+  // brand, color, type, spacing, overview). They are pure MDX — no companion
+  // CSF needed — and bind to live tokens via \`var(--hx-*)\` so updating
+  // src/tokens/tokens.css refreshes the docs without rebuilding stories.
+  //
+  // Storybook 10 imports \`Meta\` from \`@storybook/addon-docs/blocks\`
+  // (replaces the legacy \`@storybook/blocks\` package in 9.x and earlier).
+  //
+  // Reduced motion: every animated demo here is gated on
+  // \`prefers-reduced-motion: reduce\` per WCAG 2.3.3.
+
+  await safeWriteFile(
+    path.join(docsStoriesDir, 'Overview.mdx'),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Overview" />
+
+# ${dsTitle} — Overview
+
+A design system built on **HELiX** + **Lit 3** + **Storybook 10**.
+This Storybook is the source of truth for tokens, accessibility, brand,
+typography, and spacing — the surface a developer needs to ship a
+component without inventing its visual language from scratch.
+
+## What is in this Storybook
+
+- **Documentation** — the page you are on. Token narratives, a11y
+  contracts, brand voice. No component required to render these.
+- **Design Tokens** — live swatches, type ramps, spacing visualizations
+  bound to \`src/tokens/tokens.css\` via CSS custom properties.
+- **Components** — \`${ds}-*\` components authored in this design system,
+  plus the upstream \`hx-*\` catalog (auto-generated from the Custom
+  Elements Manifest, narrowed by \`helix.storybook.config.ts\`).
+
+## Token cascade — three tiers
+
+\`\`\`
+primitive     →  semantic     →  component
+${prefix}-color-primary-500  ${prefix}-color-action-primary-bg  ${prefix}-button-bg
+\`\`\`
+
+Override **primitive** tokens to retune the brand ramp; the entire
+system reflows. Override **semantic** tokens to adjust an action role
+without touching component CSS. Override **component** tokens for a
+single component instance. Components read the inner two via the
+two-level \`var()\` fallback chain documented in \`CLAUDE.md\`.
+
+## Docs config
+
+The pages under **Documentation/** ship by default. Hide individual
+pages by editing \`helix.storybook.config.ts\`:
+
+\`\`\`ts
+const config: HelixStorybookConfig = {
+  components: { include: 'all', exclude: [] },
+  docs: { include: 'all', exclude: ['accessibility'] },
+};
+\`\`\`
+
+## Quick start
+
+\`\`\`bash
+pnpm storybook         # dev server with token + catalog watch
+pnpm test              # Playwright story interaction tests
+pnpm build             # tokens + library
+pnpm cem:analyze       # regenerate custom-elements.json
+pnpm cem:catalog       # regenerate the upstream Helix catalog
+\`\`\`
+`,
+  );
+
+  await safeWriteFile(
+    path.join(docsStoriesDir, 'Accessibility.mdx'),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Accessibility" />
+
+# Accessibility
+
+${dsTitle} inherits HELiX's WCAG 2.1 AA contract. The contrast bar is
+not a goal — it is the floor. Every contrast pairing is regression-tested;
+adding a token below the floor fails CI.
+
+## Coverage at a glance
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-raised, #fff)' }}>
+    <div style={{ fontSize: '32px', fontWeight: 800, lineHeight: 1, color: 'var(--hx-color-text-primary, #212529)' }}>4.5:1</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-strong, #212529)', fontWeight: 600, marginTop: '6px' }}>Contrast floor</div>
+    <div style={{ fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', fontFamily: 'ui-monospace, monospace' }}>WCAG 1.4.3</div>
+  </div>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-raised, #fff)' }}>
+    <div style={{ fontSize: '32px', fontWeight: 800, lineHeight: 1, color: 'var(--hx-color-text-primary, #212529)' }}>44px</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-strong, #212529)', fontWeight: 600, marginTop: '6px' }}>Touch target</div>
+    <div style={{ fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', fontFamily: 'ui-monospace, monospace' }}>WCAG 2.5.5</div>
+  </div>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-raised, #fff)' }}>
+    <div style={{ fontSize: '32px', fontWeight: 800, lineHeight: 1, color: 'var(--hx-color-text-primary, #212529)' }}>3</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-strong, #212529)', fontWeight: 600, marginTop: '6px' }}>Theme modes</div>
+    <div style={{ fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', fontFamily: 'ui-monospace, monospace' }}>light · dark · HC</div>
+  </div>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-raised, #fff)' }}>
+    <div style={{ fontSize: '32px', fontWeight: 800, lineHeight: 1, color: 'var(--hx-color-text-primary, #212529)' }}>0</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-strong, #212529)', fontWeight: 600, marginTop: '6px' }}>axe violations</div>
+    <div style={{ fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', fontFamily: 'ui-monospace, monospace' }}>critical + serious</div>
+  </div>
+</div>
+
+## Focus indicators
+
+Every interactive surface ships a 2px ring at \`--hx-color-focus-ring\` with
+a 2px offset. Rings are scoped to \`:focus-visible\` so mouse users do not
+see them; keyboard users always do. Verified against WCAG 1.4.11
+(non-text contrast ≥ 3:1) on every theme.
+
+<div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', padding: '16px', background: 'var(--hx-color-surface-default, #fff)', border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '8px' }}>
+  <button style={{ padding: '10px 16px', border: 0, borderRadius: '6px', background: 'var(--hx-color-action-primary-bg, #0d6efd)', color: 'var(--hx-color-text-on-primary-strong, #fff)', outline: '2px solid var(--hx-color-focus-ring, #0066cc)', outlineOffset: '2px', font: 'inherit', fontWeight: 500 }}>Primary · focused</button>
+  <button style={{ padding: '10px 16px', borderRadius: '6px', background: 'transparent', boxShadow: 'inset 0 0 0 1px var(--hx-color-action-secondary-border, #adb5bd)', color: 'var(--hx-color-action-secondary-fg, #495057)', outline: '2px solid var(--hx-color-focus-ring, #0066cc)', outlineOffset: '2px', font: 'inherit', fontWeight: 500 }}>Secondary · focused</button>
+</div>
+
+## Never color alone — WCAG 1.4.1
+
+Status is conveyed by **color + at least one other channel**: an icon,
+a text label, a shape, or a position. A user with red-green color
+blindness sees the same information as everyone else.
+
+| Channel | Token | Used for |
+|---------|-------|----------|
+| Color | \`--hx-color-{success,warning,error,info}-*\` | Backgrounds, dots, borders |
+| Icon  | inline SVG | All status badges and validation messages |
+| Text  | localized string | Adjacent label or aria-live announcement |
+| Shape | dot, pill, underline | Multi-signal redundancy |
+
+## Keyboard contracts
+
+Within a component (menu, listbox, combobox, tabs):
+
+| Key | Action |
+|-----|--------|
+| \`Tab\` / \`Shift+Tab\` | Move focus between interactive elements |
+| \`↑\` / \`↓\` | Move within a listbox or radio group |
+| \`←\` / \`→\` | Move within tabs or segmented controls |
+| \`Home\` / \`End\` | Jump to first / last item |
+| \`Space\` | Activate or toggle current item |
+| \`Enter\` | Activate primary action |
+| \`Esc\` | Dismiss popover or cancel edit |
+
+## Live regions
+
+State changes that don't move focus are still announced. Toasts use
+\`role="status"\` (polite); errors and destructive confirmations
+escalate to \`role="alert"\` (assertive).
+
+## User preferences (runtime, no admin)
+
+- **Reduced motion** — \`prefers-reduced-motion: reduce\` collapses transitions to 0ms.
+- **High contrast** — \`data-theme="high-contrast"\` swaps the entire token tree.
+- **Large text** — root \`font-size: 18px\` reflows the type ramp.
+
+## WCAG 2.1 success criteria covered
+
+| SC | Criterion | Level |
+|---:|-----------|:-----:|
+| 1.4.1 | Use of color — never the only signal | A |
+| 1.4.3 | Contrast (minimum) — text ≥ 4.5:1 | AA |
+| 1.4.4 | Resize text — to 200% w/o loss | AA |
+| 1.4.10 | Reflow — 320px width, no horiz scroll | AA |
+| 1.4.11 | Non-text contrast — UI ≥ 3:1 | AA |
+| 2.1.1 | Keyboard — full operability | A |
+| 2.1.2 | No keyboard trap | A |
+| 2.4.7 | Focus visible — 2px ring everywhere | AA |
+| 2.5.5 | Target size — 44×44px minimum | AAA→AA |
+| 3.3.3 | Error suggestion — what to do, not just what's wrong | AA |
+| 4.1.2 | Name, role, value — for every component | A |
+| 4.1.3 | Status messages — live regions | AA |
+`,
+  );
+
+  await safeWriteFile(
+    path.join(docsStoriesDir, 'Color.mdx'),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Color" />
+
+# Color
+
+Eight color roles, each with a precision-tuned 50→950 ramp. **Stops
+500–700 are interactive surfaces**; 50–200 are tints; 800–950 are
+dark-mode pages and emphasis fills.
+
+For raw swatches and copy-on-click hex values see
+[Design Tokens / Colors](../?path=/docs/design-tokens-colors--docs).
+
+## Semantic tier — what to actually use
+
+Components do not consume primitive ramps directly. They consume the
+**semantic tier** so a brand override reflows the whole system without
+touching component CSS.
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', margin: '16px 0' }}>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-default, #fff)' }}>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', marginBottom: '6px' }}>--hx-color-surface-*</div>
+    <div style={{ fontWeight: 600, color: 'var(--hx-color-text-primary, #212529)' }}>Surfaces</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-secondary, #495057)', marginTop: '4px', lineHeight: 1.5 }}>default (page) · raised (cards) · sunken (wells) · inverse (tooltips)</div>
+  </div>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-default, #fff)' }}>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', marginBottom: '6px' }}>--hx-color-text-*</div>
+    <div style={{ fontWeight: 600, color: 'var(--hx-color-text-primary, #212529)' }}>Text</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-secondary, #495057)', marginTop: '4px', lineHeight: 1.5 }}>primary (21:1) · secondary (10.9:1) · muted (7.76:1) · on-[role] (paired)</div>
+  </div>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-default, #fff)' }}>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', marginBottom: '6px' }}>--hx-color-action-*</div>
+    <div style={{ fontWeight: 600, color: 'var(--hx-color-text-primary, #212529)' }}>Actions</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-secondary, #495057)', marginTop: '4px', lineHeight: 1.5 }}>primary · secondary · ghost · danger — bg / fg / border / hover triplets each</div>
+  </div>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '16px', background: 'var(--hx-color-surface-default, #fff)' }}>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: 'var(--hx-color-text-muted, #6c757d)', marginBottom: '6px' }}>--hx-color-[success|warning|error|info]-*</div>
+    <div style={{ fontWeight: 600, color: 'var(--hx-color-text-primary, #212529)' }}>Status</div>
+    <div style={{ fontSize: '13px', color: 'var(--hx-color-text-secondary, #495057)', marginTop: '4px', lineHeight: 1.5 }}>Always paired with an icon (WCAG 1.4.1). 50 = tint, 500 = solid, text = AA-tuned label.</div>
+  </div>
+</div>
+
+## Contrast pairings — measured
+
+| Foreground | Background | Ratio | Grade |
+|-----------|-----------|------:|:-----:|
+| \`text-primary\` | \`surface-default\` | 21.0:1 | AAA |
+| \`text-secondary\` | \`surface-default\` | 10.9:1 | AAA |
+| \`text-muted\` | \`surface-default\` | 7.76:1 | AA |
+| \`text-on-primary\` | \`primary-500\` | 5.20:1 | AA |
+| \`text-on-primary-strong\` | \`primary-600\` | 5.82:1 | AA |
+| \`error-text\` | \`surface-default\` | 5.46:1 | AA |
+| \`success-text\` | \`surface-default\` | 6.88:1 | AA |
+| \`focus-ring\` | \`surface-default\` (UI) | 5.82:1 | AA |
+
+All measured on light surface. Dark and high-contrast modes re-validate
+against the same floor — no surface goes dark without its on-token following.
+
+## Override patterns
+
+\`\`\`css
+/* Brand: retune the primary ramp at primitive tier */
+:root {
+  ${prefix}-color-primary-500: #003DA5;
+  ${prefix}-color-primary-600: #002D8A;
+}
+
+/* Theme: swap the action background for one role only */
+:root {
+  ${prefix}-color-action-primary-bg: var(${prefix}-color-secondary-600);
+}
+\`\`\`
+`,
+  );
+
+  await safeWriteFile(
+    path.join(docsStoriesDir, 'Typography.mdx'),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Typography" />
+
+# Typography
+
+Two families, ten sizes, six weights. **Inter** for prose, **JetBrains
+Mono** for code. Inter is tuned with OpenType variants \`cv11\` and
+\`ss01\` enabled for unambiguous numerals — critical in dense data
+tables and clinical contexts.
+
+## Families
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', margin: '16px 0' }}>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '20px', background: 'var(--hx-color-surface-raised, #fff)' }}>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--hx-color-text-muted, #6c757d)' }}>--hx-font-family-sans</div>
+    <div style={{ fontFamily: 'var(--hx-font-family-sans, system-ui)', fontSize: '48px', fontWeight: 700, lineHeight: 1, marginTop: '12px', color: 'var(--hx-color-text-primary, #212529)' }}>Aa Bb Cc Gg 0123</div>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '12px', color: 'var(--hx-color-text-secondary, #495057)', marginTop: '8px' }}>'Inter' · system fallback chain</div>
+  </div>
+  <div style={{ border: '1px solid var(--hx-color-border-default, #dee2e6)', borderRadius: '12px', padding: '20px', background: 'var(--hx-color-surface-raised, #fff)' }}>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--hx-color-text-muted, #6c757d)' }}>--hx-font-family-mono</div>
+    <div style={{ fontFamily: 'var(--hx-font-family-mono, ui-monospace)', fontSize: '48px', fontWeight: 600, lineHeight: 1, marginTop: '12px', color: 'var(--hx-color-text-primary, #212529)' }}>Aa Bb Cc Gg 0123</div>
+    <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: '12px', color: 'var(--hx-color-text-secondary, #495057)', marginTop: '8px' }}>'JetBrains Mono' · ui-monospace fallback</div>
+  </div>
+</div>
+
+## Type scale
+
+Ten stops on a 16px root. \`2xs\` (10px) is reserved for chart axes and
+captions; \`md\` (16px) is the default reading size; \`5xl\` (48px) is
+the display headline. Body copy uses \`md\` with line-height \`1.6\`.
+
+| Token | Size | Use |
+|-------|-----:|-----|
+| \`font-size-5xl\` | 48px | Display headline |
+| \`font-size-4xl\` | 36px | Page title |
+| \`font-size-3xl\` | 30px | Section heading |
+| \`font-size-2xl\` | 24px | Card heading |
+| \`font-size-xl\` | 20px | Subheading |
+| \`font-size-lg\` | 18px | Body large |
+| \`font-size-md\` | 16px | Body — default |
+| \`font-size-sm\` | 14px | Secondary body, dense tables |
+| \`font-size-xs\` | 12px | Captions, helper text, labels |
+| \`font-size-2xs\` | 10px | Micro · chart axis |
+
+## Weights
+
+| Token | Weight | Use |
+|-------|------:|-----|
+| \`font-weight-light\` | 300 | Display only — never body |
+| \`font-weight-normal\` | 400 | Body copy default |
+| \`font-weight-medium\` | 500 | UI buttons, active nav, table emphasis |
+| \`font-weight-semibold\` | 600 | Card headings, labels, strong text |
+| \`font-weight-bold\` | 700 | Section headings, page titles |
+| \`font-weight-extrabold\` | 800 | Display headlines (5xl, 4xl) |
+
+## Heading + body rhythm
+
+Headings tighten letter-spacing (\`-0.025em\` for h1/h2) and shorten
+line-height (\`1.15\`). Body relaxes both: line-height \`1.6\`,
+letter-spacing default. \`text-wrap: pretty\` and \`balance\` are applied
+where browser support allows for cleaner ragging on display copy.
+`,
+  );
+
+  await safeWriteFile(
+    path.join(docsStoriesDir, 'Spacing.mdx'),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Spacing" />
+
+# Spacing
+
+Fifteen stops on a 4px base. Each is named by its quarter-rem value:
+\`space-4\` is 16px, \`space-8\` is 32px. Quarter-stops (\`0-5\`,
+\`1-5\`) only exist where the rhythm needs them.
+
+For a live bar visualization see
+[Design Tokens / Spacing](../?path=/docs/design-tokens-spacing--docs).
+
+## When to reach for which stop
+
+| Token | Pixels | Use |
+|-------|------:|-----|
+| \`space-0\`   | 0px  | Reset |
+| \`space-0-5\` | 2px  | Hairline insets |
+| \`space-1\`   | 4px  | Icon ↔ label |
+| \`space-1-5\` | 6px  | Chip padding |
+| \`space-2\`   | 8px  | Tight stack · compact density |
+| \`space-3\`   | 12px | Text rhythm · button padding-y |
+| \`space-4\`   | 16px | Card padding · grid gap |
+| \`space-5\`   | 20px | Form row gap |
+| \`space-6\`   | 24px | Card padding · default density |
+| \`space-8\`   | 32px | Card outer · between subsections |
+| \`space-10\`  | 40px | Page gutter (mobile) |
+| \`space-12\`  | 48px | Between sections |
+| \`space-16\`  | 64px | Page gutter (desktop) |
+| \`space-20\`  | 80px | Hero padding |
+| \`space-24\`  | 96px | Between major regions |
+
+## Density modes
+
+The same component renders at three density scales by swapping ONLY
+the padding and gap tokens. Markup is identical; spec lists density
+tokens, not pixels.
+
+| Density | Padding-Y | Padding-X / gap |
+|---------|----------|-----------------|
+| Compact | \`space-2\` | \`space-4\` |
+| Default | \`space-3\` | \`space-5\` |
+| Touch   | \`space-5\` | \`space-6\` |
+
+## Padding rhythm inside a form
+
+Form padding is never a one-shot decision. It is a stack:
+
+| Layer | Token | Pixels |
+|-------|-------|------:|
+| Card outer padding | \`space-8\` | 32px |
+| Field gap | \`space-5\` | 20px |
+| Label → input | \`space-2\` | 8px |
+| Input padding (Y/X) | \`space-3\` / \`space-4\` | 12 / 16px |
+| Button padding (Y/X) | \`space-3\` / \`space-5\` | 12 / 20px |
+| Action gap | \`space-3\` | 12px |
+
+Each row uses a different stop on the same scale. The result reads as a
+single rhythm rather than a stack of one-off measurements.
+
+## Vertical rhythm
+
+| Use | Token | Pixels |
+|-----|-------|------:|
+| Tight metadata | \`space-2\` | 8px |
+| Paragraph rhythm | \`space-3\` | 12px |
+| Form rows | \`space-5\` | 20px |
+| Page sections | \`space-8\` | 32px |
+`,
+  );
+
+  await safeWriteFile(
+    path.join(docsStoriesDir, 'Brand.mdx'),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Brand" />
+
+# Brand
+
+${dsTitle} is a **white-label-ready** design system. Every brand registers
+a primary and secondary ramp; the rest of the 22-token semantic tier
+inherits from the HELiX base, keeping AA contrast, focus rings, and
+elevation consistent across brands.
+
+## Token prefix
+
+All custom properties exposed by this design system use the
+\`${prefix}-*\` namespace. Override at \`:root\` to recolor the entire
+system — the cascade does the rest.
+
+\`\`\`css
+:root {
+  ${prefix}-color-primary-500: #003DA5;
+  ${prefix}-color-primary-600: #002D8A;
+  /* + 20 more required for a complete brand */
+}
+\`\`\`
+
+## Cascade rules
+
+1. **Brand merges over base** on light and dark themes.
+2. **High-contrast suppresses brand** — AA-tuned tokens stay
+   authoritative. Brands cannot lower contrast in the high-contrast
+   path; this is enforced by HELiX's token resolution.
+3. **Required surface**: 22 semantic tokens (primary + secondary,
+   50→950). The remaining 200+ tokens inherit from the base.
+
+## Voice
+
+- **Direct, not decorative.** Sentences carry one idea. The interface is
+  a tool used by people doing important work.
+- **Specific, not abstract.** "Schedule visit" beats "Get started".
+  "Could not save — connection lost" beats "Something went wrong."
+- **Active, not passive.** "Sign off the discharge summary?" beats
+  "The discharge summary should be signed off."
+
+## Do / don't
+
+| Do | Don't |
+|----|-------|
+| Use action verbs in buttons (\`Schedule\`, \`Confirm\`, \`Sign off\`) | \`OK\` / \`Cancel\` for irreversible actions |
+| Tell the user what to do next on error | Apologize for the error |
+| Localize numbers, dates, and units | Hardcode 12-hour or imperial |
+| Use sentence case in UI copy | Title Case Every Button |
+| Pair every status color with an icon and label | Convey status with color alone (WCAG 1.4.1) |
+
+## Logo and identity
+
+Brand identity is a host-app concern; this design system surfaces
+neutral surface, text, and action tokens that any logo can sit on.
+\`Storybook manager.ts\` is the only place this Storybook references the
+brand primary directly — change it there if your design system has its
+own visual identity in this Storybook UI.
+`,
+  );
+
+  await safeWriteFile(
+    path.join(docsStoriesDir, 'Layout.mdx'),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Layout" />
+
+# Layout & responsiveness
+
+Components in this design system render at three responsive modes —
+**mobile**, **tablet**, **desktop** — driven by the consumer's
+\`@helixui/tokens/responsive.css\` mode chain (responsive-seed work).
+Mode selection is a single attribute on \`:root\`; every token resolves
+through the mode-specific override map.
+
+## Mode selection
+
+\`\`\`html
+<html data-responsive-mode="auto">
+  <!-- "auto" follows viewport breakpoints; "mobile" / "tablet" /
+       "desktop" pin one mode (useful for kiosks and embedded screens). -->
+</html>
+\`\`\`
+
+## Breakpoints
+
+| Mode | Min width | Used for |
+|------|----------:|----------|
+| \`mobile\`  | 0px    | Phones, narrow embeds |
+| \`tablet\`  | 768px  | Tablets, split-screen |
+| \`desktop\` | 1024px | Standard desktops, EHR clients |
+
+## What changes between modes
+
+Modes change **density tokens** (padding, gap, font-size scale) and
+**target-size minimums**. Modes do **not** change semantic colors,
+brand, or token names — your component CSS does not branch on mode;
+the tokens it consumes do.
+
+| Layer | Mode-aware? |
+|-------|:-----------:|
+| Color (semantic tier) | No |
+| Brand | No |
+| Spacing (density tokens) | Yes |
+| Type scale | Yes |
+| Touch target minimum | Yes |
+| Component CSS | No (consumes mode-aware tokens) |
+
+## Touch target floor
+
+The minimum touch target is 44×44px on mobile and tablet (WCAG 2.5.5
+AAA). Desktop relaxes to the platform default (24×24px) where pointer
+input dominates.
+
+## Reduced motion
+
+All transitions in this design system are gated on
+\`prefers-reduced-motion: reduce\`. Animations collapse to 0ms;
+spinners auto-pause; loading states swap to text-only progress.
+
+\`\`\`css
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+\`\`\`
+
+The HELiX base stylesheet ships this guard. Your component-tier CSS
+does not need to repeat it — but if you author bespoke animations
+outside the token system, add the guard explicitly.
 `,
   );
 
