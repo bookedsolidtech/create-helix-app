@@ -43,14 +43,37 @@ Parallel to `.rea/bug-reports/` which serves the same role for `@bookedsolid/rea
 
 ## Workflow
 
-1. **Draft** — write a new file in `incoming/` named `<UTC-timestamp>-<topic>.md` using `TEMPLATE.md` as the starting point. This can come from:
+1. **Pre-filing namespace check** — before drafting, enumerate the FULL relevant helix-tokens namespace. Helix's `_strong` emphasis surfaces, `on-*` text-pairings, and `border.*` siblings often satisfy a "missing token" need. ~89% of our 2026-05-07 batch came back from helix-team as false-positive because we filed without the full sweep. See `feedback_helix_token_namespace_check.md` in user-memory for the cross-validation pattern.
+2. **Draft** — write a new file in `incoming/` named `<UTC-timestamp>-<topic>.md` using `TEMPLATE.md`. Sources:
    - Manual observation during create-helix-app or figma-tokens work
-   - The cron monitoring loop (extends `.rea/bug-reports/` 1hr scanner; see Phase D4 of the unified renderer-correctness plan)
+   - The cron monitoring loop (extends `.rea/bug-reports/` 1hr scanner)
    - Codex finding during a phase review
-2. **Codex review** — run `/codex-review` on the draft. Codex evaluates: is the issue reproducible, is the severity right, is the suggested fix sensible, is upstream-vs-workaround the right call.
-3. **Promote** — rename the file to `HX-XXX-<slug>.md` (next sequential ID; check existing `filed/` entries to avoid collisions) and move to `filed/`.
-4. **Vault port** (manual, user's keystroke) — copy the filed entry to `bst-cto-kb/Projects/HELiX/Audits/` as the helix-team-facing record.
-5. **Resolution** — when helix-team ships a fix, update the entry's `status:` front-matter to `resolved` with the helix release version. Don't delete; the historical record matters.
+   - Direct MCP probe of the live Helix Figma file
+3. **Codex review** — run `/codex-review` on the draft.
+4. **Promote** — rename to `HX-XXX-<slug>.md` (next sequential ID across BOTH this tracker AND `figma-tokens/.bug-reports/` — they share numbering).
+5. **Vault port** — append a curated summary to `bst-cto-kb/Projects/HELiX/Bug Reports/Helix Bug Reports.md` (the helix-team-watching canonical surface).
+6. **Helix-team triage** — possible outcomes:
+   - `upstream-acked` — helix accepts, will fix
+   - `closed-false-positive` — helix points at existing token / pattern that solves the case (per-namespace fix on consumer side)
+   - `deferred-design-decision` — queued for helix-team internal discussion
+   - `plugin-internal` — wrong tracker, belongs in `figma-tokens/.bug-reports/` instead
+   - `resolved` — helix shipped the fix; close with version
+7. **Don't delete** — the historical record matters.
+
+## What belongs HERE vs `figma-tokens/.bug-reports/`
+
+This tracker is for **upstream-helix-blocking items** — things that REQUIRE helix-side code or token changes:
+- Missing primitives in helix-tokens authored data
+- Bugs in helix CSS/JS code
+- Broken contracts in helix's published API surface
+
+Plugin-internal items go to `figma-tokens/.bug-reports/`:
+- Plugin architecture decisions
+- Pipeline ordering bugs
+- Renderer-pattern refactors
+- Plugin-side bugs even when they affect downstream behavior
+
+When uncertain: ask the user. They've been doing the helix-team correspondence and know what's theirs vs ours. See `feedback_helix_issues_filing_discipline.md` in user-memory.
 
 ## PRIORITY.md
 
