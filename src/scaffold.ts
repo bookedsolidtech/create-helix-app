@@ -8976,9 +8976,83 @@ export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
 `,
   );
 
+  // ── helix.storybook.config.ts — story-inclusion knob ─────────────────────
+  // Consumer-facing config that controls which Helix components surface as
+  // generated catalog stories AND which scaffolded docs pages render. Default
+  // is "include everything" — enterprise consumers narrow the surface for
+  // their own design-system Storybook by editing this file. The CEM-driven
+  // catalog generator (scripts/generate-catalog.ts) reads it via dynamic
+  // import; the docs MDX pages reference the same shape via getDocsConfig().
+
+  await safeWriteFile(
+    path.join(options.directory, 'helix.storybook.config.ts'),
+    `/**
+ * Storybook surface config for this design system.
+ *
+ * Controls which upstream Helix components appear in the generated catalog
+ * (\`pnpm cem:catalog\`) AND which scaffolded documentation pages render.
+ * Edit this file — DO NOT edit the generated stories under
+ * \`src/stories/catalog/\` directly, they get rewritten on every catalog run.
+ *
+ * Both \`components\` and \`docs\` accept \`'all'\` (default) or an explicit list.
+ * Use \`exclude\` to keep \`'all'\` semantics while removing a few entries.
+ *
+ * @see scripts/generate-catalog.ts — applies \`components\` filtering.
+ * @see src/stories/docs/ — applies \`docs\` filtering at story-collection time.
+ */
+export interface HelixStorybookConfig {
+  /** Which Helix \`hx-*\` components to surface as generated catalog stories. */
+  components: {
+    /** \`'all'\` (default) or an explicit list of tag names (e.g. \`['hx-button']\`). */
+    include: 'all' | readonly string[];
+    /** Tag names to remove from the surface. Applied AFTER \`include\`. */
+    exclude: readonly string[];
+  };
+  /** Which scaffolded documentation pages render in Storybook. */
+  docs: {
+    /** \`'all'\` (default) or an explicit list of page ids (e.g. \`['accessibility']\`). */
+    include: 'all' | readonly DocsPageId[];
+    /** Page ids to remove from the surface. Applied AFTER \`include\`. */
+    exclude: readonly DocsPageId[];
+  };
+}
+
+/**
+ * Stable ids for the scaffolded documentation pages. Add a new id here when
+ * you add a new MDX page under \`src/stories/docs/\`. Story-collection logic
+ * matches the file's \`title\` parameter against these ids.
+ */
+export type DocsPageId =
+  | 'overview'
+  | 'accessibility'
+  | 'brand'
+  | 'color'
+  | 'typography'
+  | 'spacing'
+  | 'layout';
+
+const config: HelixStorybookConfig = {
+  components: {
+    include: 'all',
+    exclude: [],
+  },
+  docs: {
+    include: 'all',
+    exclude: [],
+  },
+};
+
+export default config;
+`,
+  );
+
   // ── scripts/generate-catalog.ts ──────────────────────────────────────────
   // Walks node_modules/@helixui/library/custom-elements.json and emits one
   // .stories.ts file per non-excluded hx-* component into src/stories/catalog/.
+  // Filtering is driven by the consumer's helix.storybook.config.ts — the
+  // include/exclude knobs are applied AFTER the HIPAA-adjacency safety
+  // filter (which is non-overridable; HIPAA-adjacent components must always
+  // be authored deliberately, not auto-generated).
   // Run manually or via the \`pnpm cem:catalog\` script wired in package.json.
 
   await safeEnsureDir(path.join(options.directory, 'scripts'));
@@ -8990,11 +9064,16 @@ export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
  * @helixui/library custom-elements manifest. Produces one file per non-
  * excluded hx-* declaration under src/stories/catalog/<tier>/.
  *
+ * Filtering is driven by helix.storybook.config.ts (components.include /
+ * components.exclude). The HIPAA-adjacency filter is applied UNCONDITIONALLY
+ * before the consumer config so HIPAA-adjacent components must be authored
+ * deliberately rather than auto-generated.
+ *
  * Invoke with: pnpm cem:catalog
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   walkCem,
   classifyTier,
@@ -9004,11 +9083,30 @@ import {
   type Cem,
   type CemDeclaration,
 } from '../src/stories/_catalog-helpers.ts';
+import type { HelixStorybookConfig } from '../helix.storybook.config.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const CEM_PATH = join(ROOT, 'node_modules', '@helixui', 'library', 'custom-elements.json');
 const OUT_DIR = join(ROOT, 'src', 'stories', 'catalog');
+const CONFIG_PATH = join(ROOT, 'helix.storybook.config.ts');
+
+async function loadConfig(): Promise<HelixStorybookConfig> {
+  const mod = (await import(pathToFileURL(CONFIG_PATH).href)) as {
+    default: HelixStorybookConfig;
+  };
+  return mod.default;
+}
+
+function shouldInclude(
+  tagName: string,
+  components: HelixStorybookConfig['components'],
+): boolean {
+  const includes =
+    components.include === 'all' ? true : components.include.includes(tagName);
+  if (!includes) return false;
+  return !components.exclude.includes(tagName);
+}
 
 function pascal(s: string): string {
   return s
@@ -9071,9 +9169,12 @@ async function main() {
     console.error(\`❌ Could not read \${CEM_PATH}. Run \\\`pnpm install\\\` first.\`);
     process.exit(1);
   }
+
+  const config = await loadConfig();
   const cem = JSON.parse(raw) as Cem;
   const decls = walkCem(cem)
     .filter((d) => d.tagName && !isHipaaAdjacent(d.tagName))
+    .filter((d) => shouldInclude(d.tagName!, config.components))
     .sort((a, b) => a.tagName!.localeCompare(b.tagName!));
 
   // Clean + recreate output directory
