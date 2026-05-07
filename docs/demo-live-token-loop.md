@@ -5,6 +5,7 @@ End-to-end demonstration of the Figma → tokens.json → CSS → Storybook HMR 
 This runbook is the canonical walkthrough for the wc-storybook framework's selling point: a designer changes a primitive in Figma, the developer's Storybook repaints in under 15 seconds, and the change cascades through every component variant automatically.
 
 > **TL;DR runbook (after one-time setup):**
+>
 > 1. Designer opens HELiX Tokens Figma file → runs `Plugins → HELiX Token Suite → Custom HELiX Exporter → Generate → Download tokens.json`.
 > 2. Developer drops `tokens.json` into `<project>/src/tokens/`.
 > 3. Storybook (already running with `pnpm storybook` or `npm run storybook`) regenerates CSS automatically and HMR-updates the open browser tab.
@@ -14,12 +15,12 @@ This runbook is the canonical walkthrough for the wc-storybook framework's selli
 
 ## What gets demonstrated
 
-| Layer | Tool | Output |
-|---|---|---|
-| Authoring | Figma + HELiX Token Suite plugin (Custom HELiX Exporter) | nested `tokens.json` with `action.*` semantic tier + 13 semantic groups |
-| Scaffold | `create-helix` (this repo) | a working Storybook 10 design system extending HelixButton (Track 1) and HelixElement (Track 2) |
-| Bridge | scaffolded `scripts/build-tokens.ts` | converts `tokens.json` → `tokens.css` (`--hx-*` custom properties) on file change |
-| Live update | Vite HMR via Storybook 10 | repaints all stories in <1s after CSS change |
+| Layer       | Tool                                                     | Output                                                                                          |
+| ----------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Authoring   | Figma + HELiX Token Suite plugin (Custom HELiX Exporter) | nested `tokens.json` with `action.*` semantic tier + 13 semantic groups                         |
+| Scaffold    | `create-helix` (this repo)                               | a working Storybook 10 design system extending HelixButton (Track 1) and HelixElement (Track 2) |
+| Bridge      | scaffolded `scripts/build-tokens.ts`                     | converts `tokens.json` → `tokens.css` (`--hx-*` custom properties) on file change               |
+| Live update | Vite HMR via Storybook 10                                | repaints all stories in <1s after CSS change                                                    |
 
 The architecture proves a single-source-of-truth model: a primitive change in Figma propagates through Helix's three-tier alias chain (Primitives → Semantics → Components) and into every consuming variant — no manual hunt-and-replace, no per-component CSS edits.
 
@@ -85,13 +86,14 @@ That's the entire developer step. No build commands. No git ceremony. Just file 
 ### Step 3 — watch the cascade
 
 Within ~1 second:
+
 - `scripts/build-tokens.ts --watch` (running inside `pnpm storybook` via concurrently) detects the file change.
 - It walks the nested tree and emits flattened CSS custom properties to `src/tokens/tokens.css`:
   ```css
   :root {
     --hx-color-primary-500: #429797;
     --hx-color-action-primary-bg: #429797;
-    --hx-color-text-on-primary-strong: #FFFFFF;
+    --hx-color-text-on-primary-strong: #ffffff;
     /* …276 primitives + 71 semantics + component tier… */
   }
   ```
@@ -140,7 +142,7 @@ The whole point of the demo is to show this loop is repeatable:
 - **Plugins → Development → Manage plugins in development** — the plugin should appear. If not, reimport the manifest.
 - If the manifest is invalid, Figma reports the error in the developer console (Plugins → Development → Open console).
 
-### "Custom HELiX Exporter: no action.* keys in output"
+### "Custom HELiX Exporter: no action.\* keys in output"
 
 - The Figma file is missing the `HELiX Semantics` collection (or the action variables aren't named `action/{role}/{state}`).
 - Run **Build Helix Starter → Build Tokens** first to populate the file with the canonical 3.3.1 shape.
@@ -154,7 +156,7 @@ The whole point of the demo is to show this loop is repeatable:
 
 - Resolved 2026-05-05 (figma-tokens commit `1d4bc23`). The Apply Theme command now ships five fully-calibrated themes — each defines all 11 stops × primary + secondary + neutral (34 colors per theme), not the prior partial 7-stop overrides. Themes: **HELiX Default** (restore), **Royal Blue**, **Crimson**, **Forest**, **Mono Contrast**. UI shows a 5-stop swatch strip + description per theme card. Selected theme gets a teal border.
 
-### "Where did Pages '2. Primitives' and '3. Semantics' go? Why are there 7 HELiX - * pages now?"
+### "Where did Pages '2. Primitives' and '3. Semantics' go? Why are there 7 HELiX - \* pages now?"
 
 - 2026-05-05 redesign (figma-tokens commit `fa821e5`). The empty Primitives/Semantics text-marker pages were dropped — the HELiX Primitives + Semantics Variable Collections live globally in the file and don't need a canvas page. The single 100-kit `4a. Components` dump page was split into seven family pages: **HELiX - Actions, Forms, Navigation, Feedback, Data Display, Layout & Surfaces, Media & Glyphs**. Each of the 100 components routes to its family page automatically via tag. The sandbox `4b. Custom Component Explorations` was renamed `Component Exploration` and promoted above the reference pages — exploration first, reference catalog after.
 
@@ -185,16 +187,16 @@ The whole point of the demo is to show this loop is repeatable:
 
 5 minutes total, including questions:
 
-| Time | What |
-|---|---|
-| 0:00 | "Designer changes Figma. Developer doesn't even need to be in the room." |
-| 0:30 | Show the Figma plugin button. Click. Download the JSON. |
-| 1:00 | `cp` the JSON into the project. |
-| 1:15 | Cut to Storybook tab — buttons have already repainted. |
+| Time | What                                                                      |
+| ---- | ------------------------------------------------------------------------- |
+| 0:00 | "Designer changes Figma. Developer doesn't even need to be in the room."  |
+| 0:30 | Show the Figma plugin button. Click. Download the JSON.                   |
+| 1:00 | `cp` the JSON into the project.                                           |
+| 1:15 | Cut to Storybook tab — buttons have already repainted.                    |
 | 1:30 | Change a different primitive (e.g. `space/4`). Show how spacing cascades. |
-| 2:30 | Open well-button.ts — empty class body. Explain Track 1. |
-| 3:30 | Open the JSDoc. Explain CEM inheritance limit + JSDoc-as-data-layer. |
-| 4:30 | Q&A. |
+| 2:30 | Open well-button.ts — empty class body. Explain Track 1.                  |
+| 3:30 | Open the JSDoc. Explain CEM inheritance limit + JSDoc-as-data-layer.      |
+| 4:30 | Q&A.                                                                      |
 
 ---
 

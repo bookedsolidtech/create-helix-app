@@ -7,3 +7,6 @@ pnpm-lock.yaml
 .mcp.json
 .rea/
 .claude/
+# Bug-tracker drafts — handwritten markdown by multiple authors (us + Helix-team triage).
+# Formatting drift is expected and harmless; mechanical reformat would muddy the human-authored content.
+.helix-issues/
