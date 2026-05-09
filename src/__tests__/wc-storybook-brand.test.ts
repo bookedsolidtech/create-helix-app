@@ -665,3 +665,166 @@ describe('wc-storybook Phase 3c — reference {ds}-button.mdx', () => {
     expect(src).toContain('Sign in to your workspace');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Cover + Overview + foundations + patterns narrative IA
+// ---------------------------------------------------------------------------
+
+describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
+  it('emits Cover.mdx with the correct Meta title', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-cover' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('<Meta title="Cover" />');
+    // Cover surfaces the consumer's dsTitle in the H1.
+    expect(src).toContain('# Aurora');
+  });
+
+  it('Cover.mdx surfaces brandTagline as a > blockquote when provided', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase4-cover-tagline',
+      brandTagline: 'Calm finance for everyone.',
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('> _Calm finance for everyone._');
+  });
+
+  it('Cover.mdx renders brandVerticals as chip row when provided', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase4-cover-verticals',
+      brandVerticals: ['fintech', 'wellness'],
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('>fintech<');
+    expect(src).toContain('>wellness<');
+  });
+
+  it('Cover.mdx omits the chip row when brandVerticals is empty (single-brand mode)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-cover-single' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    // No padding-chip span pattern when verticals is empty/undefined.
+    expect(src).not.toContain('borderRadius: \'999px\'');
+  });
+
+  it('emits Overview.mdx explaining the three-tier cascade', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-overview' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Overview.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('<Meta title="Overview" />');
+    // The 3 tiers: primitive, semantic, component.
+    expect(src).toContain('Primitive ramps');
+    expect(src).toContain('Semantic aliases');
+    expect(src).toContain('Component overrides');
+  });
+
+  it('emits all 7 foundations MDX pages with correct titles', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-foundations' });
+    await scaffoldProject(opts);
+    const expected: Array<[string, string]> = [
+      ['Tokens.mdx', 'Foundations/Tokens'],
+      ['Color.mdx', 'Foundations/Color'],
+      ['Typography.mdx', 'Foundations/Typography'],
+      ['Spacing.mdx', 'Foundations/Spacing'],
+      ['Layout.mdx', 'Foundations/Layout'],
+      ['Brand.mdx', 'Foundations/Brand'],
+      ['Accessibility.mdx', 'Foundations/Accessibility'],
+    ];
+    for (const [file, title] of expected) {
+      const fp = path.join(opts.directory, 'src', 'stories', 'foundations', file);
+      expect(await fs.pathExists(fp)).toBe(true);
+      const src = await fs.readFile(fp, 'utf-8');
+      expect(src).toContain(`<Meta title="${title}" />`);
+    }
+  });
+
+  it('Brand.mdx surfaces the consumer tokenPrefix in override examples', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-brand-prefix' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'foundations', 'Brand.mdx'),
+      'utf-8',
+    );
+    // tokenPrefix='--ar' should appear in the CSS override example.
+    expect(src).toContain('--ar-color-primary');
+  });
+
+  it('Tokens.mdx surfaces the consumer tokenPrefix in the cascade explainer', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-tokens-prefix' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'foundations', 'Tokens.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('--ar-color-primary');
+    // Cascade still references --hx-* primitives + semantics
+    expect(src).toContain('--hx-color-primary-600');
+    expect(src).toContain('--hx-color-action-primary-bg');
+  });
+
+  it('emits patterns/Index.mdx with the dsName-aware suggestions', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-patterns' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'patterns', 'Index.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('<Meta title="Patterns" />');
+    // dsName='aurora' should surface in the Forms suggestion.
+    expect(src).toContain('aurora-button');
+  });
+
+  it('Cover + Overview + 7 foundations + patterns/Index = 10 narrative MDX files', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-count' });
+    await scaffoldProject(opts);
+    const stories = path.join(opts.directory, 'src', 'stories');
+    const allMdx = [
+      path.join(stories, 'Cover.mdx'),
+      path.join(stories, 'Overview.mdx'),
+      path.join(stories, 'foundations', 'Tokens.mdx'),
+      path.join(stories, 'foundations', 'Color.mdx'),
+      path.join(stories, 'foundations', 'Typography.mdx'),
+      path.join(stories, 'foundations', 'Spacing.mdx'),
+      path.join(stories, 'foundations', 'Layout.mdx'),
+      path.join(stories, 'foundations', 'Brand.mdx'),
+      path.join(stories, 'foundations', 'Accessibility.mdx'),
+      path.join(stories, 'patterns', 'Index.mdx'),
+    ];
+    for (const fp of allMdx) {
+      expect(await fs.pathExists(fp)).toBe(true);
+    }
+  });
+
+  it('all narrative MDX uses live-bound tokens via var(${prefix}-...)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-live-tokens' });
+    await scaffoldProject(opts);
+    // At least Cover and Brand must use the consumer's tokenPrefix in CSS.
+    const cover = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    expect(cover).toContain('var(--ar-color-');
+    const brand = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'foundations', 'Brand.mdx'),
+      'utf-8',
+    );
+    expect(brand).toContain('--ar-color-primary');
+  });
+});
