@@ -8130,6 +8130,11 @@ const config: StorybookConfig = {
     getAbsolutePath('@storybook/addon-docs'),
     getAbsolutePath('@storybook/addon-vitest'),
     getAbsolutePath('@storybook/addon-themes'),
+    // 2026-05-09 Phase 2 — addon parity with upstream Helix storybook.
+    getAbsolutePath('@storybook/addon-links'),
+    getAbsolutePath('@storybook/addon-designs'),
+    getAbsolutePath('storybook-addon-pseudo-states'),
+    getAbsolutePath('@chromatic-com/storybook'),
   ],
   framework: {
     name: getAbsolutePath('@storybook/web-components-vite'),
@@ -9068,10 +9073,101 @@ export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
 `,
   );
 
+  // ── helix.storybook.config.ts ────────────────────────────────────────────
+  // Consumer-facing knob for hiding upstream Helix components, docs pages,
+  // brand verticals, AAA scenes, and narrative pages. Phase 2 ships the
+  // config shape; Phase 3 (AAA scenes) and Phase 4 (narrative IA) consume
+  // it. Lives at consumer's project root so designers can edit it without
+  // diving into .storybook/.
+  await safeWriteFile(
+    path.join(options.directory, 'helix.storybook.config.ts'),
+    `/**
+ * helix.storybook.config.ts
+ *
+ * Consumer-facing controls for the wc-storybook factory's generated
+ * Storybook surface. Edit this file (do NOT edit \`scripts/generate-
+ * catalog.ts\` or files under \`src/stories/catalog/\`) to:
+ *
+ *   - hide upstream Helix components from the generated catalog when
+ *     you've extended them locally (e.g. omit hx-button after adding
+ *     ${ds}-button)
+ *   - opt out of one or more default docs pages
+ *   - constrain the brand toolbar dropdown to a subset of verticals
+ *   - disable the auto-injected AAA status card
+ *   - hide narrative pages (Cover, Overview, Patterns) from the IA
+ *
+ * Each list accepts \`'all'\` (everything in scope), an explicit allow-list
+ * array, or both forms with \`exclude\` overrides. Empty arrays are valid
+ * and mean "nothing in scope" — distinct from omitting the field.
+ */
+
+/** Built-in foundations docs page identifiers (Phase 4 IA). */
+export type DocsPageId =
+  | 'tokens'
+  | 'color'
+  | 'typography'
+  | 'spacing'
+  | 'layout'
+  | 'brand'
+  | 'accessibility';
+
+/** Brand verticals supplied at scaffold time (\`brandVerticals\` prompt). */
+export type BrandKey = string;
+
+/** Narrative shell pages that frame the editorial flow (Phase 4 IA). */
+export type NarrativePageId = 'cover' | 'overview' | 'patterns';
+
+export interface HelixStorybookConfig {
+  /** Catalog filter. Drives \`scripts/generate-catalog.ts\`. */
+  components: {
+    include: 'all' | readonly string[];
+    exclude: readonly string[];
+  };
+  /** Foundations docs filter. Drives \`src/stories/foundations/*.mdx\` emission. */
+  docs: {
+    include: 'all' | readonly DocsPageId[];
+    exclude: readonly DocsPageId[];
+  };
+  /** Brand toolbar filter. Empty include → single-brand mode (suppressed). */
+  brand: {
+    include: 'all' | readonly BrandKey[];
+    exclude: readonly BrandKey[];
+  };
+  /** AAA conformance scaffolding (Phase 3 — A11yStatusCard auto-inject). */
+  aaa: {
+    enabled: boolean;
+  };
+  /** Editorial narrative shell. Drives Cover / Overview / Patterns. */
+  narrative: {
+    include: 'all' | readonly NarrativePageId[];
+    exclude: readonly NarrativePageId[];
+  };
+}
+
+/**
+ * Default configuration: everything visible. Override per-key as your
+ * design system grows beyond Helix's defaults.
+ */
+const config: HelixStorybookConfig = {
+  components: { include: 'all', exclude: [] },
+  docs: { include: 'all', exclude: [] },
+  brand: { include: 'all', exclude: [] },
+  aaa: { enabled: true },
+  narrative: { include: 'all', exclude: [] },
+};
+
+export default config;
+`,
+  );
+
   // ── scripts/generate-catalog.ts ──────────────────────────────────────────
   // Walks node_modules/@helixui/library/custom-elements.json and emits one
   // .stories.ts file per non-excluded hx-* component into src/stories/catalog/.
   // Run manually or via the \`pnpm cem:catalog\` script wired in package.json.
+  //
+  // Phase 2 — respects helix.storybook.config.ts \`components.include / exclude\`.
+  // The HIPAA-adjacency filter still runs unconditionally (Helix-team policy);
+  // consumer config narrows the post-HIPAA list further.
 
   await safeEnsureDir(path.join(options.directory, 'scripts'));
   await safeWriteFile(
@@ -9083,6 +9179,13 @@ export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
  * excluded hx-* declaration under src/stories/catalog/<tier>/.
  *
  * Invoke with: pnpm cem:catalog
+ *
+ * Filters (applied in order):
+ *   1. HIPAA-adjacency — non-overridable. Removes patient-identifiable
+ *      and healthcare-vertical-locked components. Helix-team policy.
+ *   2. \`helix.storybook.config.ts\` \`components.include / components.exclude\`
+ *      — consumer-facing knob. \`include: 'all'\` is the default. Specify
+ *      an array to allow-list, then drop entries via \`exclude\`.
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -9096,11 +9199,21 @@ import {
   type Cem,
   type CemDeclaration,
 } from '../src/stories/_catalog-helpers.ts';
+import helixConfig, { type HelixStorybookConfig } from '../helix.storybook.config.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const CEM_PATH = join(ROOT, 'node_modules', '@helixui', 'library', 'custom-elements.json');
 const OUT_DIR = join(ROOT, 'src', 'stories', 'catalog');
+
+function shouldIncludeTag(
+  tag: string,
+  components: HelixStorybookConfig['components'],
+): boolean {
+  if (components.exclude.includes(tag)) return false;
+  if (components.include === 'all') return true;
+  return components.include.includes(tag);
+}
 
 function pascal(s: string): string {
   return s
@@ -9166,6 +9279,7 @@ async function main() {
   const cem = JSON.parse(raw) as Cem;
   const decls = walkCem(cem)
     .filter((d) => d.tagName && !isHipaaAdjacent(d.tagName))
+    .filter((d) => shouldIncludeTag(d.tagName!, helixConfig.components))
     .sort((a, b) => a.tagName!.localeCompare(b.tagName!));
 
   // Clean + recreate output directory

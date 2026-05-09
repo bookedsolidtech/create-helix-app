@@ -278,6 +278,14 @@ export const TEMPLATES: TemplateConfig[] = [
       '@storybook/addon-docs': '^10.2.8',
       '@storybook/addon-themes': '^10.2.8',
       '@storybook/addon-vitest': '^10.2.8',
+      // 2026-05-09 Phase 2 — addon parity with upstream Helix storybook.
+      // Versions sourced from helix/apps/storybook/package.json. Chromatic
+      // addon version intentionally tracks the @chromatic-com major (not
+      // Storybook's), per their release cadence.
+      '@chromatic-com/storybook': '^5.1.2',
+      '@storybook/addon-designs': '^11.1.3',
+      '@storybook/addon-links': '^10.2.8',
+      'storybook-addon-pseudo-states': '^10.2.8',
       '@custom-elements-manifest/analyzer': '^0.10.0',
       concurrently: '^9.1.0',
       dotenv: '^16.4.5',

@@ -119,3 +119,160 @@ describe('wc-storybook brand fields — ProjectOptions threading', () => {
     expect(await fs.pathExists(path.join(opts.directory, 'package.json'))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Storybook config knob + addon sync
+// ---------------------------------------------------------------------------
+
+describe('wc-storybook Phase 2 — addon sync', () => {
+  it('main.ts wires all 4 new addons to match upstream Helix storybook', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-addons' });
+    await scaffoldProject(opts);
+    const main = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'main.ts'),
+      'utf-8',
+    );
+    expect(main).toContain("getAbsolutePath('@storybook/addon-links')");
+    expect(main).toContain("getAbsolutePath('@storybook/addon-designs')");
+    expect(main).toContain("getAbsolutePath('storybook-addon-pseudo-states')");
+    expect(main).toContain("getAbsolutePath('@chromatic-com/storybook')");
+    // And keeps the existing four
+    expect(main).toContain("getAbsolutePath('@storybook/addon-a11y')");
+    expect(main).toContain("getAbsolutePath('@storybook/addon-docs')");
+    expect(main).toContain("getAbsolutePath('@storybook/addon-vitest')");
+    expect(main).toContain("getAbsolutePath('@storybook/addon-themes')");
+  });
+
+  it('package.json declares all 4 new addons in devDependencies', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-deps' });
+    await scaffoldProject(opts);
+    const pkg = JSON.parse(
+      await fs.readFile(path.join(opts.directory, 'package.json'), 'utf-8'),
+    ) as { devDependencies?: Record<string, string> };
+    const dev = pkg.devDependencies ?? {};
+    expect(dev['@chromatic-com/storybook']).toBeDefined();
+    expect(dev['@storybook/addon-designs']).toBeDefined();
+    expect(dev['@storybook/addon-links']).toBeDefined();
+    expect(dev['storybook-addon-pseudo-states']).toBeDefined();
+  });
+});
+
+describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
+  it('emits helix.storybook.config.ts at consumer root', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-config-emit' });
+    await scaffoldProject(opts);
+    expect(
+      await fs.pathExists(path.join(opts.directory, 'helix.storybook.config.ts')),
+    ).toBe(true);
+  });
+
+  it('config exports HelixStorybookConfig type with all 5 knob keys', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-config-shape' });
+    await scaffoldProject(opts);
+    const cfg = await fs.readFile(
+      path.join(opts.directory, 'helix.storybook.config.ts'),
+      'utf-8',
+    );
+    expect(cfg).toContain('export interface HelixStorybookConfig');
+    expect(cfg).toContain('export type DocsPageId');
+    expect(cfg).toContain('export type BrandKey');
+    expect(cfg).toContain('export type NarrativePageId');
+    // The 5 top-level keys, in expected order
+    for (const key of ['components', 'docs', 'brand', 'aaa', 'narrative']) {
+      expect(cfg).toContain(`${key}:`);
+    }
+  });
+
+  it('config DocsPageId union covers all 7 foundations pages', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-config-docs' });
+    await scaffoldProject(opts);
+    const cfg = await fs.readFile(
+      path.join(opts.directory, 'helix.storybook.config.ts'),
+      'utf-8',
+    );
+    for (const id of [
+      "'tokens'",
+      "'color'",
+      "'typography'",
+      "'spacing'",
+      "'layout'",
+      "'brand'",
+      "'accessibility'",
+    ]) {
+      expect(cfg).toContain(id);
+    }
+  });
+
+  it('config NarrativePageId union covers cover/overview/patterns', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-config-narrative' });
+    await scaffoldProject(opts);
+    const cfg = await fs.readFile(
+      path.join(opts.directory, 'helix.storybook.config.ts'),
+      'utf-8',
+    );
+    for (const id of ["'cover'", "'overview'", "'patterns'"]) {
+      expect(cfg).toContain(id);
+    }
+  });
+
+  it('default config is "everything visible" (include: all, exclude: [])', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-config-default' });
+    await scaffoldProject(opts);
+    const cfg = await fs.readFile(
+      path.join(opts.directory, 'helix.storybook.config.ts'),
+      'utf-8',
+    );
+    // The default config object has `include: 'all'` for every knob that
+    // takes an array, and `enabled: true` for AAA. Sanity check via raw
+    // string match — the config is generated, not parsed.
+    expect(cfg).toMatch(/components:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
+    expect(cfg).toMatch(/docs:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
+    expect(cfg).toMatch(/brand:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
+    expect(cfg).toMatch(/aaa:\s*{\s*enabled:\s*true\s*}/);
+    expect(cfg).toMatch(/narrative:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
+  });
+});
+
+describe('wc-storybook Phase 2 — generate-catalog respects config', () => {
+  it('catalog script imports the consumer helix.storybook.config.ts', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-catalog-import' });
+    await scaffoldProject(opts);
+    const script = await fs.readFile(
+      path.join(opts.directory, 'scripts', 'generate-catalog.ts'),
+      'utf-8',
+    );
+    expect(script).toContain(
+      "import helixConfig, { type HelixStorybookConfig } from '../helix.storybook.config.ts'",
+    );
+  });
+
+  it('catalog script applies shouldIncludeTag against config.components', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-catalog-filter' });
+    await scaffoldProject(opts);
+    const script = await fs.readFile(
+      path.join(opts.directory, 'scripts', 'generate-catalog.ts'),
+      'utf-8',
+    );
+    expect(script).toContain('function shouldIncludeTag');
+    expect(script).toContain('shouldIncludeTag(d.tagName!, helixConfig.components)');
+  });
+
+  it('HIPAA filter still runs unconditionally before config filter', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-catalog-hipaa' });
+    await scaffoldProject(opts);
+    const script = await fs.readFile(
+      path.join(opts.directory, 'scripts', 'generate-catalog.ts'),
+      'utf-8',
+    );
+    // HIPAA filter is applied via .filter() chain BEFORE the config filter
+    // at the actual CALL site. Order matters — Helix-team policy is non-
+    // overridable. Match on the call expression (not the function defn,
+    // which appears earlier).
+    const hipaaCallIdx = script.indexOf('!isHipaaAdjacent(d.tagName)');
+    const configCallIdx = script.indexOf(
+      'shouldIncludeTag(d.tagName!, helixConfig.components)',
+    );
+    expect(hipaaCallIdx).toBeGreaterThan(0);
+    expect(configCallIdx).toBeGreaterThan(hipaaCallIdx);
+  });
+});
