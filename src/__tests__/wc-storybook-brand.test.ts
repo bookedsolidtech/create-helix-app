@@ -718,7 +718,7 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
       'utf-8',
     );
     // No padding-chip span pattern when verticals is empty/undefined.
-    expect(src).not.toContain('borderRadius: \'999px\'');
+    expect(src).not.toContain("borderRadius: '999px'");
   });
 
   it('emits Overview.mdx explaining the three-tier cascade', async () => {
