@@ -9073,6 +9073,182 @@ export const __catalogTagNames: string[] = declarations.map((d) => d.tagName!);
 `,
   );
 
+  // ── src/stories/_components/*.tsx ─────────────────────────────────────────
+  // Phase 3a — port two upstream-Helix docs-surface React components that are
+  // CEM-free (depend only on props). These pair with each per-component MDX
+  // hero scene (Phase 4) so the consumer's docs reads as a brand experience
+  // rather than a Storybook autodocs default.
+  //
+  // Sourced verbatim from helix/apps/storybook/stories/_components/. Both
+  // helix and create-helix-app are MIT under the same copyright holder
+  // (Clarity House LLC) so the port is licence-clean.
+  //
+  // CEM-coupled siblings (APGPatternCard, A11yStatusCard, HelixDocsPage) +
+  // the manager/preview FOUC-prevention rewrite + the 3 docs CSS files land
+  // in Phase 3b — they need the brand-toolbar globalType wiring to read
+  // useful, and the manager-theme.ts port carries the most escaping risk.
+  // Splitting the React port from the manager/preview infra keeps each
+  // commit a sealed, revertable deliverable per the principal-engineer
+  // review.
+
+  const componentsDocsDir = path.join(storiesDir, '_components');
+  await safeEnsureDir(componentsDocsDir);
+
+  // ── ConsumerObligations.tsx ──────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(componentsDocsDir, 'ConsumerObligations.tsx'),
+    `/**
+ * ConsumerObligations — callout listing the consumer-side responsibilities
+ * a component cert depends on.
+ *
+ * The AAA cert for a component is conditional: even when every measured
+ * row passes, the consumer can still ship a non-conformant page if they
+ * (a) strip the focus ring with author CSS, (b) omit an accessible name
+ * on an icon-only instance, or (c) embed the component on a page that
+ * itself fails 2.4.2 / 3.1.1 / etc.
+ *
+ * Renders a strongly-themed warning callout with a list of obligations
+ * the docs page author hand-curates. NOT auto-derived — the obligations
+ * reflect editorial judgement and live in story source so they evolve
+ * with the component contract.
+ */
+import * as React from 'react';
+
+export interface ConsumerObligationsProps {
+  /** Component tag (display only — the obligations are passed via children). */
+  tag?: string;
+  /** Heading override. */
+  heading?: string;
+  /** One bullet per obligation. Plain string or rich React node. */
+  obligations: ReadonlyArray<string | React.ReactNode>;
+}
+
+export function ConsumerObligations({
+  tag,
+  heading = 'Consumer obligations',
+  obligations,
+}: ConsumerObligationsProps): React.ReactElement {
+  return (
+    <aside
+      className="hx-docs hx-consumer-obligations"
+      role="note"
+      aria-label={tag ? \`Consumer obligations for \${tag}\` : 'Consumer obligations'}
+    >
+      <header className="hx-consumer-obligations-header">
+        <span className="hx-consumer-obligations-icon" aria-hidden="true">
+          ⚠
+        </span>
+        <h3 className="hx-consumer-obligations-title">{heading}</h3>
+      </header>
+      <p className="hx-consumer-obligations-intro">
+        For the AAA verdicts above to hold in real-world deployment, the consumer{' '}
+        <strong>must</strong>:
+      </p>
+      <ul className="hx-consumer-obligations-list">
+        {obligations.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+`,
+  );
+
+  // ── InlineAuditPanel.tsx ─────────────────────────────────────────────────
+
+  await safeWriteFile(
+    path.join(componentsDocsDir, 'InlineAuditPanel.tsx'),
+    `/**
+ * InlineAuditPanel — embed an AAA-AUDIT.md inline on a component docs
+ * page, collapsed by default.
+ *
+ * Consumer pattern (in MDX):
+ *
+ *   import audit from './AAA-AUDIT.md?raw';
+ *   <InlineAuditPanel tag="${ds}-button" markdown={audit} />
+ *
+ * Vite resolves \`?raw\` to the file's text contents at build time, so the
+ * audit ships in the docs bundle and is always synchronized with the
+ * source-of-truth markdown — no extra build step, no drift.
+ *
+ * Rendering: we intentionally do NOT pull a markdown renderer. The audit
+ * file is a long evidence document; rendering it as preformatted text
+ * inside a styled wrapper preserves table alignment, code blocks, and
+ * the heading hierarchy without dragging a markdown parser into the
+ * docs bundle. A "View on GitHub" link in the footer surfaces the
+ * fully-rendered version for consumers who want richer formatting.
+ *
+ * Pass \`auditPath\` and \`githubBlobBase\` to point the link at YOUR
+ * repository instead of upstream Helix.
+ */
+import * as React from 'react';
+
+export interface InlineAuditPanelProps {
+  /** Component tag (display only). */
+  tag: string;
+  /** Raw AAA-AUDIT.md contents — pass via \`?raw\` import. */
+  markdown: string;
+  /**
+   * Repo path of the audit file (e.g. "src/components/${ds}-button/AAA-AUDIT.md").
+   * Used to construct the "View on GitHub" link. Defaults to the
+   * conventional \`src/components/<tag>/AAA-AUDIT.md\` path.
+   */
+  auditPath?: string;
+  /**
+   * Base URL for "View on GitHub" link construction. Defaults to the
+   * upstream Helix repo; override to point at your own.
+   */
+  githubBlobBase?: string;
+  /** Heading override. */
+  heading?: string;
+  /** When true, the panel renders open by default. */
+  defaultOpen?: boolean;
+}
+
+export function InlineAuditPanel({
+  tag,
+  markdown,
+  auditPath,
+  githubBlobBase = 'https://github.com/bookedsolidtech/helix/blob/main/packages/hx-library/',
+  heading = 'Full AAA audit (inline)',
+  defaultOpen = false,
+}: InlineAuditPanelProps): React.ReactElement {
+  const path = auditPath ?? \`src/components/\${tag}/AAA-AUDIT.md\`;
+  const githubUrl = \`\${githubBlobBase}\${path}\`;
+  return (
+    <section className="hx-docs hx-inline-audit" aria-label={\`Inline AAA audit for \${tag}\`}>
+      <details className="hx-inline-audit-details" open={defaultOpen}>
+        <summary className="hx-inline-audit-summary">
+          <span className="hx-inline-audit-icon" aria-hidden="true">
+            📄
+          </span>
+          <span className="hx-inline-audit-heading">{heading}</span>
+          <span className="hx-inline-audit-hint">click to expand</span>
+        </summary>
+        <div className="hx-inline-audit-body">
+          <pre className="hx-inline-audit-pre">
+            <code>{markdown}</code>
+          </pre>
+          <footer className="hx-inline-audit-footer">
+            <a
+              className="hx-inline-audit-github-link"
+              href={githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View formatted on GitHub →
+            </a>
+          </footer>
+        </div>
+      </details>
+    </section>
+  );
+}
+`,
+  );
+
   // ── helix.storybook.config.ts ────────────────────────────────────────────
   // Consumer-facing knob for hiding upstream Helix components, docs pages,
   // brand verticals, AAA scenes, and narrative pages. Phase 2 ships the

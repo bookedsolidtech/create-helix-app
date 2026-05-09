@@ -128,10 +128,7 @@ describe('wc-storybook Phase 2 — addon sync', () => {
   it('main.ts wires all 4 new addons to match upstream Helix storybook', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-addons' });
     await scaffoldProject(opts);
-    const main = await fs.readFile(
-      path.join(opts.directory, '.storybook', 'main.ts'),
-      'utf-8',
-    );
+    const main = await fs.readFile(path.join(opts.directory, '.storybook', 'main.ts'), 'utf-8');
     expect(main).toContain("getAbsolutePath('@storybook/addon-links')");
     expect(main).toContain("getAbsolutePath('@storybook/addon-designs')");
     expect(main).toContain("getAbsolutePath('storybook-addon-pseudo-states')");
@@ -161,18 +158,13 @@ describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
   it('emits helix.storybook.config.ts at consumer root', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-config-emit' });
     await scaffoldProject(opts);
-    expect(
-      await fs.pathExists(path.join(opts.directory, 'helix.storybook.config.ts')),
-    ).toBe(true);
+    expect(await fs.pathExists(path.join(opts.directory, 'helix.storybook.config.ts'))).toBe(true);
   });
 
   it('config exports HelixStorybookConfig type with all 5 knob keys', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-config-shape' });
     await scaffoldProject(opts);
-    const cfg = await fs.readFile(
-      path.join(opts.directory, 'helix.storybook.config.ts'),
-      'utf-8',
-    );
+    const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
     expect(cfg).toContain('export interface HelixStorybookConfig');
     expect(cfg).toContain('export type DocsPageId');
     expect(cfg).toContain('export type BrandKey');
@@ -186,10 +178,7 @@ describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
   it('config DocsPageId union covers all 7 foundations pages', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-config-docs' });
     await scaffoldProject(opts);
-    const cfg = await fs.readFile(
-      path.join(opts.directory, 'helix.storybook.config.ts'),
-      'utf-8',
-    );
+    const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
     for (const id of [
       "'tokens'",
       "'color'",
@@ -206,10 +195,7 @@ describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
   it('config NarrativePageId union covers cover/overview/patterns', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-config-narrative' });
     await scaffoldProject(opts);
-    const cfg = await fs.readFile(
-      path.join(opts.directory, 'helix.storybook.config.ts'),
-      'utf-8',
-    );
+    const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
     for (const id of ["'cover'", "'overview'", "'patterns'"]) {
       expect(cfg).toContain(id);
     }
@@ -218,10 +204,7 @@ describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
   it('default config is "everything visible" (include: all, exclude: [])', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-config-default' });
     await scaffoldProject(opts);
-    const cfg = await fs.readFile(
-      path.join(opts.directory, 'helix.storybook.config.ts'),
-      'utf-8',
-    );
+    const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
     // The default config object has `include: 'all'` for every knob that
     // takes an array, and `enabled: true` for AAA. Sanity check via raw
     // string match — the config is generated, not parsed.
@@ -269,10 +252,89 @@ describe('wc-storybook Phase 2 — generate-catalog respects config', () => {
     // overridable. Match on the call expression (not the function defn,
     // which appears earlier).
     const hipaaCallIdx = script.indexOf('!isHipaaAdjacent(d.tagName)');
-    const configCallIdx = script.indexOf(
-      'shouldIncludeTag(d.tagName!, helixConfig.components)',
-    );
+    const configCallIdx = script.indexOf('shouldIncludeTag(d.tagName!, helixConfig.components)');
     expect(hipaaCallIdx).toBeGreaterThan(0);
     expect(configCallIdx).toBeGreaterThan(hipaaCallIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3a — Docs-surface React components (CEM-free subset)
+// ---------------------------------------------------------------------------
+
+describe('wc-storybook Phase 3a — docs React components', () => {
+  it('emits ConsumerObligations.tsx with the documented prop shape', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3a-consumer-oblig' });
+    await scaffoldProject(opts);
+    const file = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      '_components',
+      'ConsumerObligations.tsx',
+    );
+    expect(await fs.pathExists(file)).toBe(true);
+    const src = await fs.readFile(file, 'utf-8');
+    expect(src).toContain('export interface ConsumerObligationsProps');
+    expect(src).toContain('export function ConsumerObligations(');
+    expect(src).toContain('obligations: ReadonlyArray<string | React.ReactNode>');
+    // Reads from props, not from CEM — must NOT import customElements json.
+    expect(src).not.toContain('@helixui/library/custom-elements.json');
+    // Sanity: no unescaped backtick-content broke into the emitted source.
+    expect(src).toContain("import * as React from 'react';");
+  });
+
+  it('emits InlineAuditPanel.tsx with consumer-overridable github base URL', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3a-inline-audit' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, 'src', 'stories', '_components', 'InlineAuditPanel.tsx');
+    expect(await fs.pathExists(file)).toBe(true);
+    const src = await fs.readFile(file, 'utf-8');
+    expect(src).toContain('export interface InlineAuditPanelProps');
+    expect(src).toContain('export function InlineAuditPanel(');
+    // The githubBlobBase prop lets a consumer point at THEIR repo instead
+    // of bookedsolidtech/helix — critical for downstream design systems.
+    expect(src).toContain('githubBlobBase?:');
+    // Default still points at upstream Helix (consumer can override).
+    expect(src).toContain(
+      'https://github.com/bookedsolidtech/helix/blob/main/packages/hx-library/',
+    );
+    expect(src).not.toContain('@helixui/library/custom-elements.json');
+  });
+
+  it('both Phase 3a emitters land in src/stories/_components/ together', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3a-both' });
+    await scaffoldProject(opts);
+    const componentsDir = path.join(opts.directory, 'src', 'stories', '_components');
+    const entries = await fs.readdir(componentsDir);
+    expect(entries).toContain('ConsumerObligations.tsx');
+    expect(entries).toContain('InlineAuditPanel.tsx');
+  });
+
+  it('emitted source preserves backticks + ${} interpolation in the .tsx output', async () => {
+    // The emitter uses template literals with manually escaped \${} and
+    // \\\` sequences. Regression guard: the EMITTED file must contain
+    // working `${...}` template-literal expressions in its JSX, not
+    // double-escaped or stripped `\${...}` artifacts. Without this guard,
+    // an editor pass that "fixes" the escaping in scaffold.ts could ship
+    // a broken .tsx file that compiles in our scaffolder but fails in
+    // the consumer's TypeScript build.
+    const opts = makeWcStorybookOptions({ name: 'phase3a-escaping' });
+    await scaffoldProject(opts);
+    const consumerOblig = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', '_components', 'ConsumerObligations.tsx'),
+      'utf-8',
+    );
+    // Should contain a valid ${tag} interpolation, NOT a literal \${tag}
+    expect(consumerOblig).toContain('`Consumer obligations for ${tag}`');
+    expect(consumerOblig).not.toContain('\\${tag}');
+
+    const audit = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', '_components', 'InlineAuditPanel.tsx'),
+      'utf-8',
+    );
+    // Two-segment ${} interpolation must reach the consumer un-mangled.
+    expect(audit).toContain('`${githubBlobBase}${path}`');
+    expect(audit).not.toContain('\\${githubBlobBase}');
   });
 });
