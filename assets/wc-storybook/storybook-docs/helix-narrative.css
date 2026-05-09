@@ -1,0 +1,191 @@
+/**
+ * helix-narrative.css
+ *
+ * Class library for the wc-storybook factory's narrative MDX pages
+ * (Cover, Overview, Foundations, Patterns) and per-component
+ * conformance MDX. Every selector binds through `var(--hx-color-*)`
+ * tokens so the consumer's tokens.css (and future brand overrides via
+ * --{prefix}-*) drive the visual without per-page edits.
+ *
+ * Replaces the previous inline `style={{...}}` pattern across the
+ * Phase 4 narrative MDX. Override at the consumer level by re-defining
+ * the same `--hx-color-*` token or adding a sibling class.
+ */
+
+/* ─── Grid layouts for narrative card sets ──────────────────────────── */
+
+.hx-narrative-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.hx-narrative-grid--single {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.hx-narrative-grid--family {
+  /* Color-family grid — wider min for the four-family color foundation. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/* ─── Cards ─────────────────────────────────────────────────────────── */
+
+.hx-narrative-card {
+  padding: 16px;
+  border: 1px solid var(--hx-color-border-subtle, #dee2e6);
+  border-radius: 12px;
+  background: var(--hx-color-surface-default, #ffffff);
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-card--raised {
+  background: var(--hx-color-surface-raised, #f8f9fa);
+}
+
+.hx-narrative-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-card-title--lg {
+  font-size: 18px;
+}
+
+.hx-narrative-card-body {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--hx-color-text-muted, #6c757d);
+}
+
+.hx-narrative-card-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hx-color-text-muted, #6c757d);
+}
+
+/* ─── Brand verticals chip row ──────────────────────────────────────── */
+
+.hx-narrative-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.hx-narrative-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--hx-color-surface-raised, #f1f3f5);
+  color: var(--hx-color-text-primary, #0d1825);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Tables ────────────────────────────────────────────────────────── */
+
+.hx-narrative-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-table thead tr {
+  border-bottom: 1px solid var(--hx-color-border-subtle, #dee2e6);
+  text-align: left;
+}
+
+.hx-narrative-table th,
+.hx-narrative-table td {
+  padding: 8px 12px;
+}
+
+.hx-narrative-table th {
+  font-weight: 600;
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-table tbody tr {
+  border-bottom: 1px solid var(--hx-color-border-subtle, #f1f3f5);
+}
+
+.hx-narrative-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.hx-narrative-table code {
+  font-family: ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+  color: var(--hx-color-text-strong, var(--hx-color-text-primary, #0d1825));
+}
+
+/* ─── Hero scenes (per-component conformance MDX) ───────────────────── */
+
+.hx-narrative-hero {
+  max-width: 440px;
+  padding: 24px;
+  border: 1px solid var(--hx-color-border-default, #dee2e6);
+  border-radius: 12px;
+  background: var(--hx-color-surface-default, #ffffff);
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-hero h3 {
+  margin: 0 0 12px;
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-hero-intro {
+  margin: 0 0 16px;
+  color: var(--hx-color-text-muted, #6c757d);
+  line-height: 1.5;
+}
+
+.hx-narrative-hero-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.hx-narrative-hero-field span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-hero-field input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--hx-color-border-default, #dee2e6);
+  border-radius: 6px;
+  background: var(--hx-color-surface-default, #ffffff);
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-hero-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hx-narrative-hero-actions > *:first-child {
+  flex: 1 1 auto;
+}

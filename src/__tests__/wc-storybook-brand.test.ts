@@ -359,10 +359,13 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
     expect(src).toContain('if (!decl) return null');
   });
 
-  it('emits A11yStatusCard.tsx under .storybook/docs/', async () => {
+  it('emits A11yStatusCard.tsx under src/stories/_components/ (Phase 5 fix — Vite resolution)', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase3b-a11y-status' });
     await scaffoldProject(opts);
-    const file = path.join(opts.directory, '.storybook', 'docs', 'A11yStatusCard.tsx');
+    // Phase 5 — moved out of `.storybook/docs/` because Vite's
+    // import-analysis can't resolve into `.storybook/` from src/ MDX.
+    // See test 'aurora-button.mdx imports A11yStatusCard via _components/'.
+    const file = path.join(opts.directory, 'src', 'stories', '_components', 'A11yStatusCard.tsx');
     expect(await fs.pathExists(file)).toBe(true);
     const src = await fs.readFile(file, 'utf-8');
     expect(src).toContain('export interface A11yStatusCardProps');
@@ -394,7 +397,9 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
     expect(await fs.pathExists(file)).toBe(true);
     const src = await fs.readFile(file, 'utf-8');
     expect(src).toContain('export function HelixDocsPage');
-    expect(src).toContain("from './A11yStatusCard'");
+    // Phase 5 fix: import points across to src/stories/_components/ since
+    // A11yStatusCard moved out of .storybook/.
+    expect(src).toContain("from '../../src/stories/_components/A11yStatusCard'");
     expect(src).toContain('<A11yStatusCard');
     // Tag regex must match consumer-extended components, not just hx-*.
     expect(src).toContain('/^[a-z][a-z0-9]*-[a-z0-9-]+$/');
@@ -414,7 +419,7 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
     expect(apg).not.toContain('\\${tag}');
 
     const a11y = await fs.readFile(
-      path.join(opts.directory, '.storybook', 'docs', 'A11yStatusCard.tsx'),
+      path.join(opts.directory, 'src', 'stories', '_components', 'A11yStatusCard.tsx'),
       'utf-8',
     );
     expect(a11y).toContain('`${REPO_BLOB_BASE}${aaa.auditUrl}`');
@@ -616,7 +621,8 @@ describe('wc-storybook Phase 3c — reference {ds}-button.mdx', () => {
     );
     expect(src).toContain("from '../_components/APGPatternCard'");
     expect(src).toContain("from '../_components/ConsumerObligations'");
-    expect(src).toContain("from '../../.storybook/docs/A11yStatusCard'");
+    // Phase 5 fix — A11yStatusCard moved to _components/ for Vite resolution.
+    expect(src).toContain("from '../_components/A11yStatusCard'");
     expect(src).toContain('<A11yStatusCard tag="aurora-button" />');
     expect(src).toContain('<APGPatternCard tag="aurora-button" />');
   });
@@ -812,19 +818,56 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
     }
   });
 
-  it('all narrative MDX uses live-bound tokens via var(${prefix}-...)', async () => {
+  it('narrative MDX binds tokens via hx-narrative-* classes (Phase 5 v2 — CSS classes, not inline styles)', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase4-live-tokens' });
     await scaffoldProject(opts);
-    // At least Cover and Brand must use the consumer's tokenPrefix in CSS.
+    // Phase 5 v2 — narrative MDX uses className="hx-narrative-*" rather
+    // than inline style={{...}} with var() expressions. The token binding
+    // happens in the bundled helix-narrative.css; assert the className
+    // contract holds across Cover, Overview, and the foundation pages.
     const cover = await fs.readFile(
       path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
       'utf-8',
     );
-    expect(cover).toContain('var(--ar-color-');
+    expect(cover).toContain('hx-narrative-grid');
+    expect(cover).toContain('hx-narrative-card');
+
+    const overview = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Overview.mdx'),
+      'utf-8',
+    );
+    expect(overview).toContain('hx-narrative-card-title');
+
+    // Brand.mdx STILL surfaces the consumer tokenPrefix — it appears in
+    // the CSS override-pattern code block, not in inline JSX styles.
     const brand = await fs.readFile(
       path.join(opts.directory, 'src', 'stories', 'foundations', 'Brand.mdx'),
       'utf-8',
     );
     expect(brand).toContain('--ar-color-primary');
+  });
+
+  it('helix-narrative.css ships in the consumer scaffold', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase5-narrative-css' });
+    await scaffoldProject(opts);
+    const cssFile = path.join(opts.directory, '.storybook', 'docs', 'helix-narrative.css');
+    expect(await fs.pathExists(cssFile)).toBe(true);
+    const css = await fs.readFile(cssFile, 'utf-8');
+    // The class library must define each of the classes Phase 4 MDX uses.
+    for (const cls of [
+      '.hx-narrative-grid',
+      '.hx-narrative-card',
+      '.hx-narrative-card-title',
+      '.hx-narrative-card-body',
+      '.hx-narrative-chip',
+      '.hx-narrative-table',
+    ]) {
+      expect(css).toContain(cls);
+    }
+    // Every color-binding rule must use var() so the consumer's tokens.css
+    // (and brand override layer) drive the visual.
+    expect(css).toContain('var(--hx-color-text-primary');
+    expect(css).toContain('var(--hx-color-surface-default');
+    expect(css).toContain('var(--hx-color-border-subtle');
   });
 });

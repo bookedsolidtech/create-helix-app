@@ -83,7 +83,8 @@ describe('wc-storybook factory — golden snapshot', () => {
       '.storybook/preview.ts',
       '.storybook/manager-head.html',
       '.storybook/preview-head.html',
-      '.storybook/docs/A11yStatusCard.tsx',
+      // Phase 5 fix — A11yStatusCard moved to src/stories/_components/.
+      'src/stories/_components/A11yStatusCard.tsx',
       '.storybook/docs/HelixDocsPage.tsx',
       '.storybook/docs/a11y-card.css',
       '.storybook/docs/brand-overrides.css',

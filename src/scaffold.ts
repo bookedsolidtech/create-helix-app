@@ -8191,6 +8191,7 @@ function getAbsolutePath(value: string): string {
     `import './docs/helix-docs.css';
 import './docs/brand-overrides.css';
 import './docs/a11y-card.css';
+import './docs/helix-narrative.css';
 import type { Preview } from '@storybook/web-components';
 import { setCustomElementsManifest } from '@storybook/web-components';
 import { withThemeByDataAttribute } from '@storybook/addon-themes';
@@ -9395,16 +9396,28 @@ export default meta;
 
 type Story = StoryObj;
 
+// Phase 5 fix: explicit color bindings on every text node — Storybook's
+// docs surface defaults <h1>/<h2>/<div> text to a theme-tracking
+// foreground that resolves to WHITE in some light-mode autodocs contexts
+// (particularly when the parent docs container's @layer rules invert
+// the cascade). Without these explicit \`color: var(--hx-color-text-*)\`
+// rules, every component-name chip rendered as white-on-white in light
+// mode. Per-mode pairs still flip via the data-theme cascade.
+const TEXT_PRIMARY = 'var(--hx-color-text-primary, #0d1825)';
+const TEXT_MUTED = 'var(--hx-color-text-muted, #6c757d)';
+const SURFACE_DEFAULT = 'var(--hx-color-surface-default, #ffffff)';
+const BORDER_SUBTLE = 'var(--hx-color-border-subtle, #dee2e6)';
+
 function renderGroup(label: string, decls: typeof declarations) {
   return html\`
-    <section style="margin-bottom: 2rem;">
-      <h2 style="font-family: system-ui; font-size: 1.25rem; margin-bottom: 0.75rem;">
-        \${label} <span style="color: #6c757d; font-weight: normal;">(\${decls.length})</span>
+    <section style="margin-bottom: 2rem; color: \${TEXT_PRIMARY};">
+      <h2 style="font-family: system-ui; font-size: 1.25rem; margin-bottom: 0.75rem; color: \${TEXT_PRIMARY};">
+        \${label} <span style="color: \${TEXT_MUTED}; font-weight: normal;">(\${decls.length})</span>
       </h2>
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem;">
         \${decls.map(
           (d) => html\`
-            <div style="padding: 0.75rem; border: 1px solid #dee2e6; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 0.8125rem;">
+            <div style="padding: 0.75rem; border: 1px solid \${BORDER_SUBTLE}; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 0.8125rem; background: \${SURFACE_DEFAULT}; color: \${TEXT_PRIMARY};">
               \${d.tagName}
             </div>
           \`,
@@ -9416,9 +9429,9 @@ function renderGroup(label: string, decls: typeof declarations) {
 
 export const Overview: Story = {
   render: () => html\`
-    <div style="font-family: system-ui; max-width: 960px; margin: 0 auto;">
-      <h1 style="font-size: 1.5rem; margin-bottom: 0.25rem;">HELiX component catalog</h1>
-      <p style="color: #495057; margin-bottom: 1.5rem;">
+    <div style="font-family: system-ui; max-width: 960px; margin: 0 auto; color: \${TEXT_PRIMARY};">
+      <h1 style="font-size: 1.5rem; margin-bottom: 0.25rem; color: \${TEXT_PRIMARY};">HELiX component catalog</h1>
+      <p style="color: \${TEXT_MUTED}; margin-bottom: 1.5rem;">
         \${declarations.length} components available. Browse individual entries in
         the sidebar under <code>HELiX/atoms</code>, <code>HELiX/molecules</code>,
         and <code>HELiX/organisms</code>.
@@ -9787,8 +9800,14 @@ export function APGPatternCard({
   const docsContainerDir = path.join(storybookDir, 'docs');
   await safeEnsureDir(docsContainerDir);
 
+  // Phase 5 fix — A11yStatusCard.tsx moved to src/stories/_components/
+  // because Vite's import-analysis cannot resolve `../../.storybook/...`
+  // imports from MDX files served out of `src/`. HelixDocsPage and
+  // aurora-button.mdx both updated to import from `_components/` path.
+  // CSS files stay in `.storybook/docs/` (preview.ts imports them as
+  // CSS modules, that path resolves fine).
   await safeWriteFile(
-    path.join(docsContainerDir, 'A11yStatusCard.tsx'),
+    path.join(componentsDocsDir, 'A11yStatusCard.tsx'),
     `/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * A11yStatusCard — surfaces helixMeta from the Custom Elements Manifest as a
@@ -10070,7 +10089,16 @@ export function A11yStatusCard({ tag }: A11yStatusCardProps): React.ReactElement
     'wc-storybook',
     'storybook-docs',
   );
-  for (const cssFile of ['a11y-card.css', 'brand-overrides.css', 'helix-docs.css']) {
+  for (const cssFile of [
+    'a11y-card.css',
+    'brand-overrides.css',
+    'helix-docs.css',
+    // Phase 5 fix v2 — narrative-MDX class library so Cover / Overview /
+    // foundations / per-component conformance MDX bind through the
+    // var(--hx-color-*) cascade instead of inline-styled hardcoded hex.
+    // Replaces the inline style={{}} patterns the user flagged as wrong.
+    'helix-narrative.css',
+  ]) {
     const src = path.join(cssTemplatesDir, cssFile);
     const dest = path.join(docsContainerDir, cssFile);
     try {
@@ -10122,7 +10150,9 @@ import {
   Stories,
   useOf,
 } from '@storybook/addon-docs/blocks';
-import { A11yStatusCard } from './A11yStatusCard';
+// Phase 5 fix: A11yStatusCard now lives in src/stories/_components/
+// because Vite cannot resolve imports into .storybook/ from src/ MDX.
+import { A11yStatusCard } from '../../src/stories/_components/A11yStatusCard';
 
 function useResolvedTag(): string | null {
   try {
@@ -10375,7 +10405,7 @@ export default HelixDocsPage;
     `import { Meta } from '@storybook/addon-docs/blocks';
 import { APGPatternCard } from '../_components/APGPatternCard';
 import { ConsumerObligations } from '../_components/ConsumerObligations';
-import { A11yStatusCard } from '../../.storybook/docs/A11yStatusCard';
+import { A11yStatusCard } from '../_components/A11yStatusCard';
 
 {/* Subroute disambiguator: the .stories.ts file owns Components/${ClassName}Button
     (auto-derived from autodocs); the conformance MDX lives at /Conformance to
@@ -10711,14 +10741,15 @@ main().catch((err) => {
 
   const taglineLineMdx = options.brandTagline ? `> _${options.brandTagline}_\n\n` : '';
   const verticalsList = (options.brandVerticals ?? []).filter((v) => v.length > 0);
+  // Phase 5 v2 — chip row uses classes from helix-narrative.css so the
+  // styling resolves through var(--hx-color-*) tokens. Override at the
+  // consumer level by re-defining the same tokens or styling the
+  // .hx-narrative-chip class.
   const verticalsRowMdx =
     verticalsList.length > 0
-      ? `<p style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '0 0 24px' }}>\n${verticalsList
-          .map(
-            (v) =>
-              `  <span style={{ padding: '4px 10px', borderRadius: '999px', background: 'var(${prefix}-color-surface-raised, #f1f3f5)', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>${v}</span>`,
-          )
-          .join('\n')}\n</p>\n\n`
+      ? `<ul className="hx-narrative-chip-row">\n${verticalsList
+          .map((v) => `  <li className="hx-narrative-chip">${v}</li>`)
+          .join('\n')}\n</ul>\n\n`
       : '';
 
   // ── src/stories/Cover.mdx ────────────────────────────────────────────────
@@ -10743,24 +10774,18 @@ pnpm build             # produce the publishable bundle
 
 ## What's in this Storybook
 
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '24px' }}>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <strong>Foundations</strong>
-    <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
-      Tokens, color, typography, spacing, layout, brand, accessibility.
-    </p>
+<div className="hx-narrative-grid">
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title">Foundations</h3>
+    <p className="hx-narrative-card-body">Tokens, color, typography, spacing, layout, brand, accessibility.</p>
   </div>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <strong>Patterns</strong>
-    <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
-      Form, dashboard, navigation compositions.
-    </p>
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title">Patterns</h3>
+    <p className="hx-narrative-card-body">Form, dashboard, navigation compositions.</p>
   </div>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <strong>Components</strong>
-    <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
-      Every HELiX atom, plus your own ${ds}-* extensions.
-    </p>
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title">Components</h3>
+    <p className="hx-narrative-card-body">Every HELiX atom, plus your own ${ds}-* extensions.</p>
   </div>
 </div>
 
@@ -10784,22 +10809,22 @@ ${dsTitle} extends HELiX through a three-tier token cascade. Every component you
 
 ## The cascade
 
-<div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px', marginTop: '24px' }}>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px', background: 'var(${prefix}-color-surface-raised, #f8f9fa)' }}>
-    <strong>1. Primitive ramps</strong>
-    <p style={{ margin: '8px 0 0', fontSize: '14px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
+<div className="hx-narrative-grid--single">
+  <div className="hx-narrative-card hx-narrative-card--raised">
+    <h3 className="hx-narrative-card-title">1. Primitive ramps</h3>
+    <p className="hx-narrative-card-body">
       <code>--hx-color-primary-{'{50..900}'}</code>, <code>${prefix}-color-primary-{'{50..900}'}</code> — raw color values, never bound directly to layout.
     </p>
   </div>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <strong>2. Semantic aliases</strong>
-    <p style={{ margin: '8px 0 0', fontSize: '14px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title">2. Semantic aliases</h3>
+    <p className="hx-narrative-card-body">
       <code>--hx-color-action-primary-bg</code> → <code>--hx-color-primary-600</code>. Mode-aware (light / dark / high-contrast). Bind these to layouts, not the primitives.
     </p>
   </div>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <strong>3. Component overrides</strong>
-    <p style={{ margin: '8px 0 0', fontSize: '14px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title">3. Component overrides</h3>
+    <p className="hx-narrative-card-body">
       <code>--hx-button-bg</code> → <code>--hx-color-action-primary-bg</code>. The escape hatch for one-off brand callouts; rarely needed, never authored at the layout level.
     </p>
   </div>
@@ -10854,34 +10879,26 @@ The \`${prefix}-*\` rebinding flows through the cascade automatically — every 
 
 Four families, one rule: bind to **semantic** tokens, never primitives.
 
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginTop: '24px' }}>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <h3 style={{ margin: '0 0 8px' }}>Surface</h3>
-    <code style={{ fontSize: '12px' }}>--hx-color-surface-{'{default,raised,sunken}'}</code>
-    <p style={{ fontSize: '14px', margin: '8px 0 0', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
-      Layout backgrounds. Tracks data-theme.
-    </p>
+<div className="hx-narrative-grid--family">
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Surface</h3>
+    <code>--hx-color-surface-{'{default,raised,sunken}'}</code>
+    <p className="hx-narrative-card-body">Layout backgrounds. Tracks data-theme.</p>
   </div>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <h3 style={{ margin: '0 0 8px' }}>Text</h3>
-    <code style={{ fontSize: '12px' }}>--hx-color-text-{'{primary,muted,strong}'}</code>
-    <p style={{ fontSize: '14px', margin: '8px 0 0', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
-      Foreground. Always paired with a surface for AAA contrast.
-    </p>
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Text</h3>
+    <code>--hx-color-text-{'{primary,muted,strong}'}</code>
+    <p className="hx-narrative-card-body">Foreground. Always paired with a surface for AAA contrast.</p>
   </div>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <h3 style={{ margin: '0 0 8px' }}>Action</h3>
-    <code style={{ fontSize: '12px' }}>--hx-color-action-primary-bg</code>
-    <p style={{ fontSize: '14px', margin: '8px 0 0', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
-      Interactive triggers. Bind buttons / links / focus rings here.
-    </p>
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Action</h3>
+    <code>--hx-color-action-primary-bg</code>
+    <p className="hx-narrative-card-body">Interactive triggers. Bind buttons / links / focus rings here.</p>
   </div>
-  <div style={{ padding: '16px', border: '1px solid var(${prefix}-color-border-subtle, #dee2e6)', borderRadius: '12px' }}>
-    <h3 style={{ margin: '0 0 8px' }}>Status</h3>
-    <code style={{ fontSize: '12px' }}>--hx-color-{'{success,warning,danger,info}'}-bg</code>
-    <p style={{ fontSize: '14px', margin: '8px 0 0', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
-      Outcome cues. AAA contrast guaranteed.
-    </p>
+  <div className="hx-narrative-card">
+    <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Status</h3>
+    <code>--hx-color-{'{success,warning,danger,info}'}-bg</code>
+    <p className="hx-narrative-card-body">Outcome cues. AAA contrast guaranteed.</p>
   </div>
 </div>
 
@@ -10908,18 +10925,40 @@ Two faces, ten stops, six weights.
 
 ## Type ramp
 
-| Stop | Token | Sample |
-|---|---|---|
-| xs | \`--hx-font-size-xs\` | The quick brown fox |
-| sm | \`--hx-font-size-sm\` | The quick brown fox |
-| base | \`--hx-font-size-base\` | The quick brown fox |
-| md | \`--hx-font-size-md\` | The quick brown fox |
-| lg | \`--hx-font-size-lg\` | The quick brown fox |
-| xl | \`--hx-font-size-xl\` | The quick brown fox |
-| 2xl | \`--hx-font-size-2xl\` | The quick brown fox |
-| 3xl | \`--hx-font-size-3xl\` | The quick brown fox |
-| 4xl | \`--hx-font-size-4xl\` | The quick brown fox |
-| 5xl | \`--hx-font-size-5xl\` | The quick brown fox |
+{/* Phase 5 fix: rendered as JSX <table> rather than markdown table.
+    Storybook 10's MDX parser does not enable remark-gfm by default,
+    so GFM markdown-table syntax falls through and renders as inline
+    pipe-and-dash text. JSX always renders. */}
+
+<table className="hx-narrative-table">
+  <thead>
+    <tr>
+      <th>Stop</th>
+      <th>Token</th>
+      <th>Sample</th>
+    </tr>
+  </thead>
+  <tbody>
+    {[
+      ['xs', '--hx-font-size-xs'],
+      ['sm', '--hx-font-size-sm'],
+      ['base', '--hx-font-size-base'],
+      ['md', '--hx-font-size-md'],
+      ['lg', '--hx-font-size-lg'],
+      ['xl', '--hx-font-size-xl'],
+      ['2xl', '--hx-font-size-2xl'],
+      ['3xl', '--hx-font-size-3xl'],
+      ['4xl', '--hx-font-size-4xl'],
+      ['5xl', '--hx-font-size-5xl'],
+    ].map(([stop, token]) => (
+      <tr key={stop}>
+        <td>{stop}</td>
+        <td><code>{token}</code></td>
+        <td>The quick brown fox</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
 
 Every stop ships with a corresponding line-height that meets WCAG 1.4.8 (visual presentation — line-height ≥ 1.5× font-size). Don't override at the layer level; wrap in a constrained-width container if you need to change measure.
 `,
@@ -10971,16 +11010,35 @@ Eight breakpoints, one touch-target floor, one motion contract.
 
 ## Breakpoints
 
-| Token | Width | Type |
-|---|---|---|
-| xs | 360px | mobile small |
-| mobile | 375px | mobile |
-| sm | 640px | mobile (token) |
-| md | 768px | tablet (token) |
-| lg | 1024px | desktop (token) |
-| xl | 1280px | desktop (token) |
-| 2xl | 1536px | desktop (token) |
-| xxl | 1920px | ultrawide |
+{/* Phase 5 fix: JSX table rather than markdown table — see Typography.mdx for context. */}
+
+<table className="hx-narrative-table">
+  <thead>
+    <tr>
+      <th>Token</th>
+      <th>Width</th>
+      <th>Type</th>
+    </tr>
+  </thead>
+  <tbody>
+    {[
+      ['xs', '360px', 'mobile small'],
+      ['mobile', '375px', 'mobile'],
+      ['sm', '640px', 'mobile (token)'],
+      ['md', '768px', 'tablet (token)'],
+      ['lg', '1024px', 'desktop (token)'],
+      ['xl', '1280px', 'desktop (token)'],
+      ['2xl', '1536px', 'desktop (token)'],
+      ['xxl', '1920px', 'ultrawide'],
+    ].map(([token, width, type]) => (
+      <tr key={token}>
+        <td><code>{token}</code></td>
+        <td>{width}</td>
+        <td>{type}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
 
 The Storybook viewport toolbar exposes all eight; the token-defined breakpoints (sm/md/lg/xl/2xl) are load-bearing.
 
@@ -11034,12 +11092,29 @@ ${
 
 ## Do / don't
 
-| Do | Don't |
-|---|---|
-| Override at \`${prefix}-*\` (your tier) | Override \`--hx-*\` directly (breaks the cascade) |
-| Test all three theme modes (light / dark / high-contrast) | Author dark-only or light-only tokens |
-| Respect \`prefers-reduced-motion\` and \`forced-colors\` | Strip motion or use color-only signaling |
-| Keep your override list small and semantic | Pin every primitive to a brand-specific value |
+{/* Phase 5 fix: JSX table rather than markdown table — Storybook MDX no remark-gfm. */}
+
+<table className="hx-narrative-table">
+  <thead>
+    <tr>
+      <th>Do</th>
+      <th>Don't</th>
+    </tr>
+  </thead>
+  <tbody>
+    {[
+      [<>Override at <code>{'${prefix}-*'}</code> (your tier)</>, <>Override <code>--hx-*</code> directly (breaks the cascade)</>],
+      ['Test all three theme modes (light / dark / high-contrast)', 'Author dark-only or light-only tokens'],
+      [<>Respect <code>prefers-reduced-motion</code> and <code>forced-colors</code></>, 'Strip motion or use color-only signaling'],
+      ['Keep your override list small and semantic', 'Pin every primitive to a brand-specific value'],
+    ].map((row, i) => (
+      <tr key={i}>
+        <td>{row[0]}</td>
+        <td>{row[1]}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
 `,
   );
 
