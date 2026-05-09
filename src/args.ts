@@ -30,6 +30,9 @@ export interface ParsedArgs {
   // Design system factory (wc-storybook)
   dsName: string | null;
   tokenPrefix: string | null;
+  brandTagline: string | null;
+  /** Comma-separated list of brand verticals; null when flag absent */
+  brandVerticals: string[] | null;
 
   // Boolean toggles
   typescript: boolean;
@@ -170,6 +173,25 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const tokenPrefixArgIndex = argv.indexOf('--token-prefix');
   const tokenPrefix = tokenPrefixArgIndex !== -1 ? (argv[tokenPrefixArgIndex + 1] ?? null) : null;
 
+  // --brand-tagline (used by wc-storybook factory Cover + Brand MDX)
+  const brandTaglineArgIndex = argv.indexOf('--brand-tagline');
+  const brandTagline =
+    brandTaglineArgIndex !== -1 ? (argv[brandTaglineArgIndex + 1] ?? null) : null;
+
+  // --brand-verticals (comma-separated list, used by wc-storybook brand toolbar)
+  const brandVerticalsArgIndex = argv.indexOf('--brand-verticals');
+  const brandVerticalsRaw =
+    brandVerticalsArgIndex !== -1 ? (argv[brandVerticalsArgIndex + 1] ?? null) : null;
+  const brandVerticals: string[] | null =
+    brandVerticalsRaw === null
+      ? null
+      : brandVerticalsRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+  // heroScenarios are interactive-only — too complex for a CLI flag; --yes
+  // / non-interactive flows fall back to neutral defaults in the scaffolder.
+
   return {
     subcommand,
     subcommandArg,
@@ -196,6 +218,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     profile,
     dsName,
     tokenPrefix,
+    brandTagline,
+    brandVerticals,
     showVersion,
     showHelp,
   };

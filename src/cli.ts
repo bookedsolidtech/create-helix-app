@@ -241,6 +241,8 @@ export async function runJsonScaffold(
     outputDirArg: string | null;
     dsNameFromArgs?: string | null;
     tokenPrefixFromArgs?: string | null;
+    brandTaglineFromArgs?: string | null;
+    brandVerticalsFromArgs?: string[] | null;
   },
 ): Promise<void> {
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
@@ -307,6 +309,14 @@ export async function runJsonScaffold(
     verbose: opts.isVerbose,
     dsName: opts.dsNameFromArgs ?? name,
     tokenPrefix: opts.tokenPrefixFromArgs ?? '--hx',
+    // Brand-storytelling fields — wc-storybook factory only. Optional with
+    // cross-domain neutral defaults so JSON / --yes flows don't break and
+    // sample copy honors the realistic-sample-data rule (no domain lock).
+    brandTagline: opts.brandTaglineFromArgs ?? undefined,
+    brandVerticals: opts.brandVerticalsFromArgs ?? undefined,
+    // heroScenarios is too complex for a CLI flag in v1; consumers edit
+    // helix.storybook.config.ts post-scaffold to populate scenes.
+    heroScenarios: undefined,
   };
 
   try {
@@ -422,6 +432,8 @@ export async function runCLI(): Promise<void> {
     skipAudit,
     dsName: dsNameFromArgs,
     tokenPrefix: tokenPrefixFromArgs,
+    brandTagline: brandTaglineFromArgs,
+    brandVerticals: brandVerticalsFromArgs,
   } = parsed;
 
   // Load config file and environment variables
@@ -644,6 +656,8 @@ ${presetList}
       outputDirArg,
       dsNameFromArgs,
       tokenPrefixFromArgs,
+      brandTaglineFromArgs,
+      brandVerticalsFromArgs,
     });
     return;
   }
@@ -766,6 +780,32 @@ ${presetList}
         });
       },
 
+      brandTagline: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        // Brand-storytelling prompts are wc-storybook-only. Other frameworks
+        // get an empty string here and the scaffolder applies a neutral default.
+        if (fw !== 'wc-storybook') return Promise.resolve('');
+        if (brandTaglineFromArgs !== null) return Promise.resolve(brandTaglineFromArgs);
+        return p.text({
+          message: 'Brand tagline ' + pc.dim('(rendered into Cover + Brand MDX)'),
+          placeholder: 'Design system extending HELiX',
+          initialValue: '',
+        });
+      },
+
+      brandVerticals: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') return Promise.resolve('');
+        if (brandVerticalsFromArgs !== null) {
+          return Promise.resolve(brandVerticalsFromArgs.join(','));
+        }
+        return p.text({
+          message: 'Brand verticals ' + pc.dim('(comma-separated; empty = single-brand mode)'),
+          placeholder: 'fintech, wellness',
+          initialValue: '',
+        });
+      },
+
       installDeps: () =>
         isNoInstall
           ? Promise.resolve(false)
@@ -800,6 +840,20 @@ ${presetList}
     verbose: isVerbose,
     dsName: project.dsName as string,
     tokenPrefix: project.tokenPrefix as string,
+    // Brand-storytelling fields. Empty string from non-wc-storybook frameworks
+    // resolves to undefined so the scaffolder's neutral defaults kick in.
+    brandTagline: ((project.brandTagline as string) ?? '').trim() || undefined,
+    brandVerticals: (() => {
+      const raw = ((project.brandVerticals as string) ?? '').trim();
+      if (!raw) return undefined;
+      const list = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      return list.length > 0 ? list : undefined;
+    })(),
+    // heroScenarios deferred — consumers populate via helix.storybook.config.ts.
+    heroScenarios: undefined,
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);

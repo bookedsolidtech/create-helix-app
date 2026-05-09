@@ -32,6 +32,62 @@ describe('parseArgs — defaults', () => {
     expect(result.tokens).toBe(true);
     expect(result.showVersion).toBe(false);
     expect(result.showHelp).toBe(false);
+    // Brand-storytelling flags — wc-storybook factory only.
+    expect(result.dsName).toBeNull();
+    expect(result.tokenPrefix).toBeNull();
+    expect(result.brandTagline).toBeNull();
+    expect(result.brandVerticals).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseArgs — wc-storybook brand-storytelling flags
+// ---------------------------------------------------------------------------
+
+describe('parseArgs — brand flags', () => {
+  it('captures --brand-tagline value', () => {
+    const result = parseArgs(['--brand-tagline', 'Modern banking, reimagined.']);
+    expect(result.brandTagline).toBe('Modern banking, reimagined.');
+  });
+
+  it('--brand-tagline absent → null', () => {
+    expect(parseArgs([]).brandTagline).toBeNull();
+  });
+
+  it('--brand-verticals splits comma-separated list, trims, drops empties', () => {
+    const result = parseArgs(['--brand-verticals', 'fintech, wellness ,, retail']);
+    expect(result.brandVerticals).toEqual(['fintech', 'wellness', 'retail']);
+  });
+
+  it('--brand-verticals with single value → single-entry array', () => {
+    expect(parseArgs(['--brand-verticals', 'fintech']).brandVerticals).toEqual(['fintech']);
+  });
+
+  it('--brand-verticals empty string → empty array (single-brand mode)', () => {
+    expect(parseArgs(['--brand-verticals', '']).brandVerticals).toEqual([]);
+  });
+
+  it('--brand-verticals absent → null (distinct from empty array)', () => {
+    expect(parseArgs([]).brandVerticals).toBeNull();
+  });
+
+  it('combines --ds-name + --token-prefix + --brand-tagline + --brand-verticals', () => {
+    const result = parseArgs([
+      '--template',
+      'wc-storybook',
+      '--ds-name',
+      'aurora',
+      '--token-prefix',
+      '--ar',
+      '--brand-tagline',
+      'Calm finance.',
+      '--brand-verticals',
+      'fintech,wellness',
+    ]);
+    expect(result.dsName).toBe('aurora');
+    expect(result.tokenPrefix).toBe('--ar');
+    expect(result.brandTagline).toBe('Calm finance.');
+    expect(result.brandVerticals).toEqual(['fintech', 'wellness']);
   });
 });
 
