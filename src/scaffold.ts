@@ -8196,6 +8196,15 @@ import type { Preview } from '@storybook/web-components';
 import { setCustomElementsManifest } from '@storybook/web-components';
 import { withThemeByDataAttribute } from '@storybook/addon-themes';
 import { html } from 'lit';
+// CRITICAL: \`@helixui/tokens/tokens.css\` MUST load before any of the docs
+// CSS files below — it defines every \`--hx-color-*\`, \`--hx-space-*\`,
+// \`--hx-font-*\` token at \`:root\`. Without it, the helix-narrative.css /
+// helix-docs.css / a11y-card.css rules fall back to their hex defaults
+// AND Storybook's docs theme overrides body text to its own palette,
+// producing white-on-white surfaces. Order matters — token definitions
+// FIRST, then library (registers components which read tokens), then
+// the consumer's \`{prefix}-*\` overrides on top.
+import '@helixui/tokens/tokens.css';
 import '@helixui/library';
 import '../src/tokens/tokens.css';
 import customElements from '../custom-elements.json';
@@ -11179,6 +11188,10 @@ The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the first 
   );
 
   // ── src/stories/Welcome.stories.ts ───────────────────────────────────────
+  // Phase 5 v3 — title nested as 'Foundations/Welcome (legacy)' so it
+  // collapses under Foundations rather than floating at the sidebar
+  // root. Cover.mdx is the canonical root entry; this stub stays for
+  // backwards-compat with consumers who linked at /story/welcome--introduction.
 
   await safeWriteFile(
     path.join(storiesDir, 'Welcome.stories.ts'),
@@ -11186,7 +11199,7 @@ The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the first 
 import { html } from 'lit';
 
 const meta: Meta = {
-  title: 'Welcome',
+  title: 'Foundations/Welcome (legacy)',
   parameters: {
     layout: 'fullscreen',
     docs: { page: null },
@@ -11322,6 +11335,18 @@ function tokenValue(t: TokenEntry): string {
 const colorTokens = tokens.color as ColorTokens;
 
 function colorSwatchGrid(group: string, scale: ColorScale) {
+  // Defensive: the consumer's tokens.json may not include this group
+  // (stub installs without @helixui/tokens, custom branches, etc.).
+  // Render a polite placeholder rather than crashing the docs page
+  // with "Cannot convert undefined or null to object".
+  if (!scale || typeof scale !== 'object') {
+    return html\`
+      <div style="font-family: var(--hx-font-sans, sans-serif); margin-bottom: 2rem; padding: 16px; border: 1px dashed var(--hx-color-border-subtle, #dee2e6); border-radius: 8px; color: var(--hx-color-text-muted, #6c757d);">
+        <h3 style="margin: 0 0 4px; text-transform: capitalize; color: var(--hx-color-text-primary, #0d1825);">\${group}</h3>
+        <p style="margin: 0; font-size: 14px;">No tokens defined for <code>color.\${group}</code> in <code>src/tokens/tokens.json</code>. Run <code>pnpm tokens:sync</code> or edit the stub to add this group.</p>
+      </div>
+    \`;
+  }
   const entries = Object.entries(scale).filter(
     ([, v]) =>
       typeof v === 'object' && v !== null && ('$value' in v || 'value' in v),
@@ -11348,7 +11373,7 @@ function colorSwatchGrid(group: string, scale: ColorScale) {
 }
 
 const meta: Meta = {
-  title: 'Design Tokens/Colors',
+  title: 'Foundations/Token Swatches/Colors',
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -11426,7 +11451,7 @@ const borderTokens = tokens.border as {
 };
 
 const meta: Meta = {
-  title: 'Design Tokens/Borders',
+  title: 'Foundations/Token Swatches/Borders',
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -11513,7 +11538,7 @@ function tokenValue(t: TokenEntry): string {
 const shadowTokens = tokens.shadow as Record<string, TokenEntry>;
 
 const meta: Meta = {
-  title: 'Design Tokens/Shadows',
+  title: 'Foundations/Token Swatches/Shadows',
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -11569,7 +11594,7 @@ function tokenValue(t: TokenEntry): string {
 const spaceTokens = tokens.space as Record<string, TokenEntry>;
 
 const meta: Meta = {
-  title: 'Design Tokens/Spacing',
+  title: 'Foundations/Token Swatches/Spacing',
   tags: ['autodocs'],
   parameters: {
     docs: {
