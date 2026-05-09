@@ -10647,6 +10647,7 @@ function renderStoryFile(decl: CemDeclaration): string {
 // Regenerate with: pnpm cem:catalog
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import '@helixui/library';
 
 const meta: Meta = {
@@ -10655,7 +10656,10 @@ const meta: Meta = {
   argTypes: \${JSON.stringify(argTypes, null, 2)},
   args: \${JSON.stringify(args, null, 2)},
   render: (args) => {
-    const tpl = document.createElement('template');
+    // Renders via lit unsafeHTML — the previous template-cloneNode +
+    // bare html-template-literal pattern produced an empty fragment
+    // through Storybook 10's web-components renderer. unsafeHTML
+    // takes the constructed markup string and mounts it as real DOM.
     const attrs = Object.entries(args)
       .filter(([k, v]) => k !== 'content' && v !== undefined && v !== null && v !== '')
       .map(([k, v]) => {
@@ -10667,8 +10671,8 @@ const meta: Meta = {
       .filter(Boolean)
       .join(' ');
     const slot = (args as Record<string, unknown>).content ?? 'placeholder text';
-    tpl.innerHTML = \\\`<\${tag}\\\${attrs ? ' ' + attrs : ''}>\\\${slot}</\${tag}>\\\`;
-    return html\\\`\\\${tpl.content.cloneNode(true)}\\\`;
+    const markup = \\\`<\${tag}\\\${attrs ? ' ' + attrs : ''}>\\\${slot}</\${tag}>\\\`;
+    return html\\\`\\\${unsafeHTML(markup)}\\\`;
   },
 };
 
