@@ -347,13 +347,7 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
   it('emits APGPatternCard.tsx with helixMeta CEM lookup', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase3b-apg' });
     await scaffoldProject(opts);
-    const file = path.join(
-      opts.directory,
-      'src',
-      'stories',
-      '_components',
-      'APGPatternCard.tsx',
-    );
+    const file = path.join(opts.directory, 'src', 'stories', '_components', 'APGPatternCard.tsx');
     expect(await fs.pathExists(file)).toBe(true);
     const src = await fs.readFile(file, 'utf-8');
     expect(src).toContain('export interface APGPatternCardProps');
@@ -424,7 +418,7 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
       'utf-8',
     );
     expect(a11y).toContain('`${REPO_BLOB_BASE}${aaa.auditUrl}`');
-    expect(a11y).toContain('`${kc.activate.join(\' / \')} activates`');
+    expect(a11y).toContain("`${kc.activate.join(' / ')} activates`");
     expect(a11y).not.toContain('\\${REPO_BLOB_BASE}');
   });
 });
@@ -451,9 +445,9 @@ describe('wc-storybook Phase 3b — FOUC sync scripts', () => {
     const html = await fs.readFile(file, 'utf-8');
     expect(html).toContain("url.searchParams.has('globals')");
     // Per-mode pre-paint background — the table-stakes anti-flash defense.
-    expect(html).toContain("var(--hx-color-surface-default, #ffffff)");
-    expect(html).toContain("var(--hx-color-surface-default, #0d1825)");
-    expect(html).toContain("var(--hx-color-surface-default, #000000)");
+    expect(html).toContain('var(--hx-color-surface-default, #ffffff)');
+    expect(html).toContain('var(--hx-color-surface-default, #0d1825)');
+    expect(html).toContain('var(--hx-color-surface-default, #000000)');
   });
 
   it('manager + preview FOUC scripts share the same localStorage key', async () => {
@@ -473,5 +467,201 @@ describe('wc-storybook Phase 3b — FOUC sync scripts', () => {
     const KEY = "'helix:storybook:globals'";
     expect(mgr).toContain(KEY);
     expect(pv).toContain(KEY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3c — manager.ts + manager-theme.ts + preview.ts rewrite + 3 CSS + ref MDX
+// ---------------------------------------------------------------------------
+
+describe('wc-storybook Phase 3c — manager-theme.ts + manager.ts', () => {
+  it('emits manager-theme.ts wired to @helixui/tokens cascade', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-manager-theme' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, '.storybook', 'manager-theme.ts');
+    expect(await fs.pathExists(file)).toBe(true);
+    const src = await fs.readFile(file, 'utf-8');
+    // The 4 exports manager.ts depends on must all be present.
+    expect(src).toContain(
+      "import { tokenEntries, darkTokenEntries, highContrastTokenEntries } from '@helixui/tokens'",
+    );
+    expect(src).toContain("import { resolveTokenRef } from '@helixui/tokens/utils'");
+    expect(src).toContain('export const HELIX_THEME_MODES');
+    expect(src).toContain('export type HelixThemeMode');
+    expect(src).toContain('export function helixBackgroundsForMode');
+    expect(src).toContain('export const helixChromeThemes');
+    expect(src).toContain('export function coerceThemeMode');
+    // Brand title interpolates the consumer's dsName.
+    expect(src).toContain("brandTitle: 'Aurora Design System'");
+  });
+
+  it('emits manager.ts with boot-theme + GLOBALS_UPDATED listener', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-manager' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, '.storybook', 'manager.ts');
+    expect(await fs.pathExists(file)).toBe(true);
+    const src = await fs.readFile(file, 'utf-8');
+    expect(src).toContain('resolveBootThemeMode');
+    expect(src).toContain('GLOBALS_UPDATED');
+    expect(src).toContain("from './manager-theme'");
+    expect(src).toContain("addons.register('helix/manager-theme-sync'");
+    // Sidebar engineering roots collapsed by default.
+    expect(src).toContain('collapsedRoots');
+  });
+
+  it('manager-theme + manager FOUC scripts share the same localStorage key as preview', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-key-contract' });
+    await scaffoldProject(opts);
+    const mgrTs = await fs.readFile(path.join(opts.directory, '.storybook', 'manager.ts'), 'utf-8');
+    const previewTs = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'preview.ts'),
+      'utf-8',
+    );
+    const KEY = "'helix:storybook:globals'";
+    expect(mgrTs).toContain(KEY);
+    expect(previewTs).toContain(KEY);
+  });
+});
+
+describe('wc-storybook Phase 3c — 3 CSS files copied from create-helix assets', () => {
+  it('emits all 3 CSS files into .storybook/docs/', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-css' });
+    await scaffoldProject(opts);
+    const docs = path.join(opts.directory, '.storybook', 'docs');
+    for (const f of ['a11y-card.css', 'brand-overrides.css', 'helix-docs.css']) {
+      expect(await fs.pathExists(path.join(docs, f))).toBe(true);
+    }
+  });
+
+  it('CSS files are real upstream content, not stub placeholders', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-css-real' });
+    await scaffoldProject(opts);
+    // helix-docs.css is the largest at 1319 LOC. A stub would be a single
+    // line; if the bundled assets/wc-storybook/storybook-docs/ are intact
+    // the real content lands.
+    const helixDocs = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'docs', 'helix-docs.css'),
+      'utf-8',
+    );
+    expect(helixDocs.length).toBeGreaterThan(5000);
+    expect(helixDocs).not.toContain('Placeholder');
+  });
+});
+
+describe('wc-storybook Phase 3c — preview.ts rewrite', () => {
+  it('imports the 3 CSS files + manager-theme + HelixDocsPage', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-preview-imports' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(path.join(opts.directory, '.storybook', 'preview.ts'), 'utf-8');
+    expect(src).toContain("import './docs/helix-docs.css'");
+    expect(src).toContain("import './docs/brand-overrides.css'");
+    expect(src).toContain("import './docs/a11y-card.css'");
+    expect(src).toContain("from './manager-theme'");
+    expect(src).toContain("from './docs/HelixDocsPage'");
+  });
+
+  it('wires HelixDocsPage as parameters.docs.page (auto-injection)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-docs-page' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(path.join(opts.directory, '.storybook', 'preview.ts'), 'utf-8');
+    // The single-line wire: `page: HelixDocsPage,` inside parameters.docs
+    expect(src).toMatch(/docs:\s*\{[\s\S]*page:\s*HelixDocsPage/);
+  });
+
+  it('storySort lists Cover → Overview → Foundations editorial-first', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-storysort' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(path.join(opts.directory, '.storybook', 'preview.ts'), 'utf-8');
+    // Cover MUST come before Components in the storySort order array.
+    const coverIdx = src.indexOf("'Cover'");
+    const componentsIdx = src.indexOf("'Components'");
+    expect(coverIdx).toBeGreaterThan(0);
+    expect(componentsIdx).toBeGreaterThan(coverIdx);
+  });
+
+  it('initialGlobals hydrates from localStorage with URL-globals-as-authoritative', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-globals' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(path.join(opts.directory, '.storybook', 'preview.ts'), 'utf-8');
+    // The URL precedence is the load-bearing contract — without it, deep
+    // links like ?globals=theme:dark silently resurrect stored brand.
+    expect(src).toContain("searchParams.has('globals')");
+    expect(src).toContain('if (!urlHasGlobals)');
+  });
+
+  it('brand persistence decorator writes to helix:storybook:globals', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-brand-persist' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(path.join(opts.directory, '.storybook', 'preview.ts'), 'utf-8');
+    expect(src).toContain('localStorage.setItem');
+    expect(src).toContain('helix:storybook:globals');
+    expect(src).toContain("setAttribute('data-brand', brand)");
+  });
+});
+
+describe('wc-storybook Phase 3c — reference {ds}-button.mdx', () => {
+  it('emits aurora-button.mdx with the configured dsName', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-ref-mdx' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, 'src', 'stories', 'components', 'aurora-button.mdx');
+    expect(await fs.pathExists(file)).toBe(true);
+  });
+
+  it('reference MDX imports the React docs cards from the right paths', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-ref-mdx-imports' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'components', 'aurora-button.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain("from '../_components/APGPatternCard'");
+    expect(src).toContain("from '../_components/ConsumerObligations'");
+    expect(src).toContain("from '../../.storybook/docs/A11yStatusCard'");
+    expect(src).toContain('<A11yStatusCard tag="aurora-button" />');
+    expect(src).toContain('<APGPatternCard tag="aurora-button" />');
+  });
+
+  it('reference MDX uses brandTagline when provided', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase3c-ref-mdx-tagline',
+      brandTagline: 'Calm finance for everyone.',
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'components', 'aurora-button.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('> Calm finance for everyone.');
+  });
+
+  it('reference MDX uses heroScenarios[0] when matched by componentId', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase3c-ref-mdx-hero',
+      heroScenarios: [
+        {
+          componentId: 'aurora-button',
+          title: 'Confirm withdrawal',
+          body: 'A destructive action requires confirmation; the primary button reads as a real product moment.',
+        },
+      ],
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'components', 'aurora-button.mdx'),
+      'utf-8',
+    );
+    expect(src).toContain('## Hero scene — Confirm withdrawal');
+    expect(src).toContain('A destructive action requires confirmation');
+  });
+
+  it('reference MDX falls back to neutral default when no heroScenarios', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-ref-mdx-default' });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'components', 'aurora-button.mdx'),
+      'utf-8',
+    );
+    // Neutral default is the 'Sign in to your workspace' scene.
+    expect(src).toContain('Sign in to your workspace');
   });
 });

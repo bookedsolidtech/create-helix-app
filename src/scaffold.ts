@@ -8166,72 +8166,88 @@ function getAbsolutePath(value: string): string {
   );
 
   // ── .storybook/preview.ts ────────────────────────────────────────────────
+  //
+  // Phase 3c — full preview rewrite:
+  //   * Wire HelixDocsPage as the global autodocs container
+  //   * Theme decorator using HELIX_THEME_MODES (3 modes vs the prior 2)
+  //   * Per-mode backgrounds palette from helixBackgroundsForMode
+  //   * Brand toolbar globalType (items populated from brandVerticals;
+  //     Phase 4 will wire that — for v1 we ship a stub and Phase 4 swaps
+  //     in the consumer's prompts)
+  //   * Initial globals hydrated from localStorage with URL-globals-as-
+  //     authoritative precedence (mirrors preview-head.html FOUC chain)
+  //   * Brand persistence decorator that writes to
+  //     localStorage["helix:storybook:globals"] so FOUC-prevention
+  //     scripts can pre-paint on subsequent loads
+  //   * Editorial-first storySort (Cover → Overview → Foundations →
+  //     Patterns → Components → Playground)
+  //
+  // ESM templating note: every \${} in this template literal is
+  // doubly-escaped so it lands as `\${...}` in the emitted .ts source —
+  // critical regression class, see the "round-trip escape" tests.
 
   await safeWriteFile(
     path.join(storybookDir, 'preview.ts'),
-    `import type { Preview } from '@storybook/web-components';
+    `import './docs/helix-docs.css';
+import './docs/brand-overrides.css';
+import './docs/a11y-card.css';
+import type { Preview } from '@storybook/web-components';
 import { setCustomElementsManifest } from '@storybook/web-components';
 import { withThemeByDataAttribute } from '@storybook/addon-themes';
 import { html } from 'lit';
 import '@helixui/library';
 import '../src/tokens/tokens.css';
+import customElements from '../custom-elements.json';
+import { helixBackgroundsForMode, HELIX_THEME_MODES } from './manager-theme';
+import { HelixDocsPage } from './docs/HelixDocsPage';
 
 // Load the Custom Elements Manifest so autodocs API tables are populated
 // with properties, events, slots, CSS parts, and CSS custom properties.
-// Run \`pnpm run cem:analyze\` to regenerate after adding new components.
-import customElements from '../custom-elements.json';
-
 setCustomElementsManifest(customElements as Record<string, unknown>);
 
+/**
+ * Viewport breakpoints sourced from @helixui/tokens.
+ */
+const helixViewports = {
+  xs: { name: 'xs (mobile small, 360px)', styles: { width: '360px', height: '780px' }, type: 'mobile' as const },
+  mobile: { name: 'mobile (375px)', styles: { width: '375px', height: '812px' }, type: 'mobile' as const },
+  sm: { name: 'sm (token, 640px)', styles: { width: '640px', height: '900px' }, type: 'mobile' as const },
+  md: { name: 'md (token, 768px)', styles: { width: '768px', height: '1024px' }, type: 'tablet' as const },
+  lg: { name: 'lg (token, 1024px)', styles: { width: '1024px', height: '768px' }, type: 'desktop' as const },
+  xl: { name: 'xl (token, 1280px)', styles: { width: '1280px', height: '900px' }, type: 'desktop' as const },
+  '2xl': { name: '2xl (token, 1536px)', styles: { width: '1536px', height: '960px' }, type: 'desktop' as const },
+  xxl: { name: 'xxl (ultrawide, 1920px)', styles: { width: '1920px', height: '1080px' }, type: 'desktop' as const },
+};
+
 const preview: Preview = {
-  decorators: [
-    // Global padding so stories do not render edge-to-edge
-    (story) => html\`<div style="padding: 2rem;">\${story()}</div>\`,
-
-    // Theme switching via data-theme attribute on <html>
-    withThemeByDataAttribute({
-      themes: {
-        light: 'light',
-        dark: 'dark',
-      },
-      defaultTheme: 'light',
-      attributeName: 'data-theme',
-    }),
-  ],
-
-  initialGlobals: {
-    backgrounds: { value: 'light' },
-    theme: 'light',
-  },
-
   parameters: {
+    beforeEach: async () => {
+      document.body.removeAttribute('style');
+    },
     controls: {
       expanded: true,
       sort: 'requiredFirst',
-      matchers: {
-        color: /(background|color)$/i,
-        date: /Date$/i,
-      },
-    },
-    backgrounds: {
-      options: {
-        light: { name: 'light', value: '#ffffff' },
-        grey: { name: 'grey', value: '#f8f9fa' },
-        dark: { name: 'dark', value: '#1a1a2e' },
-      },
+      matchers: { color: /(background|color)$/i, date: /Date$/i },
     },
     docs: {
-      toc: {
-        headingSelector: 'h2, h3',
-        title: 'Table of Contents',
-      },
+      // Custom autodocs page — auto-injects A11yStatusCard from CEM
+      // helixMeta on every component page.
+      page: HelixDocsPage,
+      toc: { headingSelector: 'h2, h3', title: 'Table of Contents' },
+      source: { format: 'dedent' },
     },
     options: {
+      // Editorial flow above engineering. Phase 4 expands the inner
+      // ordering for Foundations + Patterns. Drupal omitted — wc-storybook
+      // factory does not ship Drupal stories.
       storySort: {
         order: [
-          'Welcome',
-          'Design Tokens',
-          ['Colors', ['Primary', 'Secondary', 'Accent', 'Neutral', 'Semantic', 'Full Palette'], 'Borders', 'Shadows', 'Spacing', '*'],
+          'Cover',
+          'Overview',
+          'Accessibility',
+          'Foundations',
+          'Patterns',
+          'Playground',
           'Components',
           '*',
         ],
@@ -8242,42 +8258,388 @@ const preview: Preview = {
         rules: [{ id: 'color-contrast', enabled: true }],
       },
     },
+    backgrounds: {
+      options: {
+        ...helixBackgroundsForMode('light'),
+        ...helixBackgroundsForMode('dark'),
+        ...helixBackgroundsForMode('high-contrast'),
+      },
+    },
+    viewport: { options: helixViewports },
+    actions: { argTypesRegex: '^hx-.*' },
+    pseudo: {},
+    design: {
+      type: 'link',
+      name: '${dsTitle} component source',
+      url: '/',
+      label: 'View component source',
+      showArrow: true,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    },
   },
+
+  /**
+   * Initial globals — hydrated from helix:storybook:globals localStorage
+   * key. URL globals are AUTHORITATIVE when present (no localStorage merge).
+   * Mirrors preview-head.html FOUC precedence so canvas + toolbar agree
+   * on first frame.
+   */
+  initialGlobals: (() => {
+    let urlHasGlobals = false;
+    if (typeof window !== 'undefined') {
+      try {
+        urlHasGlobals = new URL(window.location.href).searchParams.has('globals');
+      } catch {
+        urlHasGlobals = false;
+      }
+    }
+
+    let persisted: { theme?: unknown; brand?: unknown } | null = null;
+    if (!urlHasGlobals) {
+      try {
+        if (typeof window !== 'undefined') {
+          const raw = window.localStorage.getItem('helix:storybook:globals');
+          if (raw) {
+            const parsed: unknown = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              persisted = parsed as { theme?: unknown; brand?: unknown };
+            }
+          }
+        }
+      } catch {
+        /* fall through to defaults */
+      }
+    }
+    const theme =
+      typeof persisted?.theme === 'string' && persisted.theme.length > 0
+        ? persisted.theme
+        : 'light';
+    const brand = typeof persisted?.brand === 'string' ? persisted.brand : '';
+    return {
+      // Canvas background tracks data-theme cascade via helix-docs.css —
+      // do NOT pin a backgrounds.value default or theme switching freezes.
+      backgrounds: { value: undefined },
+      theme,
+      brand,
+      viewport: { value: undefined, isRotated: false },
+    };
+  })(),
+
+  /**
+   * Brand toolbar entry. Phase 4 will populate \`items\` from the
+   * \`brandVerticals\` prompt; v1 ships an empty array so the toolbar
+   * shows a single "Default" entry until the consumer adds verticals.
+   */
+  globalTypes: {
+    brand: {
+      description: 'Active brand override (data-brand on :root)',
+      toolbar: {
+        title: 'Brand',
+        icon: 'paintbrush',
+        items: [{ value: '', title: 'Default' }],
+        dynamicTitle: true,
+      },
+    },
+  },
+
+  decorators: [
+    // Global padding so stories do not render edge-to-edge.
+    (story) => html\`<div style="padding: 2rem;">\${story()}</div>\`,
+
+    // Theme switching via data-theme attribute on <html>. HELIX_THEME_MODES
+    // is the single source of truth — kept in sync with manager-theme.ts.
+    withThemeByDataAttribute({
+      themes: Object.fromEntries(HELIX_THEME_MODES.map((m) => [m, m])) as Record<
+        (typeof HELIX_THEME_MODES)[number],
+        (typeof HELIX_THEME_MODES)[number]
+      >,
+      defaultTheme: 'light',
+      attributeName: 'data-theme',
+    }),
+
+    // Brand persistence. Writes (theme, brand) to localStorage so the
+    // FOUC-prevention scripts in manager-head.html + preview-head.html
+    // can pre-paint on subsequent loads.
+    (story, ctx) => {
+      const brand = (ctx.globals.brand as string) ?? '';
+      const theme = (ctx.globals.theme as string) ?? 'light';
+      if (typeof document !== 'undefined') {
+        if (brand) document.documentElement.setAttribute('data-brand', brand);
+        else document.documentElement.removeAttribute('data-brand');
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem('helix:storybook:globals', JSON.stringify({ theme, brand }));
+        } catch {
+          /* storage disabled — URL globals param remains source of truth */
+        }
+      }
+      return story();
+    },
+  ],
 };
 
 export default preview;
 `,
   );
 
+  // ── .storybook/manager-theme.ts ──────────────────────────────────────────
+  //
+  // Phase 3c — token-driven Storybook chrome themes (light / dark / high-
+  // contrast). Reads from @helixui/tokens at module evaluation, walks the
+  // semantic → primitive cascade via resolveTokenRef, and feeds resolved
+  // hex values into Storybook's create() ThemeVars. The previous hard-
+  // coded #0066cc primary was wrong — Helix's primary-600 resolves to
+  // #0F7078 in light mode. This module makes that drift impossible.
+
+  await safeWriteFile(
+    path.join(storybookDir, 'manager-theme.ts'),
+    `/**
+ * Storybook manager + preview theme bridge.
+ *
+ * Single source of truth for the three Helix theme modes (light, dark,
+ * high-contrast) + the resolved hex values used by:
+ *
+ *  - \`preview.ts\` parameters.backgrounds  (per-mode surface tints)
+ *  - \`manager.ts\`                          (Storybook chrome create() themes)
+ *  - addon-themes preview decorator        (data-theme attribute)
+ *
+ * Token values are pulled at build time from @helixui/tokens. Var() chains
+ * are walked to a concrete hex via \`resolveTokenRef\`, so anything that
+ * resolves to a primitive ramp value lands as a real color in Storybook's
+ * theme keys (Storybook's create() does not understand CSS custom properties).
+ */
+
+import { tokenEntries, darkTokenEntries, highContrastTokenEntries } from '@helixui/tokens';
+import { resolveTokenRef } from '@helixui/tokens/utils';
+import { create, type ThemeVars } from 'storybook/theming';
+
+export const HELIX_THEME_MODES = ['light', 'dark', 'high-contrast'] as const;
+export type HelixThemeMode = (typeof HELIX_THEME_MODES)[number];
+
+const lightMap: Record<string, string> = Object.fromEntries(
+  tokenEntries.map((t) => [t.name, t.value]),
+);
+
+const darkOverrides: Record<string, string> = Object.fromEntries(
+  darkTokenEntries.map((t) => [t.name, t.value]),
+);
+const highContrastOverrides: Record<string, string> = Object.fromEntries(
+  highContrastTokenEntries.map((t) => [t.name, t.value]),
+);
+
+function tokenMapForMode(mode: HelixThemeMode): Record<string, string> {
+  const layered: Record<string, string> = { ...lightMap };
+  if (mode === 'dark') Object.assign(layered, darkOverrides);
+  if (mode === 'high-contrast') Object.assign(layered, highContrastOverrides);
+
+  const resolved: Record<string, string> = {};
+  for (const [name, value] of Object.entries(layered)) {
+    resolved[name] = resolveTokenRef(value, layered);
+  }
+  return resolved;
+}
+
+const tokenMaps: Record<HelixThemeMode, Record<string, string>> = {
+  light: tokenMapForMode('light'),
+  dark: tokenMapForMode('dark'),
+  'high-contrast': tokenMapForMode('high-contrast'),
+};
+
+function token(mode: HelixThemeMode, name: string, fallback: string): string {
+  const v = tokenMaps[mode][name];
+  if (!v) return fallback;
+  if (v.startsWith('var(')) return fallback;
+  return v;
+}
+
+export function helixBackgroundsForMode(
+  mode: HelixThemeMode,
+): Record<string, { name: string; value: string }> {
+  const def = token(mode, '--hx-color-surface-default', '#ffffff');
+  const raised = token(mode, '--hx-color-surface-raised', '#f8f9fa');
+  const sunken = token(mode, '--hx-color-surface-sunken', '#f1f3f5');
+  return {
+    [\`surface-default-\${mode}\`]: {
+      name: \`surface.default · \${mode}\`,
+      value: def,
+    },
+    [\`surface-raised-\${mode}\`]: {
+      name: \`surface.raised · \${mode}\`,
+      value: raised,
+    },
+    [\`surface-sunken-\${mode}\`]: {
+      name: \`surface.sunken · \${mode}\`,
+      value: sunken,
+    },
+  };
+}
+
+function buildHelixChromeTheme(mode: HelixThemeMode): ThemeVars {
+  const isLight = mode === 'light';
+  const surfaceDefault = token(mode, '--hx-color-surface-default', '#ffffff');
+  const surfaceRaised = token(mode, '--hx-color-surface-raised', '#f8f9fa');
+  const surfaceSunken = token(mode, '--hx-color-surface-sunken', '#f1f3f5');
+  const textPrimary = token(mode, '--hx-color-text-primary', '#0d1825');
+  const textInverse = token(mode, '--hx-color-text-inverse', '#ffffff');
+  const textMuted = token(mode, '--hx-color-text-muted', '#6c757d');
+  const borderDefault = token(mode, '--hx-color-border-default', '#dee2e6');
+  const primary = token(mode, '--hx-color-primary-600', '#0F7078');
+  const secondary = token(mode, '--hx-color-secondary-600', '#0F6B7E');
+
+  return create({
+    base: isLight ? 'light' : 'dark',
+
+    // Brand
+    brandTitle: '${dsTitle} Design System',
+    brandUrl: '/',
+
+    // Colors
+    colorPrimary: primary,
+    colorSecondary: secondary,
+
+    // UI
+    appBg: surfaceRaised,
+    appContentBg: surfaceDefault,
+    appPreviewBg: surfaceDefault,
+    appBorderColor: borderDefault,
+    appBorderRadius: 6,
+
+    // Text
+    textColor: textPrimary,
+    textInverseColor: textInverse,
+    textMutedColor: textMuted,
+
+    // Toolbar
+    barTextColor: textMuted,
+    barSelectedColor: primary,
+    barHoverColor: primary,
+    barBg: surfaceSunken,
+
+    // Inputs
+    inputBg: surfaceDefault,
+    inputBorder: borderDefault,
+    inputTextColor: textPrimary,
+    inputBorderRadius: 4,
+  });
+}
+
+export const helixLightTheme = buildHelixChromeTheme('light');
+export const helixDarkTheme = buildHelixChromeTheme('dark');
+export const helixHighContrastTheme = buildHelixChromeTheme('high-contrast');
+
+export const helixChromeThemes: Record<HelixThemeMode, ThemeVars> = {
+  light: helixLightTheme,
+  dark: helixDarkTheme,
+  'high-contrast': helixHighContrastTheme,
+};
+
+export function coerceThemeMode(value: unknown): HelixThemeMode {
+  if (typeof value === 'string' && (HELIX_THEME_MODES as readonly string[]).includes(value)) {
+    return value as HelixThemeMode;
+  }
+  return 'light';
+}
+`,
+  );
+
   // ── .storybook/manager.ts ────────────────────────────────────────────────
+  //
+  // Phase 3c — replaces the previous minimal manager.ts with the upstream
+  // Helix manager pattern: boot-theme resolution from URL globals → local
+  // storage → default light, plus a GLOBALS_UPDATED listener that syncs
+  // preview theme switches to manager chrome via addons.setConfig({ theme }).
+  // Sidebar IA also collapses engineering roots so the editorial flow
+  // (Cover → Overview → Foundations → Patterns) reads top-first.
 
   await safeWriteFile(
     path.join(storybookDir, 'manager.ts'),
     `import { addons } from 'storybook/manager-api';
-import { create } from 'storybook/theming';
+import { GLOBALS_UPDATED } from 'storybook/internal/core-events';
+import { helixChromeThemes, coerceThemeMode, type HelixThemeMode } from './manager-theme';
 
-const dsTheme = create({
-  base: 'light',
-  brandTitle: '${dsTitle} Design System',
-  brandTarget: '_self',
-  colorPrimary: '#0066cc',
-  colorSecondary: '#0052a3',
-  appBg: '#f8f9fa',
-  appContentBg: '#ffffff',
-  appBorderColor: '#dee2e6',
-  appBorderRadius: 6,
-  textColor: '#212529',
-  textInverseColor: '#ffffff',
-  barTextColor: '#6c757d',
-  barSelectedColor: '#0066cc',
-  barBg: '#ffffff',
-});
+/**
+ * Resolve the active theme mode at manager boot from the same precedence
+ * chain the FOUC-prevention block in \`preview-head.html\` walks:
+ *
+ *   1. URL \`globals\` param (\`?globals=theme:dark;...\`) — AUTHORITATIVE when
+ *      present. Missing keys default; we do not fall through to localStorage.
+ *   2. \`localStorage["helix:storybook:globals"]\` — only consulted when the
+ *      URL has NO \`globals\` parameter.
+ *   3. Fallback: 'light'.
+ */
+function resolveBootThemeMode(): HelixThemeMode {
+  if (typeof window === 'undefined') return 'light';
+
+  let urlHasGlobals = false;
+  let urlTheme = '';
+  try {
+    const url = new URL(window.location.href);
+    urlHasGlobals = url.searchParams.has('globals');
+    if (urlHasGlobals) {
+      const raw = url.searchParams.get('globals') ?? '';
+      for (const pair of raw.split(';')) {
+        const idx = pair.indexOf(':');
+        if (idx === -1) continue;
+        const k = pair.slice(0, idx).trim();
+        const v = pair.slice(idx + 1).trim();
+        if (k === 'theme') urlTheme = v;
+      }
+    }
+  } catch {
+    urlHasGlobals = false;
+  }
+
+  if (urlHasGlobals) {
+    return coerceThemeMode(urlTheme || undefined);
+  }
+
+  try {
+    const raw = window.localStorage.getItem('helix:storybook:globals');
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const theme = (parsed as { theme?: unknown }).theme;
+        return coerceThemeMode(theme);
+      }
+    }
+  } catch {
+    /* storage disabled or JSON broken */
+  }
+
+  return 'light';
+}
+
+const bootMode: HelixThemeMode = resolveBootThemeMode();
 
 addons.setConfig({
-  theme: dsTheme,
+  theme: helixChromeThemes[bootMode],
+  sidebar: {
+    // Engineering roots collapse by default so editorial flow reads top-down.
+    // Drupal omitted from the wc-storybook factory output (consumer-specific).
+    collapsedRoots: ['components', 'utilities', 'infrastructure'],
+  },
+});
+
+let currentMode: HelixThemeMode = bootMode;
+
+addons.register('helix/manager-theme-sync', (api) => {
+  const channel = api.getChannel();
+  if (!channel) return;
+
+  channel.on(GLOBALS_UPDATED, (event: { globals?: Record<string, unknown> }) => {
+    const next = coerceThemeMode(event?.globals?.theme);
+    if (next === currentMode) return;
+    currentMode = next;
+    addons.setConfig({ theme: helixChromeThemes[next] });
+  });
 });
 `,
   );
+
+  // (Phase 3c CSS template copy moved below — runs after the
+  // .storybook/docs/ dir is created by the A11yStatusCard emitter.)
 
   // ── src/base/{ds}-element.ts ─────────────────────────────────────────────
 
@@ -9692,6 +10054,39 @@ export function A11yStatusCard({ tag }: A11yStatusCardProps): React.ReactElement
 `,
   );
 
+  // ── .storybook/docs/{a11y-card,brand-overrides,helix-docs}.css ───────────
+  //
+  // Phase 3c — copy the 3 docs-surface CSS files from the create-helix
+  // package's bundled assets/wc-storybook/storybook-docs/ directory into
+  // the consumer scaffold. These files are too large for inline template-
+  // literal emission (2,400 LOC total) and contain CSS custom-property
+  // expressions that would require careful escaping otherwise. Static-
+  // file copy avoids the escape hazard entirely.
+
+  const cssTemplatesDir = path.join(
+    new URL('.', import.meta.url).pathname,
+    '..',
+    'assets',
+    'wc-storybook',
+    'storybook-docs',
+  );
+  for (const cssFile of ['a11y-card.css', 'brand-overrides.css', 'helix-docs.css']) {
+    const src = path.join(cssTemplatesDir, cssFile);
+    const dest = path.join(docsContainerDir, cssFile);
+    try {
+      await fs.copy(src, dest);
+    } catch {
+      // CSS asset missing — emit a stub so the consumer's preview.ts import
+      // does not 404. The visual treatment falls back to Storybook defaults
+      // until the consumer re-installs create-helix from a build that
+      // includes the bundled CSS templates.
+      await safeWriteFile(
+        dest,
+        `/* Placeholder ${cssFile} — bundled CSS template missing from create-helix install. */\n`,
+      );
+    }
+  }
+
   await safeWriteFile(
     path.join(docsContainerDir, 'HelixDocsPage.tsx'),
     `/**
@@ -9952,6 +10347,109 @@ export default HelixDocsPage;
 <link
   href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
   rel="stylesheet"
+/>
+`,
+  );
+
+  // ── src/stories/components/{ds}-button.mdx ───────────────────────────────
+  //
+  // Phase 3c — reference per-component MDX with hero scene. Demonstrates
+  // the brand-storytelling layer: imports the freshly-emitted React docs
+  // cards (A11yStatusCard, APGPatternCard, ConsumerObligations,
+  // InlineAuditPanel), pulls the consumer's `brandTagline` (when provided)
+  // into the page intro, and uses `heroScenarios[0]` if present, else a
+  // cross-domain neutral default per `feedback_realistic_sample_data`.
+
+  const referenceComponentsDir = path.join(storiesDir, 'components');
+  await safeEnsureDir(referenceComponentsDir);
+
+  const heroForButton = (options.heroScenarios ?? []).find((s) => s.componentId === `${ds}-button`);
+  const heroTitle = heroForButton?.title ?? 'Sign in to your workspace';
+  const heroBody =
+    heroForButton?.body ??
+    `A primary action lifted into a real product moment — the same ${ds}-button you compose into forms, dashboards, and toolbars.`;
+  const taglineLine = options.brandTagline ? `> ${options.brandTagline}\n\n` : '';
+
+  await safeWriteFile(
+    path.join(referenceComponentsDir, `${ds}-button.mdx`),
+    `import { Meta } from '@storybook/addon-docs/blocks';
+import { APGPatternCard } from '../_components/APGPatternCard';
+import { ConsumerObligations } from '../_components/ConsumerObligations';
+import { A11yStatusCard } from '../../.storybook/docs/A11yStatusCard';
+
+{/* Subroute disambiguator: the .stories.ts file owns Components/${ClassName}Button
+    (auto-derived from autodocs); the conformance MDX lives at /Conformance to
+    avoid the storybook indexer's "Unable to index" duplicate-title conflict. */}
+<Meta title="Components/${ClassName}Button/Conformance" />
+
+# ${ClassName} Button — AAA conformance
+
+${taglineLine}A primary action button extending HELiX's accessible button foundation.
+Use it for the dominant call-to-action on a screen.
+
+## Hero scene — ${heroTitle}
+
+<div
+  style={{
+    maxWidth: '440px',
+    padding: '24px',
+    border: '1px solid var(${prefix}-color-border-default, #dee2e6)',
+    borderRadius: '12px',
+    background: 'var(${prefix}-color-surface-default, #ffffff)',
+  }}
+>
+  <h3 style={{ marginTop: 0, marginBottom: '12px' }}>${heroTitle}</h3>
+  <p style={{ marginTop: 0, marginBottom: '16px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
+    ${heroBody.replace(/\n/g, '\n    ')}
+  </p>
+  <label style={{ display: 'block', marginBottom: '12px' }}>
+    <span style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>Email</span>
+    <input
+      type="email"
+      placeholder="you@example.com"
+      style={{
+        width: '100%',
+        padding: '8px 12px',
+        border: '1px solid var(${prefix}-color-border-default, #dee2e6)',
+        borderRadius: '6px',
+      }}
+    />
+  </label>
+  <label style={{ display: 'block', marginBottom: '16px' }}>
+    <span style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>Password</span>
+    <input
+      type="password"
+      style={{
+        width: '100%',
+        padding: '8px 12px',
+        border: '1px solid var(${prefix}-color-border-default, #dee2e6)',
+        borderRadius: '6px',
+      }}
+    />
+  </label>
+  <div style={{ display: 'flex', gap: '8px' }}>
+    <${ds}-button variant="primary" style={{ flex: '1 1 auto' }}>Sign in</${ds}-button>
+    <${ds}-button variant="ghost">Forgot?</${ds}-button>
+  </div>
+</div>
+
+## Accessibility status
+
+<A11yStatusCard tag="${ds}-button" />
+
+## ARIA + keyboard contract
+
+<APGPatternCard tag="${ds}-button" />
+
+## Consumer obligations
+
+<ConsumerObligations
+  tag="${ds}-button"
+  obligations={[
+    'Provide an accessible name. The button text content IS the name. Do not strip it for icon-only variants without supplying aria-label.',
+    'Do not strip the focus ring. The component ships a token-driven focus ring; author CSS that sets outline:none on the button breaks the AAA-cert.',
+    'Use the right semantic role. Submit actions belong inside a <form>; navigation actions should use <a href> or hx-link instead of a button.',
+  ]}
 />
 `,
   );
