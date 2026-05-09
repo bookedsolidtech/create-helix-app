@@ -9249,6 +9249,713 @@ export function InlineAuditPanel({
 `,
   );
 
+  // ── APGPatternCard.tsx (CEM-coupled, in src/stories/_components/) ────────
+
+  await safeWriteFile(
+    path.join(componentsDocsDir, 'APGPatternCard.tsx'),
+    `/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * APGPatternCard — surfaces the WAI-ARIA Authoring Practices Guide
+ * pattern citation and the keyboard contract pulled from the component's
+ * \`helixMeta.ariaPattern\` + \`helixMeta.keyboardContract\` JSDoc tags.
+ *
+ * The keyboard rows render as <kbd> token clusters so the component
+ * contract reads like the APG keyboard tables themselves.
+ *
+ * Optional \`screenReaderAnnouncement\` prop documents the expected
+ * announcement string a screen reader emits for the canonical default
+ * state — a practical aid for QA teams running NVDA / JAWS / VoiceOver
+ * acceptance tests.
+ *
+ * Reads from \`@helixui/library/custom-elements.json\` at module load.
+ * Returns null when no helixMeta is found for the tag — defensive for
+ * consumer-extended components that have not yet authored ARIA pattern
+ * + keyboard-contract JSDoc tags.
+ */
+import * as React from 'react';
+import customElements from '@helixui/library/custom-elements.json';
+
+interface KeyboardContract {
+  activate?: readonly string[];
+  navigate?: readonly string[];
+  dismiss?: readonly string[];
+  disabledSuppresses?: boolean;
+}
+
+interface CemDeclaration {
+  tagName?: string;
+  helixMeta?: {
+    ariaPattern?: string;
+    ariaPatternSource?: string;
+    keyboardContract?: KeyboardContract;
+  };
+}
+
+const declCache = new Map<string, CemDeclaration | null>();
+function findDeclaration(tag: string): CemDeclaration | null {
+  if (declCache.has(tag)) return declCache.get(tag) ?? null;
+  const cem = customElements as { modules?: Array<{ declarations?: CemDeclaration[] }> };
+  for (const mod of cem.modules ?? []) {
+    for (const decl of mod.declarations ?? []) {
+      if (decl?.tagName === tag) {
+        declCache.set(tag, decl);
+        return decl;
+      }
+    }
+  }
+  declCache.set(tag, null);
+  return null;
+}
+
+function KbdGroup({ keys }: { keys: readonly string[] }): React.ReactElement {
+  return (
+    <span className="hx-apg-kbd-group">
+      {keys.map((k, i) => (
+        <React.Fragment key={\`\${k}-\${i}\`}>
+          {i > 0 ? <span className="hx-apg-kbd-sep"> / </span> : null}
+          <kbd className="hx-apg-kbd">{k}</kbd>
+        </React.Fragment>
+      ))}
+    </span>
+  );
+}
+
+export interface APGPatternCardProps {
+  tag: string;
+  /** Heading override. */
+  heading?: string;
+  /** Optional expected screen-reader announcement string for the default state. */
+  screenReaderAnnouncement?: string;
+  /** Optional override for the screen-reader announcement label. */
+  screenReaderContext?: string;
+}
+
+export function APGPatternCard({
+  tag,
+  heading = 'ARIA pattern & keyboard contract',
+  screenReaderAnnouncement,
+  screenReaderContext = 'When focused, screen readers announce',
+}: APGPatternCardProps): React.ReactElement | null {
+  const decl = findDeclaration(tag);
+  if (!decl) return null;
+  const meta = decl.helixMeta ?? {};
+  const pattern = meta.ariaPattern;
+  const patternUrl = meta.ariaPatternSource;
+  const kc = meta.keyboardContract ?? {};
+
+  if (!pattern && !kc.activate && !kc.navigate && !kc.dismiss) {
+    return null;
+  }
+
+  return (
+    <section className="hx-docs hx-apg-card" aria-label={\`ARIA pattern walkthrough for \${tag}\`}>
+      <header className="hx-apg-card-header">
+        <h3 className="hx-apg-card-title">{heading}</h3>
+        {pattern ? (
+          <p className="hx-apg-card-subtitle">
+            Implements the <code>{pattern}</code> pattern from the W3C WAI-ARIA Authoring Practices
+            Guide.{' '}
+            {patternUrl ? (
+              <a
+                className="hx-apg-card-link"
+                href={patternUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open APG pattern ↗
+              </a>
+            ) : null}
+          </p>
+        ) : null}
+      </header>
+
+      <div className="hx-apg-card-body">
+        <h4 className="hx-apg-card-section-title">Keyboard contract</h4>
+        <ul className="hx-apg-card-keyboard">
+          {kc.activate?.length ? (
+            <li>
+              <KbdGroup keys={kc.activate} />
+              <span className="hx-apg-kbd-desc">activates the component</span>
+            </li>
+          ) : null}
+          {kc.navigate?.length ? (
+            <li>
+              <KbdGroup keys={kc.navigate} />
+              <span className="hx-apg-kbd-desc">navigates between items</span>
+            </li>
+          ) : null}
+          {kc.dismiss?.length ? (
+            <li>
+              <KbdGroup keys={kc.dismiss} />
+              <span className="hx-apg-kbd-desc">dismisses / closes</span>
+            </li>
+          ) : null}
+          {kc.disabledSuppresses ? (
+            <li className="hx-apg-card-keyboard-note">
+              <span className="hx-apg-kbd-desc">
+                When <code>disabled</code>, all keyboard activation is suppressed.
+              </span>
+            </li>
+          ) : null}
+        </ul>
+
+        {screenReaderAnnouncement ? (
+          <>
+            <h4 className="hx-apg-card-section-title">Expected screen-reader announcement</h4>
+            <p className="hx-apg-card-sr">
+              {screenReaderContext}:{' '}
+              <q className="hx-apg-card-sr-quote">{screenReaderAnnouncement}</q>
+            </p>
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+`,
+  );
+
+  // ── .storybook/docs/A11yStatusCard.tsx + HelixDocsPage.tsx ───────────────
+  // Phase 3b — auto-injection container + per-component status card.
+  // Lives under .storybook/docs/ (not src/stories/_components/) because
+  // they are wired into preview.ts as the global autodocs page (Phase 3c
+  // does the wiring; for now they are emitted-but-not-yet-referenced).
+  // Consumers can manually import + use them in MDX today.
+
+  const docsContainerDir = path.join(storybookDir, 'docs');
+  await safeEnsureDir(docsContainerDir);
+
+  await safeWriteFile(
+    path.join(docsContainerDir, 'A11yStatusCard.tsx'),
+    `/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * A11yStatusCard — surfaces helixMeta from the Custom Elements Manifest as a
+ * compliance-grade status card on every component docs page.
+ *
+ * Rendered automatically by the autodocs template wired in
+ * \`.storybook/docs/HelixDocsPage.tsx\` (Phase 3c). The card is data-driven:
+ * when a component declares \`aaaCertified: true\` (with \`helixMeta.aaa.*\`
+ * payload), it renders the green "AAA Certified" headline with criteria
+ * chips, audit link, ARIA pattern row, keyboard contract row, and
+ * capability badges. Non-certified components fall back to a neutral
+ * "AAA — Pending audit" state but still surface ARIA pattern + keyboard
+ * contract + capabilities when present so consumer-facing documentation
+ * stays useful pre-audit.
+ *
+ * Source of truth: \`@helixui/library/custom-elements.json\`. Runtime
+ * lookups walk all \`javascript-module\` entries → \`declarations[]\` →
+ * matching \`tagName\`.
+ *
+ * Visual language inherits from \`helix-docs.css\` token-driven primitives
+ * (no hardcoded colors / spacing). Pair with \`a11y-card.css\` (Phase 3c).
+ */
+import * as React from 'react';
+import customElements from '@helixui/library/custom-elements.json';
+
+interface KeyboardContract {
+  activate?: readonly string[];
+  navigate?: readonly string[];
+  dismiss?: readonly string[];
+  disabledSuppresses?: boolean;
+}
+
+interface AaaPayload {
+  certified?: boolean;
+  certifiedDate?: string;
+  criteria?: readonly string[];
+  auditUrl?: string;
+}
+
+interface HelixMeta {
+  aaa?: AaaPayload;
+  keyboardContract?: KeyboardContract;
+  ariaPattern?: string;
+  ariaPatternSource?: string;
+  forcedColorsSupported?: boolean;
+  stability?: string;
+  since?: string;
+  formAssociated?: boolean;
+  themeAware?: boolean;
+  brandAware?: boolean;
+  drupalSdcEligible?: boolean;
+  reactWrapperStatus?: string;
+  priorityTier?: 'P0' | 'P1' | 'P2' | 'Exempt' | string;
+  phiHandles?: boolean;
+  clinicalContext?: string;
+}
+
+interface CemDeclaration {
+  tagName?: string;
+  aaaCertified?: boolean;
+  aaaCertifiedDate?: string;
+  helixMeta?: HelixMeta;
+  summary?: string;
+}
+
+const declarationCache = new Map<string, CemDeclaration | null>();
+
+function findDeclaration(tag: string): CemDeclaration | null {
+  if (declarationCache.has(tag)) {
+    return declarationCache.get(tag) ?? null;
+  }
+  const cem = customElements as { modules?: Array<{ declarations?: CemDeclaration[] }> };
+  for (const mod of cem.modules ?? []) {
+    for (const decl of mod.declarations ?? []) {
+      if (decl?.tagName === tag) {
+        declarationCache.set(tag, decl);
+        return decl;
+      }
+    }
+  }
+  declarationCache.set(tag, null);
+  return null;
+}
+
+const PRIORITY_TIER_TOOLTIPS: Record<string, string> = {
+  P0: 'P0 — Foundational primitive. AAA-cert is mandatory before release.',
+  P1: 'P1 — Common workflow component. AAA-cert is required for healthcare deploys.',
+  P2: 'P2 — Convenience or composition layer. AAA-cert is recommended.',
+  Exempt: 'Exempt — Component is decorative or internal-only and not subject to AAA cert.',
+};
+
+const REPO_BLOB_BASE = 'https://github.com/bookedsolidtech/helix/blob/main/packages/hx-library/';
+
+function humanizeKeyboardContract(kc: KeyboardContract | undefined): string | null {
+  if (!kc) return null;
+  const parts: string[] = [];
+  if (kc.activate?.length) {
+    parts.push(\`\${kc.activate.join(' / ')} activates\`);
+  }
+  if (kc.navigate?.length) {
+    parts.push(\`\${kc.navigate.join(' / ')} navigates\`);
+  }
+  if (kc.dismiss?.length) {
+    parts.push(\`\${kc.dismiss.join(' / ')} dismisses\`);
+  }
+  if (kc.disabledSuppresses) {
+    parts.push('disabled suppresses');
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
+function formatCertDate(iso: string | undefined): string | null {
+  if (!iso) return null;
+  return iso;
+}
+
+interface CapabilityBadgeProps {
+  label: string;
+  truthy: boolean;
+  valueLabel?: string;
+}
+
+function CapabilityBadge({ label, truthy, valueLabel }: CapabilityBadgeProps) {
+  if (!truthy && !valueLabel) return null;
+  return (
+    <span className="hx-a11y-card-cap-badge">
+      <span className="hx-a11y-card-cap-label">{label}</span>
+      <span className="hx-a11y-card-cap-value">{valueLabel ?? '✓'}</span>
+    </span>
+  );
+}
+
+export interface A11yStatusCardProps {
+  /** Component tag name (e.g. "${ds}-button"). */
+  tag: string;
+}
+
+export function A11yStatusCard({ tag }: A11yStatusCardProps): React.ReactElement | null {
+  const decl = findDeclaration(tag);
+  if (!decl) return null;
+
+  const meta = decl.helixMeta ?? {};
+  const aaa = meta.aaa ?? {};
+  const certified = decl.aaaCertified === true || aaa.certified === true;
+  const certDate = formatCertDate(decl.aaaCertifiedDate ?? aaa.certifiedDate);
+  const criteria = aaa.criteria ?? [];
+  const auditUrl = aaa.auditUrl ? \`\${REPO_BLOB_BASE}\${aaa.auditUrl}\` : null;
+  const tier = meta.priorityTier ?? null;
+  const tierTooltip = tier
+    ? (PRIORITY_TIER_TOOLTIPS[tier] ?? \`Priority tier: \${tier}\`)
+    : null;
+  const keyboardLine = humanizeKeyboardContract(meta.keyboardContract);
+
+  return (
+    <aside className="hx-docs hx-a11y-card" data-certified={certified ? 'true' : 'false'}>
+      <header className="hx-a11y-card-header">
+        <div className="hx-a11y-card-headline">
+          <span className="hx-a11y-card-icon" aria-hidden="true">
+            {certified ? '✓' : '◷'}
+          </span>
+          <div className="hx-a11y-card-title-block">
+            <h3 className="hx-a11y-card-title">
+              {certified ? 'AAA Certified' : 'AAA — Pending audit'}
+            </h3>
+            {certified && certDate ? (
+              <p className="hx-a11y-card-subtitle">
+                Certified <time dateTime={certDate}>{certDate}</time> · WCAG 2.1 Level AAA
+              </p>
+            ) : (
+              <p className="hx-a11y-card-subtitle">
+                Component has not yet completed the WCAG 2.1 Level AAA audit.
+              </p>
+            )}
+          </div>
+        </div>
+        {tier ? (
+          <span
+            className="hx-a11y-card-tier"
+            data-tier={tier}
+            title={tierTooltip ?? undefined}
+            aria-label={tierTooltip ?? \`Priority tier \${tier}\`}
+          >
+            {tier}
+          </span>
+        ) : null}
+      </header>
+
+      {certified && criteria.length ? (
+        <div className="hx-a11y-card-row">
+          <span className="hx-a11y-card-row-label">Success Criteria</span>
+          <ul className="hx-a11y-card-criteria" aria-label="WCAG success criteria audited">
+            {criteria.map((sc) => (
+              <li key={sc} className="hx-a11y-card-criterion">
+                <code>{sc}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {meta.ariaPattern ? (
+        <div className="hx-a11y-card-row">
+          <span className="hx-a11y-card-row-label">ARIA Pattern</span>
+          <span className="hx-a11y-card-row-value">
+            <code>{meta.ariaPattern}</code>
+            {meta.ariaPatternSource ? (
+              <>
+                {' '}
+                <a
+                  className="hx-a11y-card-link"
+                  href={meta.ariaPatternSource}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  W3C APG ↗
+                </a>
+              </>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
+
+      {keyboardLine ? (
+        <div className="hx-a11y-card-row">
+          <span className="hx-a11y-card-row-label">Keyboard</span>
+          <span className="hx-a11y-card-row-value">{keyboardLine}</span>
+        </div>
+      ) : null}
+
+      <div className="hx-a11y-card-row hx-a11y-card-caps-row">
+        <span className="hx-a11y-card-row-label">Capabilities</span>
+        <div className="hx-a11y-card-caps">
+          <CapabilityBadge label="Forced colors" truthy={meta.forcedColorsSupported === true} />
+          <CapabilityBadge label="Form-associated" truthy={meta.formAssociated === true} />
+          <CapabilityBadge label="Theme-aware" truthy={meta.themeAware === true} />
+          <CapabilityBadge label="Brand-aware" truthy={meta.brandAware === true} />
+          <CapabilityBadge label="Drupal SDC" truthy={meta.drupalSdcEligible === true} />
+          {meta.reactWrapperStatus ? (
+            <CapabilityBadge label="React wrapper" truthy valueLabel={meta.reactWrapperStatus} />
+          ) : null}
+          {meta.stability ? (
+            <CapabilityBadge label="Stability" truthy valueLabel={meta.stability} />
+          ) : null}
+          {meta.since ? <CapabilityBadge label="Since" truthy valueLabel={meta.since} /> : null}
+        </div>
+      </div>
+
+      {certified && auditUrl ? (
+        <footer className="hx-a11y-card-footer">
+          <a
+            className="hx-a11y-card-audit-link"
+            href={auditUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View full AAA audit →
+          </a>
+        </footer>
+      ) : null}
+    </aside>
+  );
+}
+`,
+  );
+
+  await safeWriteFile(
+    path.join(docsContainerDir, 'HelixDocsPage.tsx'),
+    `/**
+ * HelixDocsPage — custom autodocs template for every component page.
+ *
+ * Wire into \`parameters.docs.page\` at the preview level (Phase 3c) so
+ * every story tagged \`autodocs\` (which the \`Components/*\` stories use
+ * via \`tags: ['autodocs']\`) renders this layout instead of Storybook's
+ * default DocsPage.
+ *
+ * Layout:
+ *   <Title />          — story metadata title
+ *   <Subtitle />       — story metadata subtitle
+ *   <A11yStatusCard /> — AAA cert + helixMeta surface (THE feature)
+ *   <Description />    — JSDoc summary from CEM
+ *   <Primary />        — primary story canvas
+ *   <Controls />       — args table for primary story
+ *   <Stories />        — secondary stories (excluding primary)
+ *
+ * Tag resolution: pulled from \`useOf('meta')\` which returns the resolved
+ * meta module export. Adapted for downstream design systems — the tag
+ * regex matches ANY custom-element-shaped name (one or more segments
+ * separated by dashes), so \`${ds}-button\` resolves the same way
+ * \`hx-button\` does upstream.
+ */
+import * as React from 'react';
+import {
+  Title,
+  Subtitle,
+  Description,
+  Primary,
+  Controls,
+  Stories,
+  useOf,
+} from '@storybook/addon-docs/blocks';
+import { A11yStatusCard } from './A11yStatusCard';
+
+function useResolvedTag(): string | null {
+  try {
+    const meta = useOf('meta', ['meta']);
+    const candidate = (meta as { preparedMeta?: { component?: unknown } } | undefined)
+      ?.preparedMeta?.component;
+    // Custom elements MUST contain a hyphen per the HTML spec, so any
+    // string with a dash and lowercase prefix is a candidate. This is
+    // the consumer-friendly variant of upstream's hx-only check.
+    if (typeof candidate === 'string' && /^[a-z][a-z0-9]*-[a-z0-9-]+$/.test(candidate)) {
+      return candidate;
+    }
+  } catch {
+    /* swallow — addon-docs context shape can shift between versions */
+  }
+  return null;
+}
+
+export function HelixDocsPage(): React.ReactElement {
+  const tag = useResolvedTag();
+  return (
+    <>
+      <Title />
+      <Subtitle />
+      {tag ? <A11yStatusCard tag={tag} /> : null}
+      <Description />
+      <Primary />
+      <Controls />
+      <Stories />
+    </>
+  );
+}
+
+export default HelixDocsPage;
+`,
+  );
+
+  // ── .storybook/manager-head.html + preview-head.html (FOUC scripts) ──────
+  // Phase 3b — pre-paint sync scripts. These run BEFORE first paint and
+  // resolve theme/brand from URL globals → localStorage → default. The
+  // CSS pre-paint block tints the <html> background so dark/HC pages
+  // do not flash white on reload. Compatible with the existing minimal
+  // preview.ts; Phase 3c expands preview.ts to wire the persistence
+  // shadow this script reads from.
+
+  await safeWriteFile(
+    path.join(storybookDir, 'manager-head.html'),
+    `<meta name="robots" content="noindex, nofollow" />
+<!--
+  Manager FOUC prevention. The manager chrome (sidebar, toolbar) reads
+  the same data-theme attribute the preview iframe uses. Without this
+  block, the manager paints in light first, then snaps to dark/high-
+  contrast when the manager-theme module loads. Re-uses the same
+  resolution chain as the preview: URL globals → localStorage shadow
+  → default light.
+-->
+<script>
+  (function () {
+    try {
+      var html = document.documentElement;
+      var theme = '';
+      var brand = '';
+      // URL globals are AUTHORITATIVE when present — partial keys fall
+      // through to defaults (NOT to localStorage). Mirrors the preview-
+      // head precedence rule so reload behavior is consistent across
+      // manager + preview iframes.
+      var urlHasGlobals = false;
+      try {
+        var url = new URL(window.location.href);
+        urlHasGlobals = url.searchParams.has('globals');
+        var raw = url.searchParams.get('globals') || '';
+        raw.split(';').forEach(function (pair) {
+          var idx = pair.indexOf(':');
+          if (idx === -1) return;
+          var k = pair.slice(0, idx).trim();
+          var v = pair.slice(idx + 1).trim();
+          if (k === 'theme') theme = v;
+          else if (k === 'brand') brand = v;
+        });
+      } catch (_e) {
+        urlHasGlobals = false;
+      }
+      if (!urlHasGlobals) {
+        try {
+          var stored = window.localStorage.getItem('helix:storybook:globals');
+          if (stored) {
+            var parsed = JSON.parse(stored);
+            if (!theme && parsed && typeof parsed.theme === 'string') theme = parsed.theme;
+            if (!brand && parsed && typeof parsed.brand === 'string') brand = parsed.brand;
+          }
+        } catch (_e) {
+          /* fall through */
+        }
+      }
+      if (!theme) theme = 'light';
+      html.setAttribute('data-theme', theme);
+      if (brand) html.setAttribute('data-brand', brand);
+      else html.removeAttribute('data-brand');
+    } catch (_e) {
+      /* never throw */
+    }
+  })();
+</script>
+<style>
+  :root {
+    color-scheme: light dark;
+  }
+  :root[data-theme='dark'],
+  :root[data-theme='high-contrast'] {
+    color-scheme: dark;
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+  rel="stylesheet"
+/>
+`,
+  );
+
+  await safeWriteFile(
+    path.join(storybookDir, 'preview-head.html'),
+    `<!--
+  FOUC prevention.
+
+  Storybook's \`addon-themes\` decorator runs AFTER first paint, so without
+  this block the preview iframe paints once at default-light tokens before
+  the persisted theme/brand attributes apply. That produces a visible
+  flash on dark/high-contrast pages.
+
+  Resolution rules:
+    - If the URL has a \`globals\` parameter at all, it is AUTHORITATIVE:
+      we read theme/brand only from URL keys present in that string;
+      missing keys default. We do NOT fall back to localStorage in this
+      case — otherwise a deep link like \`?globals=theme:dark\` (omitting
+      brand) would silently resurrect the previously-stored brand.
+    - If the URL has NO \`globals\` parameter, fall through to the
+      \`localStorage["helix:storybook:globals"]\` shadow maintained by the
+      preview decorators (Phase 3c).
+    - Final default: theme='light', no brand.
+
+  The :root background-color is also primed to surface-default so the
+  very first paint is at least neutral instead of stark white.
+-->
+<script>
+  (function () {
+    try {
+      var html = document.documentElement;
+      var theme = '';
+      var brand = '';
+      var urlHasGlobals = false;
+
+      try {
+        var url = new URL(window.location.href);
+        urlHasGlobals = url.searchParams.has('globals');
+        var raw = url.searchParams.get('globals') || '';
+        raw.split(';').forEach(function (pair) {
+          var idx = pair.indexOf(':');
+          if (idx === -1) return;
+          var k = pair.slice(0, idx).trim();
+          var v = pair.slice(idx + 1).trim();
+          if (k === 'theme') theme = v;
+          else if (k === 'brand') brand = v;
+        });
+      } catch (_e) {
+        urlHasGlobals = false;
+      }
+
+      if (!urlHasGlobals) {
+        try {
+          var stored = window.localStorage.getItem('helix:storybook:globals');
+          if (stored) {
+            var parsed = JSON.parse(stored);
+            if (!theme && parsed && typeof parsed.theme === 'string') theme = parsed.theme;
+            if (!brand && parsed && typeof parsed.brand === 'string') brand = parsed.brand;
+          }
+        } catch (_e) {
+          /* storage disabled or JSON broken */
+        }
+      }
+
+      if (!theme) theme = 'light';
+
+      html.setAttribute('data-theme', theme);
+      if (brand) html.setAttribute('data-brand', brand);
+      else html.removeAttribute('data-brand');
+    } catch (_e) {
+      /* never throw from FOUC-prevention */
+    }
+  })();
+</script>
+<style>
+  :root {
+    color-scheme: light dark;
+    background-color: var(--hx-color-surface-default, #ffffff);
+  }
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    background-color: var(--hx-color-surface-default, #0d1825);
+  }
+  :root[data-theme='high-contrast'] {
+    color-scheme: dark;
+    background-color: var(--hx-color-surface-default, #000000);
+  }
+  html,
+  body {
+    background-color: var(--hx-color-surface-default, #ffffff);
+  }
+  html[data-theme='dark'],
+  html[data-theme='dark'] body {
+    background-color: var(--hx-color-surface-default, #0d1825);
+  }
+  html[data-theme='high-contrast'],
+  html[data-theme='high-contrast'] body {
+    background-color: var(--hx-color-surface-default, #000000);
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+  rel="stylesheet"
+/>
+`,
+  );
+
   // ── helix.storybook.config.ts ────────────────────────────────────────────
   // Consumer-facing knob for hiding upstream Helix components, docs pages,
   // brand verticals, AAA scenes, and narrative pages. Phase 2 ships the

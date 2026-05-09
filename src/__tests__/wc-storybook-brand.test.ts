@@ -338,3 +338,140 @@ describe('wc-storybook Phase 3a — docs React components', () => {
     expect(audit).not.toContain('\\${githubBlobBase}');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b — CEM-coupled docs cards + FOUC sync scripts
+// ---------------------------------------------------------------------------
+
+describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
+  it('emits APGPatternCard.tsx with helixMeta CEM lookup', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3b-apg' });
+    await scaffoldProject(opts);
+    const file = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      '_components',
+      'APGPatternCard.tsx',
+    );
+    expect(await fs.pathExists(file)).toBe(true);
+    const src = await fs.readFile(file, 'utf-8');
+    expect(src).toContain('export interface APGPatternCardProps');
+    expect(src).toContain("import customElements from '@helixui/library/custom-elements.json'");
+    expect(src).toContain('keyboardContract');
+    expect(src).toContain('ariaPattern');
+    // Defensive null return when no helixMeta is found — guard against
+    // consumer-extended components that have not authored ARIA tags.
+    expect(src).toContain('if (!decl) return null');
+  });
+
+  it('emits A11yStatusCard.tsx under .storybook/docs/', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3b-a11y-status' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, '.storybook', 'docs', 'A11yStatusCard.tsx');
+    expect(await fs.pathExists(file)).toBe(true);
+    const src = await fs.readFile(file, 'utf-8');
+    expect(src).toContain('export interface A11yStatusCardProps');
+    expect(src).toContain("import customElements from '@helixui/library/custom-elements.json'");
+    // The 9 capability badges must all emit, even if their helixMeta
+    // fields are unset (the badges themselves return null when truthy=false).
+    for (const cap of [
+      'Forced colors',
+      'Form-associated',
+      'Theme-aware',
+      'Brand-aware',
+      'Drupal SDC',
+      'React wrapper',
+      'Stability',
+      'Since',
+    ]) {
+      expect(src).toContain(`label="${cap}"`);
+    }
+    // Tier tooltips (P0/P1/P2/Exempt) must all be present.
+    for (const tier of ['P0', 'P1', 'P2', 'Exempt']) {
+      expect(src).toContain(`${tier}:`);
+    }
+  });
+
+  it('emits HelixDocsPage.tsx under .storybook/docs/ that references A11yStatusCard', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3b-docs-page' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, '.storybook', 'docs', 'HelixDocsPage.tsx');
+    expect(await fs.pathExists(file)).toBe(true);
+    const src = await fs.readFile(file, 'utf-8');
+    expect(src).toContain('export function HelixDocsPage');
+    expect(src).toContain("from './A11yStatusCard'");
+    expect(src).toContain('<A11yStatusCard');
+    // Tag regex must match consumer-extended components, not just hx-*.
+    expect(src).toContain('/^[a-z][a-z0-9]*-[a-z0-9-]+$/');
+    // Pulls from useOf('meta') — official addon-docs blocks API.
+    expect(src).toContain("useOf('meta', ['meta'])");
+  });
+
+  it('all 3 Phase 3b docs cards survive the ${} round-trip escape test', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3b-escape-roundtrip' });
+    await scaffoldProject(opts);
+
+    const apg = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', '_components', 'APGPatternCard.tsx'),
+      'utf-8',
+    );
+    expect(apg).toContain('`ARIA pattern walkthrough for ${tag}`');
+    expect(apg).not.toContain('\\${tag}');
+
+    const a11y = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'docs', 'A11yStatusCard.tsx'),
+      'utf-8',
+    );
+    expect(a11y).toContain('`${REPO_BLOB_BASE}${aaa.auditUrl}`');
+    expect(a11y).toContain('`${kc.activate.join(\' / \')} activates`');
+    expect(a11y).not.toContain('\\${REPO_BLOB_BASE}');
+  });
+});
+
+describe('wc-storybook Phase 3b — FOUC sync scripts', () => {
+  it('emits manager-head.html with URL → localStorage → light fallback chain', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3b-manager-fouc' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, '.storybook', 'manager-head.html');
+    expect(await fs.pathExists(file)).toBe(true);
+    const html = await fs.readFile(file, 'utf-8');
+    expect(html).toContain("url.searchParams.has('globals')");
+    expect(html).toContain("'helix:storybook:globals'");
+    expect(html).toContain("if (!theme) theme = 'light'");
+    expect(html).toContain("html.setAttribute('data-theme', theme)");
+    expect(html).toContain('color-scheme: light dark');
+  });
+
+  it('emits preview-head.html with the same FOUC chain + per-mode pre-paint', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3b-preview-fouc' });
+    await scaffoldProject(opts);
+    const file = path.join(opts.directory, '.storybook', 'preview-head.html');
+    expect(await fs.pathExists(file)).toBe(true);
+    const html = await fs.readFile(file, 'utf-8');
+    expect(html).toContain("url.searchParams.has('globals')");
+    // Per-mode pre-paint background — the table-stakes anti-flash defense.
+    expect(html).toContain("var(--hx-color-surface-default, #ffffff)");
+    expect(html).toContain("var(--hx-color-surface-default, #0d1825)");
+    expect(html).toContain("var(--hx-color-surface-default, #000000)");
+  });
+
+  it('manager + preview FOUC scripts share the same localStorage key', async () => {
+    // Critical contract: manager-head.html and preview-head.html MUST
+    // read from the same localStorage key (`helix:storybook:globals`),
+    // otherwise the manager chrome and preview canvas drift on reload.
+    const opts = makeWcStorybookOptions({ name: 'phase3b-fouc-storage-key' });
+    await scaffoldProject(opts);
+    const mgr = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'manager-head.html'),
+      'utf-8',
+    );
+    const pv = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'preview-head.html'),
+      'utf-8',
+    );
+    const KEY = "'helix:storybook:globals'";
+    expect(mgr).toContain(KEY);
+    expect(pv).toContain(KEY);
+  });
+});
