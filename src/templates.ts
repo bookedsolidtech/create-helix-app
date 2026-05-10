@@ -299,6 +299,16 @@ export const TEMPLATES: TemplateConfig[] = [
       playwright: '^1.50.0',
       vite: '^6.4.0',
       typescript: '^5.7.0',
+      // React is required because the scaffold emits .tsx docs helpers
+      // (HelixDocsPage, A11yStatusCard, ConsumerObligations, etc.) that
+      // import from 'react' and '@storybook/addon-docs/blocks'. Storybook
+      // 10's web-components-vite renderer ships with React under the hood
+      // for autodocs — declaring it explicitly here so `pnpm install`
+      // resolves the import without relying on hoisting.
+      react: '^19.0.0',
+      'react-dom': '^19.0.0',
+      '@types/react': '^19.0.0',
+      '@types/react-dom': '^19.0.0',
     },
     features: [
       'web-components',

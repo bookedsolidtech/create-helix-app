@@ -634,8 +634,13 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         // The .d.ts emit step is critical — without it, downstream TS
         // consumers see "Could not find a declaration file for module"
         // errors and lose autocomplete for every exported component.
+        // --project tsconfig.build.json scopes declaration emit to src/
+        // only (rootDir=src) so output lands at dist/index.d.ts — the
+        // path package.json's "types" field advertises. The default
+        // tsconfig.json includes src + .storybook, which would emit
+        // dist/src/index.d.ts and break the typed-import contract.
         build:
-          'tsx scripts/build-tokens.ts && vite build && tsc --emitDeclarationOnly --declaration --outDir dist',
+          'tsx scripts/build-tokens.ts && vite build && tsc --project tsconfig.build.json',
         test: 'vitest run',
         'test:ui': 'vitest --ui',
         'type-check': 'tsc --noEmit',
@@ -12093,9 +12098,18 @@ function buildAndWrite(): void {
 buildAndWrite();
 
 if (process.argv.includes('--watch')) {
+  const inputDir = path.dirname(INPUT);
+  const inputFile = path.basename(INPUT);
   console.log(\`[build-tokens] watching \${path.relative(ROOT, INPUT)}\`);
   let rebuildTimer: NodeJS.Timeout | null = null;
-  fs.watch(INPUT, () => {
+  // Watch the PARENT DIRECTORY, not the file itself. Editors that save by
+  // atomic rename (VS Code, JetBrains, prettier-on-save, prettier-cli)
+  // replace the file, which severs an fs.watch attached to the original
+  // inode — the watcher silently dies and tokens.css stops rebuilding
+  // until storybook is restarted. Watching the directory and filtering
+  // by filename survives atomic replaces.
+  fs.watch(inputDir, (eventType, filename) => {
+    if (filename !== inputFile) return;
     // Ignore events that fire within SELF_WRITE_WINDOW_MS of our own
     // OUTPUT write — without this, fs.watch on macOS loops on its own
     // sibling write to tokens.css and rebuilds every ~3s.
@@ -12613,9 +12627,36 @@ export default defineConfig({
         resolveJsonModule: true,
         experimentalDecorators: true,
         useDefineForClassFields: false,
+        // JSX support is required because the scaffold emits .tsx React
+        // helpers under src/stories/_components/ and .storybook/docs/
+        // (HelixDocsPage, A11yStatusCard, etc.). Without `jsx`, both
+        // `pnpm type-check` and `pnpm build`'s declaration step fail with
+        // TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+        jsx: 'react-jsx',
       },
       include: ['src', '.storybook'],
       exclude: ['node_modules', 'dist', 'storybook-static'],
+    },
+    { spaces: 2 },
+  );
+
+  // ── tsconfig.build.json — declaration emit for `pnpm build` ──────────────
+  // Scopes tsc to src/ only with rootDir=src so emitted .d.ts files land
+  // directly under dist/ (matching package.json's "types": "./dist/index.d.ts")
+  // instead of the default dist/src/ that comes from including .storybook.
+  await safeWriteJson(
+    path.join(options.directory, 'tsconfig.build.json'),
+    {
+      extends: './tsconfig.json',
+      compilerOptions: {
+        rootDir: 'src',
+        outDir: 'dist',
+        declaration: true,
+        emitDeclarationOnly: true,
+        noEmit: false,
+      },
+      include: ['src'],
+      exclude: ['node_modules', 'dist', 'storybook-static', '.storybook', 'src/**/*.test.ts'],
     },
     { spaces: 2 },
   );
