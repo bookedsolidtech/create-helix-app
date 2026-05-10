@@ -8153,6 +8153,29 @@ const config: StorybookConfig = {
         useDefineForClassFields: false,
       },
     };
+    // Force-include @helixui/library in the dep-optimization graph so
+    // Vite pre-bundles it as a side-effecting dependency. Without this,
+    // production tree-shaking drops bare \`import '@helixui/library'\` and
+    // \`import '@helixui/library/components/<tag>'\` because the registration
+    // runs in a downstream chunk (dist/shared/*) that Rollup considers
+    // pure. \`treeshake.moduleSideEffects\` keeps the registration alive.
+    config.optimizeDeps.include ??= [];
+    config.optimizeDeps.include.push('@helixui/library');
+    config.build ??= {};
+    const existingRollupOptions = config.build.rollupOptions ?? {};
+    config.build.rollupOptions = {
+      ...existingRollupOptions,
+      treeshake: {
+        // Globally preserve module side effects. Without this, bare
+        // \`import '@helixui/library'\` and per-component side-effect
+        // imports get dropped during \`storybook build\` because Rollup
+        // chases the import chain into dist/shared/* and decides the
+        // @customElement decorator runtime is "pure". The bundle still
+        // tree-shakes unused exports — only side-effecting top-level
+        // module evaluation is preserved.
+        moduleSideEffects: true,
+      },
+    };
     return config;
   },
 };
@@ -8205,7 +8228,16 @@ import { html } from 'lit';
 // FIRST, then library (registers components which read tokens), then
 // the consumer's \`{prefix}-*\` overrides on top.
 import '@helixui/tokens/tokens.css';
-import '@helixui/library';
+// Anchor every hx-* registration into the bundle. Bare
+// \`import '@helixui/library'\` and per-component side-effect imports get
+// tree-shaken during \`storybook build\` because Rollup chases through
+// dist/components/*/index.js (which only re-exports) into dist/shared/*
+// (where the @customElement decorators run) and decides those modules
+// are pure. Importing a NAMED export and \`window\`-attaching it forces
+// Rollup to keep the import chain alive — the chain's evaluation runs
+// the registration as a side effect.
+import { HelixButton } from '@helixui/library';
+(window as unknown as { __helixUiAnchor: typeof HelixButton }).__helixUiAnchor = HelixButton;
 import '../src/tokens/tokens.css';
 import customElements from '../custom-elements.json';
 import { helixBackgroundsForMode, HELIX_THEME_MODES } from './manager-theme';
@@ -10607,6 +10639,7 @@ export default config;
  *      — consumer-facing knob. \`include: 'all'\` is the default. Specify
  *      an array to allow-list, then drop entries via \`exclude\`.
  */
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10624,6 +10657,7 @@ import helixConfig, { type HelixStorybookConfig } from '../helix.storybook.confi
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const CEM_PATH = join(ROOT, 'node_modules', '@helixui', 'library', 'custom-elements.json');
+const COMPONENTS_DIR = join(ROOT, 'node_modules', '@helixui', 'library', 'dist', 'components');
 const OUT_DIR = join(ROOT, 'src', 'stories', 'catalog');
 
 function shouldIncludeTag(
@@ -10646,18 +10680,54 @@ function kebabSafe(s: string): string {
   return s.replace(/[^a-z0-9]/gi, '_');
 }
 
+// Resolve which @helixui/library/components/* path actually has its own
+// dist/components/<tag>/index.js. Child components like hx-carousel-item
+// share their parent's bundle and don't have their own export path.
+// Strip suffixes (-item, -row, -cell, -panel, -divider) and try the parent.
+function componentImportPath(tag: string): string {
+  if (existsSync(join(COMPONENTS_DIR, tag))) return tag;
+  const parents: string[] = [];
+  const m = tag.match(/^(hx-.+?)(-(item|row|cell|panel|divider|head|body|foot|header))$/);
+  if (m) parents.push(m[1]);
+  // hx-tab → hx-tabs (singular → plural)
+  if (tag.endsWith('-tab')) parents.push(tag.replace(/-tab$/, '-tabs'));
+  for (const p of parents) {
+    if (existsSync(join(COMPONENTS_DIR, p))) return p;
+  }
+  // Last resort: full library import (will be tree-shaken in production
+  // build, but better than throwing — the catalog story will still emit).
+  return '';
+}
+
 function renderStoryFile(decl: CemDeclaration): string {
   const tag = decl.tagName!;
   const tier = classifyTier(decl);
   const className = pascal(tag);
   const argTypes = deriveArgTypes(decl);
   const args = { content: 'placeholder text', ...deriveArgs(decl) };
+  const importPath = componentImportPath(tag);
+  // Reference a named export so Rollup keeps the import. Bare side-effect
+  // imports (\`import '@helixui/library/components/hx-button'\`) get
+  // tree-shaken in production builds because the components/*/index.js
+  // only re-exports the class — Rollup cannot see that the upstream
+  // shared chunk has @customElement decorator side effects. Importing
+  // and referencing the class anchors the import chain, which forces the
+  // shared module (where the registration runs) to evaluate.
+  const stripPrefix = (s: string) => s.replace(/^hx-/, '');
+  const importLine = importPath
+    ? \`import * as _Reg_\${kebabSafe(tag)} from '@helixui/library/components/\${importPath}';
+// Reference the namespace so the import is not dropped by Rollup. The
+// imported module's evaluation is the side effect we need (it triggers
+// @customElement registration via Lit's decorator runtime).
+void _Reg_\${kebabSafe(tag)};\`
+    : \`import * as _libReg_\${kebabSafe(tag)} from '@helixui/library';
+void _libReg_\${kebabSafe(tag)};\`;
   return \`// GENERATED by scripts/generate-catalog.ts — do not edit by hand.
 // Regenerate with: pnpm cem:catalog
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import '@helixui/library';
+\${importLine}
 
 const meta: Meta = {
   title: 'HELiX/\${tier}/\${tag}',
@@ -10790,15 +10860,15 @@ pnpm build             # produce the publishable bundle
 <div className="hx-narrative-grid">
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title">Foundations</h3>
-    <p className="hx-narrative-card-body">Tokens, color, typography, spacing, layout, brand, accessibility.</p>
+    <div className="hx-narrative-card-body">Tokens, color, typography, spacing, layout, brand, accessibility.</div>
   </div>
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title">Patterns</h3>
-    <p className="hx-narrative-card-body">Form, dashboard, navigation compositions.</p>
+    <div className="hx-narrative-card-body">Form, dashboard, navigation compositions.</div>
   </div>
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title">Components</h3>
-    <p className="hx-narrative-card-body">Every HELiX atom, plus your own ${ds}-* extensions.</p>
+    <div className="hx-narrative-card-body">Every HELiX atom, plus your own ${ds}-* extensions.</div>
   </div>
 </div>
 
@@ -10825,21 +10895,21 @@ ${dsTitle} extends HELiX through a three-tier token cascade. Every component you
 <div className="hx-narrative-grid--single">
   <div className="hx-narrative-card hx-narrative-card--raised">
     <h3 className="hx-narrative-card-title">1. Primitive ramps</h3>
-    <p className="hx-narrative-card-body">
+    <div className="hx-narrative-card-body">
       <code>--hx-color-primary-{'{50..900}'}</code>, <code>${prefix}-color-primary-{'{50..900}'}</code> — raw color values, never bound directly to layout.
-    </p>
+    </div>
   </div>
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title">2. Semantic aliases</h3>
-    <p className="hx-narrative-card-body">
+    <div className="hx-narrative-card-body">
       <code>--hx-color-action-primary-bg</code> → <code>--hx-color-primary-600</code>. Mode-aware (light / dark / high-contrast). Bind these to layouts, not the primitives.
-    </p>
+    </div>
   </div>
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title">3. Component overrides</h3>
-    <p className="hx-narrative-card-body">
+    <div className="hx-narrative-card-body">
       <code>--hx-button-bg</code> → <code>--hx-color-action-primary-bg</code>. The escape hatch for one-off brand callouts; rarely needed, never authored at the layout level.
-    </p>
+    </div>
   </div>
 </div>
 
@@ -10896,22 +10966,22 @@ Four families, one rule: bind to **semantic** tokens, never primitives.
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Surface</h3>
     <code>--hx-color-surface-{'{default,raised,sunken}'}</code>
-    <p className="hx-narrative-card-body">Layout backgrounds. Tracks data-theme.</p>
+    <div className="hx-narrative-card-body">Layout backgrounds. Tracks data-theme.</div>
   </div>
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Text</h3>
     <code>--hx-color-text-{'{primary,muted,strong}'}</code>
-    <p className="hx-narrative-card-body">Foreground. Always paired with a surface for AAA contrast.</p>
+    <div className="hx-narrative-card-body">Foreground. Always paired with a surface for AAA contrast.</div>
   </div>
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Action</h3>
     <code>--hx-color-action-primary-bg</code>
-    <p className="hx-narrative-card-body">Interactive triggers. Bind buttons / links / focus rings here.</p>
+    <div className="hx-narrative-card-body">Interactive triggers. Bind buttons / links / focus rings here.</div>
   </div>
   <div className="hx-narrative-card">
     <h3 className="hx-narrative-card-title hx-narrative-card-title--lg">Status</h3>
     <code>--hx-color-{'{success,warning,danger,info}'}-bg</code>
-    <p className="hx-narrative-card-body">Outcome cues. AAA contrast guaranteed.</p>
+    <div className="hx-narrative-card-body">Outcome cues. AAA contrast guaranteed.</div>
   </div>
 </div>
 
