@@ -189,3 +189,150 @@
 .hx-narrative-hero-actions > *:first-child {
   flex: 1 1 auto;
 }
+
+/* ── Cover.mdx hero ─────────────────────────────────────────────────────── */
+/* Distinct from .hx-narrative-hero (which is the inline aurora-button mock-
+ * form). The Cover hero is full-width, top of page, with clear hierarchy:
+ * eyebrow (brand-color, smaller) → tagline (display) → verticals chips →
+ * subtext. Uses semantic action.* tokens so brand overrides recolor it
+ * automatically. */
+
+.hx-cover-hero {
+  margin: 0 0 32px;
+  padding: 40px 32px;
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      135deg,
+      var(--hx-color-action-primary-bg, #0f7078) 0%,
+      var(--hx-color-action-primary-bg-hover, #0d5e64) 100%
+    );
+  color: var(--hx-color-text-on-primary-strong, #ffffff);
+  position: relative;
+  overflow: hidden;
+}
+
+.hx-cover-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse at top right,
+      rgba(255, 255, 255, 0.12),
+      transparent 60%
+    );
+}
+
+.hx-cover-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hx-cover-hero-eyebrow {
+  margin: 0 0 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hx-color-text-on-primary-strong, #ffffff);
+  opacity: 0.85;
+}
+
+.hx-cover-hero-tagline {
+  margin: 0 0 20px;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--hx-color-text-on-primary-strong, #ffffff);
+  max-width: 720px;
+}
+
+.hx-cover-hero .hx-narrative-chip-row {
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hx-cover-hero .hx-narrative-chip {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: var(--hx-color-text-on-primary-strong, #ffffff);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hx-cover-hero-subtext {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--hx-color-text-on-primary-strong, #ffffff);
+  opacity: 0.75;
+}
+
+.hx-cover-hero-subtext code {
+  font-family: var(--hx-font-mono, ui-monospace, monospace);
+  background: rgba(255, 255, 255, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+/* ── Live swatches (Foundations/Color) ──────────────────────────────────── */
+/* Inline preview chips that resolve through the brand-token cascade. The
+ * chip uses the `--swatch-bg` custom property each row sets inline (so
+ * the consumer's tokens drive the color, not a hardcoded hex). */
+
+.hx-narrative-swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 24px 0 32px;
+  padding: 0;
+  list-style: none;
+}
+
+.hx-narrative-swatch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--hx-color-border-default, #dee2e6);
+  border-radius: 8px;
+  background: var(--hx-color-surface-default, #ffffff);
+  color: var(--hx-color-text-primary, #0d1825);
+  min-width: 0;
+}
+
+.hx-narrative-swatch-chip {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--swatch-bg, #cccccc);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.hx-narrative-swatch-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--hx-color-text-primary, #0d1825);
+}
+
+.hx-narrative-swatch-label code {
+  font-family: var(--hx-font-mono, ui-monospace, monospace);
+  font-size: 0.85em;
+  background: var(--hx-color-surface-sunken, #f8f9fa);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--hx-color-text-muted, #6c757d);
+}

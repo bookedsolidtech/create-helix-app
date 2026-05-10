@@ -8557,15 +8557,13 @@ const preview: Preview = {
     viewport: { options: helixViewports },
     actions: { argTypesRegex: '^hx-.*' },
     pseudo: {},
-    design: {
-      type: 'link',
-      name: '${dsTitle} component source',
-      url: '/',
-      label: 'View component source',
-      showArrow: true,
-      target: '_blank',
-      rel: 'noopener noreferrer',
-    },
+    // The @storybook/addon-designs "design" parameter is OPT-IN per
+    // story — when a real Figma URL is configured, the consumer adds
+    // it to the individual story's parameters block (e.g.
+    //   design: { type: 'figma', url: 'https://figma.com/...' }
+    // ). Setting a global default with url:'/' produced a broken
+    // external link on every story page; dropping the global default
+    // leaves the addon dormant until the consumer wires it intentionally.
   },
 
   /**
@@ -8676,8 +8674,16 @@ ${brandToolbarItemsLiteral},
   }
 
   decorators: [
-    // Global padding so stories do not render edge-to-edge.
-    (story) => html\`<div style="padding: 2rem;">\${story()}</div>\`,
+    // Global padding so stories do not render edge-to-edge. Padding is
+    // token-driven (\`--hx-space-04\`) so brand-token overrides reshape
+    // the canvas spacing automatically. Stories that need full-bleed
+    // (banners, full-page layouts) opt out via
+    // \`parameters: { layout: 'fullscreen' }\` — Storybook's built-in
+    // layout parameter bypasses decorators that wrap the story root.
+    (story, ctx) => {
+      if (ctx.parameters?.layout === 'fullscreen') return story();
+      return html\`<div style="padding: var(--hx-space-04, 1rem);">\${story()}</div>\`;
+    },
 
     // Theme switching via data-theme attribute on <html>. HELIX_THEME_MODES
     // is the single source of truth — kept in sync with manager-theme.ts.
@@ -10819,46 +10825,34 @@ Use it for the dominant call-to-action on a screen.
 
 ## Hero scene — ${heroTitle}
 
-<div
-  style={{
-    maxWidth: '440px',
-    padding: '24px',
-    border: '1px solid var(${prefix}-color-border-default, #dee2e6)',
-    borderRadius: '12px',
-    background: 'var(${prefix}-color-surface-default, #ffffff)',
-  }}
->
-  <h3 style={{ marginTop: 0, marginBottom: '12px' }}>${heroTitle}</h3>
-  <p style={{ marginTop: 0, marginBottom: '16px', color: 'var(${prefix}-color-text-muted, #6c757d)' }}>
+{/*
+  Hero scene uses real HELiX form atoms (hx-text-input) instead of raw
+  <input> — the whole point of demonstrating ${ds}-button is showing how
+  it composes with the rest of the platform. hx-text-input owns its own
+  label + helper-text + validation states; the consumer doesn't need to
+  rebuild that scaffolding on every form. Wrapper styling lives in
+  helix-narrative.css under .hx-narrative-hero so this MDX stays clean.
+*/}
+
+<div className="hx-narrative-hero">
+  <h3>${heroTitle}</h3>
+  <p className="hx-narrative-hero-intro">
     ${heroBody.replace(/\n/g, '\n    ')}
   </p>
-  <label style={{ display: 'block', marginBottom: '12px' }}>
-    <span style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>Email</span>
-    <input
-      type="email"
-      placeholder="you@example.com"
-      style={{
-        width: '100%',
-        padding: '8px 12px',
-        border: '1px solid var(${prefix}-color-border-default, #dee2e6)',
-        borderRadius: '6px',
-      }}
-    />
-  </label>
-  <label style={{ display: 'block', marginBottom: '16px' }}>
-    <span style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>Password</span>
-    <input
-      type="password"
-      style={{
-        width: '100%',
-        padding: '8px 12px',
-        border: '1px solid var(${prefix}-color-border-default, #dee2e6)',
-        borderRadius: '6px',
-      }}
-    />
-  </label>
-  <div style={{ display: 'flex', gap: '8px' }}>
-    <${ds}-button variant="primary" style={{ flex: '1 1 auto' }}>Sign in</${ds}-button>
+  <hx-text-input
+    label="Email"
+    type="email"
+    placeholder="you@example.com"
+    style={{ display: 'block', marginBottom: '12px' }}
+  ></hx-text-input>
+  <hx-text-input
+    label="Password"
+    type="password"
+    placeholder="••••••••"
+    style={{ display: 'block', marginBottom: '16px' }}
+  ></hx-text-input>
+  <div className="hx-narrative-hero-actions">
+    <${ds}-button variant="primary">Sign in</${ds}-button>
     <${ds}-button variant="ghost">Forgot?</${ds}-button>
   </div>
 </div>
@@ -11341,16 +11335,39 @@ main().catch((err) => {
   await safeEnsureDir(foundationsDir);
   await safeEnsureDir(patternsDir);
 
-  const taglineLineMdx = options.brandTagline
-    ? `> _${escapeMdxText(options.brandTagline)}_\n\n`
+  // Brand-tagline + verticals chip row are now wrapped in a styled
+  // hero block (\`hx-narrative-hero\`) so Cover.mdx leads with a real
+  // visual identity instead of a default markdown blockquote. The
+  // hero block surfaces:
+  //   - eyebrow: dsTitle name in brand-primary color
+  //   - tagline: large display copy (when brandTagline set)
+  //   - verticals: chip row with aria-label
+  //   - subtext: factory-attribution line
+  // Styles live in helix-narrative.css under .hx-narrative-hero / -eyebrow
+  // / -tagline / -subtext (added below).
+  const taglineMarkup = options.brandTagline
+    ? `\n  <p className="hx-cover-hero-tagline">${escapeMdxText(options.brandTagline)}</p>`
     : '';
   const verticalsList = (options.brandVerticals ?? [])
     .filter((v) => v.length > 0)
     .map((v) => escapeMdxText(v));
-  // Phase 5 v2 — chip row uses classes from helix-narrative.css so the
-  // styling resolves through var(--hx-color-*) tokens. Override at the
-  // consumer level by re-defining the same tokens or styling the
-  // .hx-narrative-chip class.
+  const verticalsRowMarkup =
+    verticalsList.length > 0
+      ? `\n  <ul aria-label="Brand verticals" className="hx-narrative-chip-row">\n${verticalsList
+          .map((v) => `    <li className="hx-narrative-chip">${v}</li>`)
+          .join('\n')}\n  </ul>`
+      : '';
+  const heroBlockMdx = `<header className="hx-cover-hero">
+  <p className="hx-cover-hero-eyebrow">${escapeMdxText(dsTitle)} Design System</p>${taglineMarkup}${verticalsRowMarkup}
+  <p className="hx-cover-hero-subtext">Built on HELiX + Lit 3 + Storybook 10. Generated by <code>create-helix</code>.</p>
+</header>
+
+`;
+  // Pre-existing references — keep the legacy variable names so the rest
+  // of the Cover.mdx template + Brand.mdx interpolation don't churn.
+  const taglineLineMdx = options.brandTagline
+    ? `_${escapeMdxText(options.brandTagline)}_\n\n`
+    : '';
   const verticalsRowMdx =
     verticalsList.length > 0
       ? `<ul aria-label="Brand verticals" className="hx-narrative-chip-row">\n${verticalsList
@@ -11366,16 +11383,24 @@ main().catch((err) => {
 
 <Meta title="Welcome/Cover" />
 
-# ${dsTitle}
-
-${taglineLineMdx}${verticalsRowMdx}A design system extending **HELiX**, generated by \`create-helix\` and built on Lit 3 + Storybook 10. Edit \`src/tokens/tokens.css\` and the components in \`src/components/\` — the rest is yours.
+${heroBlockMdx}A design system extending **HELiX**, generated by \`create-helix\` and built on Lit 3 + Storybook 10. Edit \`src/tokens/tokens.css\` and the components in \`src/components/\` — the rest is yours.
 
 ## Quick start
 
+Run the scripts with whichever package manager you installed with —
+\`pnpm\`, \`npm run\`, \`yarn\`, or \`bun run\` all wire to the same
+package.json scripts.
+
 \`\`\`bash
+# pnpm
 pnpm storybook         # open the design system at localhost:6006
 pnpm tokens:sync       # pull tokens from your Figma file (.env required)
 pnpm build             # produce the publishable bundle
+
+# npm
+npm run storybook
+npm run tokens:sync
+npm run build
 \`\`\`
 
 ## What's in this Storybook
@@ -11511,6 +11536,35 @@ Four families, one rule: bind to **semantic** tokens, never primitives.
 ## Contrast pairings
 
 All semantic surface/text pairings are pre-validated against WCAG 2.1 AAA (7:1 normal, 4.5:1 large). The **A11y Status Card** on each component page surfaces the per-criterion verdicts.
+
+## Live swatches
+
+Every chip below resolves through the same cascade your components use — change \`${prefix}-color-action-primary-bg\` and these update instantly.
+
+<div className="hx-narrative-swatch-row" aria-label="Action primary states">
+  <div className="hx-narrative-swatch" style={{'--swatch-bg': \`var(${prefix}-color-action-primary-bg, var(--hx-color-action-primary-bg))\`}}>
+    <span className="hx-narrative-swatch-chip" />
+    <span className="hx-narrative-swatch-label">Primary <code>bg</code></span>
+  </div>
+  <div className="hx-narrative-swatch" style={{'--swatch-bg': \`var(${prefix}-color-action-primary-bg-hover, var(--hx-color-action-primary-bg-hover))\`}}>
+    <span className="hx-narrative-swatch-chip" />
+    <span className="hx-narrative-swatch-label">Primary <code>bg-hover</code></span>
+  </div>
+  <div className="hx-narrative-swatch" style={{'--swatch-bg': \`var(${prefix}-color-action-primary-bg-active, var(--hx-color-action-primary-bg-active))\`}}>
+    <span className="hx-narrative-swatch-chip" />
+    <span className="hx-narrative-swatch-label">Primary <code>bg-active</code></span>
+  </div>
+  <div className="hx-narrative-swatch" style={{'--swatch-bg': \`var(${prefix}-color-action-secondary-bg, var(--hx-color-action-secondary-bg))\`}}>
+    <span className="hx-narrative-swatch-chip" />
+    <span className="hx-narrative-swatch-label">Secondary <code>bg</code></span>
+  </div>
+  <div className="hx-narrative-swatch" style={{'--swatch-bg': \`var(${prefix}-color-action-danger-bg, var(--hx-color-action-danger-bg))\`}}>
+    <span className="hx-narrative-swatch-chip" />
+    <span className="hx-narrative-swatch-label">Danger <code>bg</code></span>
+  </div>
+</div>
+
+For the full primitive ramp (\`primary-{'{50..950}'}\`, neutrals, semantic groups), see **Foundations/Token Swatches/Colors** — that page renders every entry from \`tokens.json\`, grouped by family.
 `,
   );
 
@@ -11692,7 +11746,7 @@ The \`${prefix}-*\` namespace flows through the same cascade as HELiX's \`--hx-*
 
 ${
   options.brandTagline
-    ? `> ${escapeMdxText(options.brandTagline)}\n\nThat tagline lives in \`Cover.mdx\`. The full voice sits with you.`
+    ? `Tagline (${escapeMdxText(options.brandTagline)}) lives in \`Cover.mdx\`. Editorial guidance — tone, vocabulary, do-and-don't phrases — belongs alongside it. Add a Voice subsection to Cover.mdx or a sibling \`Voice.mdx\` page as the brand vocabulary firms up.`
     : `Brand voice lives with you — taglines, vertical-specific copy, hero scenarios. The factory ships neutral defaults so the design system reads as a generic starter; replace them in your fork.`
 }
 
@@ -11767,16 +11821,73 @@ Animation respects \`prefers-reduced-motion: reduce\`. Components degrade to ins
 
 # Patterns
 
-Composed examples — full forms, dashboards, navigation chrome. The factory ships with this index page; your team authors patterns into \`src/stories/patterns/*.mdx\` as they emerge.
+Composed examples — full forms, dashboards, navigation chrome. Patterns
+demonstrate how the consumer's own \`${ds}-*\` components compose with
+HELiX form atoms, layout primitives, and feedback components into
+real product moments.
 
-## Suggested patterns
+This page ships with one starter pattern (Sign-in form). Author
+additional patterns into \`src/stories/patterns/*.mdx\` as they emerge —
+typical first batch is forms, feedback, data display, and navigation.
 
-- **Forms** — sign-in, intake, multi-step wizard. Pair \`${ds}-button\` with HELiX form atoms (\`hx-text-input\`, \`hx-checkbox\`, \`hx-select\`, etc.).
-- **Feedback** — toast, alert, inline-error patterns. Wire \`hx-toast\` for transient, \`hx-alert\` for persistent.
-- **Data display** — table, list, detail pages. Mix \`hx-data-table\` with summary cards.
-- **Navigation** — top-nav, side-nav, breadcrumbs. Combine \`hx-top-nav\` + \`hx-breadcrumb\` + your own routing.
+## Sign-in form
 
-The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the first scenario lands as the per-component hero scene; subsequent scenarios become the seed material for these pattern pages.
+A canonical authentication moment that exercises the full form stack:
+\`hx-text-input\` for email + password, \`${ds}-button\` for the primary
+action, \`hx-link\` for password recovery. Token-driven so the form
+re-skins automatically when brand tokens change.
+
+<div className="hx-narrative-hero" style={{ maxWidth: '420px', margin: '24px 0' }}>
+  <h3>Sign in to your workspace</h3>
+  <p className="hx-narrative-hero-intro">
+    Calm finance for everyone — sign in to continue.
+  </p>
+  <hx-text-input
+    label="Email"
+    type="email"
+    placeholder="you@example.com"
+    style={{ display: 'block', marginBottom: '12px' }}
+  ></hx-text-input>
+  <hx-text-input
+    label="Password"
+    type="password"
+    placeholder="••••••••"
+    style={{ display: 'block', marginBottom: '16px' }}
+  ></hx-text-input>
+  <div className="hx-narrative-hero-actions">
+    <${ds}-button variant="primary">Sign in</${ds}-button>
+    <${ds}-button variant="ghost">Forgot?</${ds}-button>
+  </div>
+</div>
+
+### Source
+
+\`\`\`tsx
+<form>
+  <hx-text-input label="Email" type="email" placeholder="you@example.com" />
+  <hx-text-input label="Password" type="password" />
+  <${ds}-button variant="primary" type="submit">Sign in</${ds}-button>
+  <${ds}-button variant="ghost">Forgot?</${ds}-button>
+</form>
+\`\`\`
+
+## Author your own patterns
+
+Drop a new \`.mdx\` file under \`src/stories/patterns/\` and Storybook will
+pick it up. Use the same \`<hx-narrative-hero>\` wrapper for the live
+preview, then add \`### Source\` and \`### Notes\` sections so the page
+reads as a recipe, not a screenshot.
+
+Suggested next patterns:
+
+- **Intake form** — multi-step wizard with \`hx-stepper\` + per-step validation
+- **Toast feedback** — \`hx-toast-stack\` wired to a save action
+- **Data table** — \`hx-data-table\` with sort, pagination, row selection
+- **Top navigation** — \`hx-top-nav\` + \`hx-breadcrumb\` + active-route handling
+
+The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the
+first scenario lands as the per-component hero scene; subsequent
+scenarios become the seed material for additional pattern pages.
 `,
   );
 
@@ -11885,17 +11996,17 @@ export const Introduction: Story = {
         padding: 1rem;
         font-size: 0.875rem;
         overflow: auto;
-      "># Start Storybook
-pnpm storybook
+"># Start Storybook (use whichever package manager you installed with)
+pnpm storybook       # or: npm run storybook  /  yarn storybook
 
 # Run interaction tests
-pnpm test
+pnpm test            # or: npm run test  /  yarn test
 
 # Build component library
-pnpm build
+pnpm build           # or: npm run build  /  yarn build
 
 # Generate Custom Elements Manifest (for autodocs)
-pnpm cem:analyze</pre>
+pnpm cem:analyze     # or: npm run cem:analyze  /  yarn cem:analyze</pre>
 
       <p style="margin-top: 2rem; font-size: 0.85rem; color: #adb5bd;">
         Scaffolded with

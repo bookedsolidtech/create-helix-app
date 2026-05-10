@@ -679,11 +679,15 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
       'utf-8',
     );
     expect(src).toContain('<Meta title="Welcome/Cover" />');
-    // Cover surfaces the consumer's dsTitle in the H1.
-    expect(src).toContain('# Aurora');
+    // Cover renders the dsTitle as the hero eyebrow ("Aurora Design
+    // System") inside the .hx-cover-hero block. The previous bare
+    // `# Aurora` H1 was replaced when the hero block became the
+    // canonical title treatment.
+    expect(src).toContain('Aurora Design System');
+    expect(src).toContain('hx-cover-hero-eyebrow');
   });
 
-  it('Cover.mdx surfaces brandTagline as a > blockquote when provided', async () => {
+  it('Cover.mdx surfaces brandTagline inside the cover hero block', async () => {
     const opts = makeWcStorybookOptions({
       name: 'phase4-cover-tagline',
       brandTagline: 'Calm finance for everyone.',
@@ -693,7 +697,12 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
       path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
       'utf-8',
     );
-    expect(src).toContain('> _Calm finance for everyone._');
+    // The tagline now renders as the .hx-cover-hero-tagline display
+    // copy inside the gradient hero block, replacing the previous bare
+    // `> _Calm finance for everyone._` blockquote (which had no visual
+    // hierarchy / brand color and read as a quoted citation).
+    expect(src).toContain('hx-cover-hero-tagline');
+    expect(src).toContain('Calm finance for everyone.');
   });
 
   it('Cover.mdx renders brandVerticals as chip row when provided', async () => {
