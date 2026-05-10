@@ -1314,3 +1314,145 @@ export function ContrastMatrix({ mode, live = false }: ContrastMatrixProps) {
 }
 `;
 }
+
+// ---------------------------------------------------------------------------
+// Editorial layout primitives — consumed by Phase 3 accessibility narrative
+// MDXes. Lifted from helix/apps/storybook/stories/_components/. Tiny, pure,
+// CEM-free. Wrap inside the `.hx-docs` MDX container so the editorial CSS
+// layer applies.
+// ---------------------------------------------------------------------------
+
+export function eyebrowHeadingSrc(): string {
+  return `import * as React from 'react';
+
+/**
+ * Editorial 6/4 column header — mono eyebrow above oversized headline,
+ * optional lede in the right column. Lifted from
+ * helix/apps/storybook/stories/_components/EyebrowHeading.tsx.
+ *
+ * Wrap in a \`.hx-docs\` container (provided by every MDX page wrapper)
+ * so the editorial CSS layer applies.
+ */
+export interface EyebrowHeadingProps {
+  /** Mono uppercase label above the title. */
+  eyebrow: string;
+  /** Headline. */
+  title: string;
+  /** Optional supporting lede paragraph in the right column. */
+  lede?: React.ReactNode;
+  /** Override the headline element (defaults to \`h1\`). */
+  as?: 'h1' | 'h2';
+}
+
+export function EyebrowHeading({
+  eyebrow,
+  title,
+  lede,
+  as: Heading = 'h1',
+}: EyebrowHeadingProps): React.ReactElement {
+  return (
+    <header className="hx-docs-eyebrow-heading">
+      <div>
+        <p className="hx-docs-eyebrow">{eyebrow}</p>
+        <Heading className="hx-docs-headline">{title}</Heading>
+      </div>
+      {lede ? <div className="hx-docs-lede">{lede}</div> : null}
+    </header>
+  );
+}
+`;
+}
+
+export function sectionHeadSrc(): string {
+  return `import * as React from 'react';
+
+/**
+ * Section divider — h2 with optional mono-meta annotation, baseline-aligned,
+ * separated from the section body by a 1px rule. Lifted from
+ * helix/apps/storybook/stories/_components/SectionHead.tsx.
+ */
+export interface SectionHeadProps {
+  title: string;
+  /** Mono token annotation displayed flush-right. */
+  meta?: string;
+}
+
+export function SectionHead({ title, meta }: SectionHeadProps): React.ReactElement {
+  return (
+    <div className="hx-docs-section-head">
+      <h2>{title}</h2>
+      {meta ? <span className="hx-docs-section-meta">{meta}</span> : null}
+    </div>
+  );
+}
+`;
+}
+
+export function statCardSrc(): string {
+  return `import * as React from 'react';
+
+/**
+ * Stat card — large tabular numerals with optional trailing unit, mono label.
+ * Lifted from helix/apps/storybook/stories/_components/StatCard.tsx.
+ *
+ * Use inside a \`<div className="hx-docs-stats">…</div>\` row container so the
+ * 4-column grid + dividers apply.
+ */
+export interface StatCardProps {
+  /** Primary number (e.g. \`3\`, \`240\`, \`4.5\`). */
+  num: string | number;
+  /** Optional small trailing unit (e.g. \`tiers\`, \`+\`, \`:1\`, \`px\`). */
+  unit?: string;
+  /** Mono uppercase label below the number. */
+  label: string;
+  /** Optional sub-label rendered in small mono below the main label. */
+  sub?: string;
+}
+
+export function StatCard({ num, unit, label, sub }: StatCardProps): React.ReactElement {
+  return (
+    <div className="hx-docs-stat">
+      <div className="hx-docs-stat-num">
+        {num}
+        {unit ? <small>{unit}</small> : null}
+      </div>
+      <div className="hx-docs-stat-label">{label}</div>
+      {sub ? <div className="hx-docs-stat-sub">{sub}</div> : null}
+    </div>
+  );
+}
+`;
+}
+
+export function docsCardSrc(): string {
+  return `import * as React from 'react';
+
+/**
+ * Card with a title, optional mono tag, and body content. Adapted from
+ * helix/apps/storybook/stories/_components/DocsCard.tsx — the upstream
+ * variant required a separate \`demo\` prop; this version accepts content
+ * via \`children\` so the accessibility narrative MDXes can pass plain
+ * paragraphs, lists, or composed JSX without splitting copy from layout.
+ */
+export interface DocsCardProps {
+  /** Card title (h4-equivalent). */
+  title: string;
+  /** Optional mono tag flush-right. */
+  tag?: string;
+  /** Body content — paragraphs, lists, code blocks, or composed JSX. */
+  children?: React.ReactNode;
+}
+
+export function DocsCard({ title, tag, children }: DocsCardProps): React.ReactElement {
+  return (
+    <div className="hx-docs-card">
+      <div className="hx-docs-card-head">
+        <h4 className="hx-docs-card-title">{title}</h4>
+        {tag ? <span className="hx-docs-card-tag">{tag}</span> : null}
+      </div>
+      {children ? <div className="hx-docs-card-body">{children}</div> : null}
+    </div>
+  );
+}
+`;
+}

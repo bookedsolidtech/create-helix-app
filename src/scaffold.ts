@@ -20,9 +20,14 @@ import {
   codeBlockSrc,
   codeTabsSrc,
   contrastMatrixSrc,
+  eyebrowHeadingSrc,
+  sectionHeadSrc,
+  statCardSrc,
+  docsCardSrc,
 } from './scaffold/wc-storybook/helpers.js';
 import { inlineAuditPanelStubSrc } from './scaffold/wc-storybook/audit-stub.js';
 import { getComponentMdxEmissions } from './scaffold/wc-storybook/mdx-components.js';
+import { getAccessibilityMdxEmissions } from './scaffold/wc-storybook/mdx-accessibility.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -8539,8 +8544,25 @@ const preview: Preview = {
             'Spacing',
             'Layout',
             'Brand',
-            'Accessibility',
             'Token Swatches',
+          ],
+          // Phase 3 — top-level Accessibility namespace, positioned between
+          // Foundations (the design-language ledger) and Components (the
+          // shipped surface). Houses the 8 narrative pages: Dashboard,
+          // Success Criteria, Consumer Obligations, Keyboard Contracts,
+          // Focus Management, Contrast Deep-Dive, Forced Colors, AAA
+          // Story Template. Without explicit placement, Storybook would
+          // sort it alphabetically (between 'A11y addon' and 'Components').
+          'Accessibility',
+          [
+            'Dashboard',
+            'Success Criteria',
+            'Consumer Obligations',
+            'Keyboard Contracts',
+            'Focus Management',
+            'Contrast Deep-Dive',
+            'Forced Colors',
+            'AAA Story Template',
           ],
           'Components',
           'HELiX',
@@ -9942,6 +9964,19 @@ export function ConsumerObligations({
   await safeWriteFile(path.join(componentsDocsDir, 'CodeTabs.tsx'), codeTabsSrc());
   await safeWriteFile(path.join(componentsDocsDir, 'ContrastMatrix.tsx'), contrastMatrixSrc());
 
+  // ── Editorial layout primitives (Phase 3) ────────────────────────────────
+  // Tiny pure-React presentational helpers consumed by the accessibility
+  // narrative MDXes (EyebrowHeading title block, SectionHead dividers,
+  // StatCard stat rows, DocsCard split-content cards). Lifted from
+  // helix/apps/storybook/stories/_components/ alongside the Phase 1 set.
+  // DocsCard adapted to accept body content via `children` instead of the
+  // upstream `demo` prop — the narrative MDXes pass paragraphs/lists, not
+  // a sealed demo zone.
+  await safeWriteFile(path.join(componentsDocsDir, 'EyebrowHeading.tsx'), eyebrowHeadingSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'SectionHead.tsx'), sectionHeadSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'StatCard.tsx'), statCardSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'DocsCard.tsx'), docsCardSrc());
+
   // ── APGPatternCard.tsx (CEM-coupled, in src/stories/_components/) ────────
 
   await safeWriteFile(
@@ -10832,6 +10867,23 @@ Use it for the dominant call-to-action on a screen.
   // Phase 1). Refs: shimmying-roaming-kernighan plan, Phase 2.
   const componentMdxEmissions = getComponentMdxEmissions({ dsName: ds, dsClass: ClassName });
   for (const emission of componentMdxEmissions) {
+    await safeWriteFile(path.join(options.directory, emission.relativePath), emission.content);
+  }
+
+  // ── src/stories/accessibility/*.mdx + _snippets.ts ───────────────────────
+  // Phase 3 — port 8 accessibility narrative MDXes from helix/apps/storybook/
+  // stories/accessibility/ into the new top-level `Accessibility` namespace
+  // (storySort entry above). Pages: Dashboard, AAA Story Template, Success
+  // Criteria, Consumer Obligations, Keyboard Contracts, Focus Management,
+  // Contrast Deep-Dive, Forced Colors. Accompanying `_snippets.ts` carries
+  // the CSS / TS code-string constants the MDXes feed into <CodeBlock> /
+  // <CodeTabs>. Healthcare-vertical demo content rewritten to neutral
+  // SaaS / team-tool examples per `feedback_realistic_sample_data`. NO
+  // `?raw` AAA-AUDIT.md imports, NO monorepo-path links survive the port.
+  // Refs: shimmying-roaming-kernighan plan, Phase 3.
+  await safeEnsureDir(path.join(storiesDir, 'accessibility'));
+  const a11yMdxEmissions = getAccessibilityMdxEmissions({ dsName: ds, dsClass: ClassName });
+  for (const emission of a11yMdxEmissions) {
     await safeWriteFile(path.join(options.directory, emission.relativePath), emission.content);
   }
 

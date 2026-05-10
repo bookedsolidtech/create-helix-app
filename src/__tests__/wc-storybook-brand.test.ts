@@ -1113,3 +1113,206 @@ describe('wc-storybook Phase 2 — 7 component conformance MDXes', () => {
     expect(src).not.toContain('HxCard');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3 — 8 accessibility narrative MDXes + _snippets.ts
+//
+// Validates the new src/scaffold/wc-storybook/mdx-accessibility/ split:
+// emits the 8 narrative pages plus the _snippets.ts module under
+// src/stories/accessibility/, all titled `Accessibility/*`, no monorepo
+// links or healthcare keywords leak through, and the storySort emission
+// in .storybook/preview.ts surfaces the new top-level Accessibility
+// namespace between Foundations and Components.
+// ---------------------------------------------------------------------------
+
+const PHASE3_PAGES = [
+  'AAAStoryTemplate',
+  'ConsumerObligations',
+  'ContrastDeepDive',
+  'Dashboard',
+  'FocusManagement',
+  'ForcedColors',
+  'KeyboardContracts',
+  'SuccessCriteria',
+] as const;
+
+const PHASE3_TITLE_BY_PAGE: Record<(typeof PHASE3_PAGES)[number], string> = {
+  AAAStoryTemplate: 'Accessibility/AAA Story Template',
+  ConsumerObligations: 'Accessibility/Consumer Obligations',
+  ContrastDeepDive: 'Accessibility/Contrast Deep-Dive',
+  Dashboard: 'Accessibility/Dashboard',
+  FocusManagement: 'Accessibility/Focus Management',
+  ForcedColors: 'Accessibility/Forced Colors',
+  KeyboardContracts: 'Accessibility/Keyboard Contracts',
+  SuccessCriteria: 'Accessibility/Success Criteria',
+};
+
+describe('wc-storybook Phase 3 — 8 accessibility narrative MDXes', () => {
+  for (const page of PHASE3_PAGES) {
+    it(`emits src/stories/accessibility/${page}.mdx`, async () => {
+      const opts = makeWcStorybookOptions({ name: `phase3-${page.toLowerCase()}-emits` });
+      await scaffoldProject(opts);
+      const fp = path.join(opts.directory, 'src', 'stories', 'accessibility', `${page}.mdx`);
+      expect(await fs.pathExists(fp), `${page}.mdx should exist`).toBe(true);
+      const src = await fs.readFile(fp, 'utf-8');
+      // Sanity: meaningful content, not a 0-byte stub.
+      expect(src.length, `${page}.mdx should be non-empty`).toBeGreaterThan(500);
+    });
+  }
+
+  it('emits _snippets.ts alongside the 8 MDXes', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3-snippets-emits' });
+    await scaffoldProject(opts);
+    const fp = path.join(opts.directory, 'src', 'stories', 'accessibility', '_snippets.ts');
+    expect(await fs.pathExists(fp), '_snippets.ts should exist').toBe(true);
+    const src = await fs.readFile(fp, 'utf-8');
+    // Sanity: the eight named code-string constants the MDXes import.
+    for (const named of [
+      'FORCED_COLORS_BUTTON_CSS',
+      'FORCED_COLORS_DONT_CSS',
+      'FORCED_COLORS_DO_CSS',
+      'FOCUS_RING_CSS',
+      'DIALOG_HTML',
+      'DIALOG_TS',
+      'ROVING_TABINDEX_TS',
+      'TABS_KEYDOWN_TS',
+      'CONTRAST_RATIO_TS',
+      'REGENERATE_CONTRAST_BASH',
+    ]) {
+      expect(src).toContain(`export const ${named}`);
+    }
+  });
+
+  it('all 8 emitted MDXes contain zero forbidden monorepo paths or healthcare keywords', async () => {
+    // Per shimmying-roaming-kernighan plan, Phase 3 hold condition: broken
+    // monorepo links shipped to consumers > missing pages. Healthcare-vertical
+    // copy is forbidden per `feedback_realistic_sample_data`.
+    const opts = makeWcStorybookOptions({ name: 'phase3-forbidden-strings' });
+    await scaffoldProject(opts);
+    const dir = path.join(opts.directory, 'src', 'stories', 'accessibility');
+    const forbidden = [
+      '?raw',
+      'packages/hx-library',
+      'apps/storybook/scripts',
+      'aaa-standards.json',
+      // Healthcare keywords — none of these may appear in emitted body content.
+      // Match whole words: `provider` excluded (allowed if it appears in a
+      // generic SaaS sense like "service provider"); the upstream uses are
+      // healthcare-specific ("provider-dashboard"), so we check the more
+      // domain-locked terms: patient, MRN, clinic, intake.
+      'patient',
+      'MRN',
+      'clinic',
+      'intake',
+    ];
+    const allFiles = [...PHASE3_PAGES.map((p) => `${p}.mdx`), '_snippets.ts'];
+    for (const fileName of allFiles) {
+      const fp = path.join(dir, fileName);
+      const src = await fs.readFile(fp, 'utf-8');
+      for (const needle of forbidden) {
+        expect(
+          src.includes(needle),
+          `${fileName} must not contain forbidden string "${needle}"`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('all 8 page titles are namespaced under Accessibility/*', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3-titles' });
+    await scaffoldProject(opts);
+    const dir = path.join(opts.directory, 'src', 'stories', 'accessibility');
+    for (const page of PHASE3_PAGES) {
+      const fp = path.join(dir, `${page}.mdx`);
+      const src = await fs.readFile(fp, 'utf-8');
+      const expectedTitle = PHASE3_TITLE_BY_PAGE[page];
+      expect(src, `${page}.mdx should declare title="${expectedTitle}"`).toContain(
+        `title="${expectedTitle}"`,
+      );
+    }
+  });
+
+  it('Accessibility/Consumer Obligations PAGE coexists with the ConsumerObligations TSX COMPONENT', async () => {
+    // Disambiguation test — the upstream collision the plan flagged. The
+    // PAGE lives under accessibility/ConsumerObligations.mdx with title
+    // 'Accessibility/Consumer Obligations' (note the SPACE). The COMPONENT
+    // lives under _components/ConsumerObligations.tsx and is imported by
+    // every Phase 2 component MDX. Both must be present and unambiguous.
+    const opts = makeWcStorybookOptions({ name: 'phase3-collision' });
+    await scaffoldProject(opts);
+    const pageFp = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'accessibility',
+      'ConsumerObligations.mdx',
+    );
+    const componentFp = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      '_components',
+      'ConsumerObligations.tsx',
+    );
+    expect(await fs.pathExists(pageFp), 'page .mdx must exist').toBe(true);
+    expect(await fs.pathExists(componentFp), 'component .tsx must exist').toBe(true);
+
+    const pageSrc = await fs.readFile(pageFp, 'utf-8');
+    expect(pageSrc).toContain('title="Accessibility/Consumer Obligations"');
+
+    // Phase 2 component MDXes import the TSX as `<ConsumerObligations>` —
+    // verify the import path still resolves alongside the new namespaced page.
+    const cardMdxFp = path.join(opts.directory, 'src', 'stories', 'components', 'aurora-card.mdx');
+    const cardSrc = await fs.readFile(cardMdxFp, 'utf-8');
+    expect(cardSrc).toMatch(
+      /import\s+\{\s*ConsumerObligations\s*\}\s+from\s+'\.\.\/_components\/ConsumerObligations'/,
+    );
+  });
+
+  it('storySort in .storybook/preview.ts surfaces a top-level Accessibility namespace', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3-storysort' });
+    await scaffoldProject(opts);
+    const previewFp = path.join(opts.directory, '.storybook', 'preview.ts');
+    expect(await fs.pathExists(previewFp), 'preview.ts must exist').toBe(true);
+    const src = await fs.readFile(previewFp, 'utf-8');
+
+    // The storySort `order:` array literal is the only meaningful token-order
+    // surface; ad-hoc string searches in the surrounding code (comments,
+    // import blocks) hit false-positives. Carve out just the order-array
+    // literal and assert positions inside it. The order array contains
+    // nested sub-arrays, so a non-greedy match would stop at the first
+    // `]`. We grab from `order: [` up to `\n      },` (the storySort
+    // object close) instead.
+    const orderHead = src.indexOf('order: [');
+    expect(orderHead, 'storySort.order must be declared').toBeGreaterThanOrEqual(0);
+    const orderTail = src.indexOf('\n      },', orderHead);
+    expect(orderTail, 'storySort object close must follow order:').toBeGreaterThan(orderHead);
+    const orderBody = src.slice(orderHead, orderTail);
+
+    // Top-level Accessibility entry — sits between Foundations (and its
+    // nested sub-array) and Components in the order list. Strip out any
+    // commentary lines starting with '//' so quoted token references in
+    // explanatory comments do not mask the real entry positions.
+    const stripped = orderBody
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+
+    expect(stripped).toContain("'Accessibility'");
+
+    const foundationsIdx = stripped.indexOf("'Foundations'");
+    const componentsIdx = stripped.indexOf("'Components'");
+    const accessibilityIdx = stripped.indexOf("'Accessibility'");
+
+    expect(foundationsIdx, "'Foundations' must be in the order array").toBeGreaterThanOrEqual(0);
+    expect(componentsIdx, "'Components' must be in the order array").toBeGreaterThanOrEqual(0);
+
+    // Accessibility must sit AFTER Foundations and BEFORE Components.
+    expect(accessibilityIdx, "'Accessibility' must appear after Foundations").toBeGreaterThan(
+      foundationsIdx,
+    );
+    expect(accessibilityIdx, "'Accessibility' must appear before Components").toBeLessThan(
+      componentsIdx,
+    );
+  });
+});
