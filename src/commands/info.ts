@@ -22,6 +22,14 @@ export function showTemplateInfo(id: string, json: boolean): void {
             hint: template.hint,
             dependencies: template.dependencies,
             devDependencies: template.devDependencies,
+            // peerDependencies is the consumer-host contract surface for
+            // library templates (e.g. wc-storybook's @helixui/library /
+            // @helixui/tokens 3.3.1 cascade pin). Tooling that audits or
+            // pre-installs template requirements needs this — only emit
+            // when populated to keep app-style template output minimal.
+            ...(template.peerDependencies && Object.keys(template.peerDependencies).length > 0
+              ? { peerDependencies: template.peerDependencies }
+              : {}),
             features: template.features,
           },
           null,
@@ -50,6 +58,15 @@ export function showTemplateInfo(id: string, json: boolean): void {
     if (Object.keys(template.devDependencies).length > 0) {
       console.log(pc.bold('  Dev Dependencies'));
       for (const [pkg, version] of Object.entries(template.devDependencies)) {
+        console.log(`    ${pc.cyan(pkg.padEnd(36))} ${pc.dim(version)}`);
+      }
+      console.log('');
+    }
+
+    if (template.peerDependencies && Object.keys(template.peerDependencies).length > 0) {
+      console.log(pc.bold('  Peer Dependencies'));
+      console.log(pc.dim('    (the consumer host MUST satisfy these versions)'));
+      for (const [pkg, version] of Object.entries(template.peerDependencies)) {
         console.log(`    ${pc.cyan(pkg.padEnd(36))} ${pc.dim(version)}`);
       }
       console.log('');

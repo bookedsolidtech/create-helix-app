@@ -8190,7 +8190,18 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   // dsName values like '../../outside' that get interpolated into
   // path.join() targets below. The CLI / JSON paths validate, but this
   // entry point is a public API surface that must self-defend.
-  const dsRaw = options.dsName ?? 'my-ds';
+  // Fall back to the project name when dsName is not supplied — the api.ts
+  // (scaffold(...)) entry never accepts dsName today, so a generic
+  // fallback like 'my-ds' produced <my-ds-button> tags and --my-ds-* tokens
+  // for every API caller. Project name is the consumer's intent for the
+  // package; deriving the design-system codename from it matches the CLI's
+  // initialValue (projectName ?? 'my-ds') and gives API callers a sensible
+  // identity without forcing them to expose dsName separately. Project
+  // names like @scope/pkg fail validateDsName, so we only fall back when
+  // the project name is itself a valid dsName.
+  const projectAsDsName =
+    options.name && validateDsName(options.name) === undefined ? options.name : null;
+  const dsRaw = options.dsName ?? projectAsDsName ?? 'my-ds';
   const dsErr = validateDsName(dsRaw);
   if (dsErr) {
     throw new HelixError(ErrorCode.PATH_TRAVERSAL, `Invalid dsName "${dsRaw}": ${dsErr}`);
