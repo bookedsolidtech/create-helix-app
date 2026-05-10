@@ -597,10 +597,16 @@ function getScripts(options: ProjectOptions): Record<string, string> {
       // package-manager-agnostic — `npm run storybook`, `pnpm storybook`, and
       // `yarn storybook` all work without requiring pnpm to be installed.
       return {
+        // The chain is: build-tokens (CSS) → cem analyze (refresh
+        // custom-elements.json from src/components/*) → generate-catalog
+        // (per-tag .stories.ts from CEM) → storybook. Skipping cem:analyze
+        // means setCustomElementsManifest() loads an empty stub and every
+        // autodocs API table renders blank until the consumer manually
+        // runs `pnpm cem:analyze`.
         storybook:
-          'tsx scripts/build-tokens.ts && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
+          'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
         'build-storybook':
-          'tsx scripts/build-tokens.ts && tsx scripts/generate-catalog.ts && storybook build',
+          'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && storybook build',
         build: 'tsx scripts/build-tokens.ts && vite build',
         test: 'vitest run',
         'test:ui': 'vitest --ui',

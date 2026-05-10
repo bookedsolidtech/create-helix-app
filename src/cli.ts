@@ -292,6 +292,21 @@ export async function runJsonScaffold(
         process.exit(1);
       }
     }
+    // When --ds-name is omitted in JSON mode the project name is used as
+    // the fallback, but validateProjectName accepts shapes that
+    // validateDsName rejects (leading digits, underscores). Validate the
+    // resolved value the scaffolder will actually use, so wc-storybook
+    // never silently produces invalid hx-* tag / class names downstream.
+    const resolvedDsName = opts.dsNameFromArgs ?? name;
+    const dsErr = validateDsName(resolvedDsName);
+    if (dsErr) {
+      const result: ScaffoldJsonResult = {
+        success: false,
+        error: `Invalid ds-name fallback "${resolvedDsName}" (derived from project name): ${dsErr}. Pass --ds-name explicitly.`,
+      };
+      console.log(JSON.stringify(result, null, 2));
+      process.exit(1);
+    }
   }
 
   const options: import('./types.js').ProjectOptions = {
