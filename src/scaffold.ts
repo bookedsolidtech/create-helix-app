@@ -8542,13 +8542,25 @@ const preview: Preview = {
         ? persisted.theme
         : 'light';
     // Validate the persisted brand against THIS scaffold's allowed
-    // verticals before applying. Storybook's localStorage key is
-    // namespaced only by origin, so two scaffolds running on the
-    // default localhost:6006 share state — and a removed/renamed
-    // vertical would otherwise re-apply data-brand="<stale>" on first
-    // load. Allowed list is derived from the brand toolbar items below.
+    // verticals AND the runtime helixConfig.brand filter before applying.
+    // Storybook's localStorage key is namespaced only by origin, so two
+    // scaffolds running on the default localhost:6006 share state — and
+    // a removed/renamed vertical would otherwise re-apply
+    // data-brand="<stale>" on first load. The scaffold-time list is the
+    // baseline; the config filter narrows it further at runtime so
+    // helixConfig.brand.include/exclude actually have an effect on
+    // initial state, not just toolbar item visibility.
+    const scaffoldVerticals: readonly string[] = [${brandVerticalsList.length > 0 ? '\n      ' + brandVerticalsList.map((v) => JSON.stringify(v.toLowerCase().replace(/[^a-z0-9-]+/g, '-'))).join(',\n      ') + ',' : ''}
+    ];
+    const brandInclude = helixConfig.brand?.include;
+    const brandExclude = helixConfig.brand?.exclude ?? [];
     const allowedBrandValues: readonly string[] = [
-      '',${brandVerticalsList.length > 0 ? '\n      ' + brandVerticalsList.map((v) => JSON.stringify(v.toLowerCase().replace(/[^a-z0-9-]+/g, '-'))).join(',\n      ') + ',' : ''}
+      '', // unbranded baseline always allowed
+      ...scaffoldVerticals.filter((v) => {
+        if (brandExclude.includes(v)) return false;
+        if (brandInclude === 'all' || brandInclude === undefined) return true;
+        return brandInclude.includes(v);
+      }),
     ];
     const persistedBrand =
       typeof persisted?.brand === 'string' ? persisted.brand : '';
@@ -9619,6 +9631,7 @@ import {
   isHipaaAdjacent,
   type Cem,
 } from './_catalog-helpers.js';
+import helixConfig from '../../helix.storybook.config';
 
 /**
  * HELiX catalog overview — lists every non-excluded hx-* component grouped by
@@ -9636,8 +9649,20 @@ import {
  * Build Spec references: §5 (HIPAA redaction), §7 (tier classification).
  */
 
+// Honor helix.storybook.config.ts components.include / exclude so the
+// overview stays in sync with the per-component catalog stories generated
+// by scripts/generate-catalog.ts. Without this, removing hx-button via
+// config still left it on the overview page even though its docs page
+// disappeared from the sidebar.
+const componentsConfig = helixConfig.components ?? { include: 'all', exclude: [] };
+function shouldIncludeOverviewTag(tag: string): boolean {
+  if (componentsConfig.exclude.includes(tag)) return false;
+  if (componentsConfig.include === 'all') return true;
+  return componentsConfig.include.includes(tag);
+}
 const declarations = walkCem(cem as Cem)
   .filter((d) => d.tagName && !isHipaaAdjacent(d.tagName))
+  .filter((d) => shouldIncludeOverviewTag(d.tagName!))
   .sort((a, b) => a.tagName!.localeCompare(b.tagName!));
 
 const byTier = {
@@ -11019,7 +11044,34 @@ const meta: Meta = {
       .filter(Boolean)
       .join(' ');
     const slot = (args as Record<string, unknown>).content ?? 'placeholder text';
-    const markup = \\\`<\${tag}\\\${attrs ? ' ' + attrs : ''}>\\\${slot}</\${tag}>\\\`;
+    // Some Helix tags are CHILD components — they only render inside a
+    // specific parent (e.g. hx-carousel-item inside hx-carousel,
+    // hx-tab/hx-tab-panel inside hx-tabs). Rendered standalone they
+    // appear empty or unstructured. Wrap the child in its expected
+    // parent so the catalog story shows a meaningful preview.
+    const PARENT_WRAPPERS: Record<string, string> = {
+      'hx-accordion-item': 'hx-accordion',
+      'hx-breadcrumb-item': 'hx-breadcrumb',
+      'hx-carousel-item': 'hx-carousel',
+      'hx-list-item': 'hx-list',
+      'hx-menu-item': 'hx-menu',
+      'hx-menu-divider': 'hx-menu',
+      'hx-nav-item': 'hx-nav',
+      'hx-tab': 'hx-tabs',
+      'hx-tab-panel': 'hx-tabs',
+      'hx-tree-item': 'hx-tree-view',
+      'hx-step': 'hx-steps',
+      'hx-tr': 'hx-table',
+      'hx-th': 'hx-table',
+      'hx-td': 'hx-table',
+      'hx-thead': 'hx-table',
+      'hx-tbody': 'hx-table',
+      'hx-tfoot': 'hx-table',
+      'hx-structured-list-row': 'hx-structured-list',
+    };
+    const inner = \\\`<\${tag}\\\${attrs ? ' ' + attrs : ''}>\\\${slot}</\${tag}>\\\`;
+    const wrapper = PARENT_WRAPPERS['\${tag}'];
+    const markup = wrapper ? \\\`<\\\${wrapper}>\\\${inner}</\\\${wrapper}>\\\` : inner;
     return html\\\`\\\${unsafeHTML(markup)}\\\`;
   },
 };
