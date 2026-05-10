@@ -7,7 +7,7 @@ import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions, AnyTemplateConfig } from './types.js';
 import { HelixError, ErrorCode } from './errors.js';
-import { validateDsName, validateTokenPrefix } from './validation.js';
+import { validateDsName, validateTokenPrefix, unscopeName } from './validation.js';
 import { HookManager, buildHookContext } from './plugins/hooks.js';
 import { loadHelixRcHooks } from './plugins/config-loader.js';
 import { discoverPlugins } from './plugins/plugin-discovery.js';
@@ -8233,12 +8233,13 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   // fallback like 'my-ds' produced <my-ds-button> tags and --my-ds-* tokens
   // for every API caller. Project name is the consumer's intent for the
   // package; deriving the design-system codename from it matches the CLI's
-  // initialValue (projectName ?? 'my-ds') and gives API callers a sensible
-  // identity without forcing them to expose dsName separately. Project
-  // names like @scope/pkg fail validateDsName, so we only fall back when
-  // the project name is itself a valid dsName.
+  // initialValue and gives API callers a sensible identity without forcing
+  // them to expose dsName separately. Strip the @scope/ prefix first so
+  // `@acme/design-system` falls back to dsName='design-system' instead of
+  // failing validation outright.
+  const unscopedName = options.name ? unscopeName(options.name) : null;
   const projectAsDsName =
-    options.name && validateDsName(options.name) === undefined ? options.name : null;
+    unscopedName && validateDsName(unscopedName) === undefined ? unscopedName : null;
   const dsRaw = options.dsName ?? projectAsDsName ?? 'my-ds';
   const dsErr = validateDsName(dsRaw);
   if (dsErr) {

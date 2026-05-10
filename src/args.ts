@@ -113,75 +113,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
     tokens: argv.includes('--tokens') || argv.includes('--no-tokens'),
   };
 
-  // --template
-  const templateArgIndex = argv.indexOf('--template');
-  const templateStr = templateArgIndex !== -1 ? (argv[templateArgIndex + 1] ?? null) : null;
-  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
-
-  if (templateStr !== null && !validFrameworks.includes(templateStr as Framework)) {
-    throw new HelixError(
-      ErrorCode.INVALID_TEMPLATE,
-      `Invalid template: "${templateStr}". Valid options: ${validFrameworks.join(', ')}`,
-    );
-  }
-  const template = templateStr as Framework | null;
-
-  // --preset
-  const presetArgIndex = argv.indexOf('--preset');
-  const presetStr = presetArgIndex !== -1 ? (argv[presetArgIndex + 1] ?? null) : null;
-
-  if (presetStr !== null && !isValidPreset(presetStr)) {
-    throw new HelixError(
-      ErrorCode.INVALID_PRESET,
-      `Invalid preset: "${presetStr}". Valid presets: standard, blog, healthcare, intranet`,
-    );
-  }
-  const preset = presetStr as DrupalPreset | null;
-
-  // --bundles
-  const bundlesArgIndex = argv.indexOf('--bundles');
-  const bundlesStr = bundlesArgIndex !== -1 ? (argv[bundlesArgIndex + 1] ?? null) : null;
-  const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
-
-  let bundles: ComponentBundle[] | null = null;
-  if (bundlesStr !== null) {
-    const requested = bundlesStr.split(',').map((s) => s.trim()) as ComponentBundle[];
-    const invalid = requested.filter((b) => !validBundles.includes(b));
-    if (invalid.length > 0) {
-      throw new HelixError(
-        ErrorCode.INVALID_BUNDLE,
-        `Invalid bundle(s): ${invalid.map((b) => `"${b}"`).join(', ')}. Valid options: ${validBundles.join(', ')}`,
-      );
-    }
-    bundles = requested;
-  }
-
-  // --output-dir / -o
-  const outputDirArgIndex =
-    argv.indexOf('--output-dir') !== -1 ? argv.indexOf('--output-dir') : argv.indexOf('-o');
-  const outputDir = outputDirArgIndex !== -1 ? (argv[outputDirArgIndex + 1] ?? null) : null;
-
-  // --profile
-  const profileArgIndex = argv.indexOf('--profile');
-  const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
-
-  // Helper: read a value flag accepting either `--flag value` or
-  // `--flag=value`. The repo's own docs use both forms.
-  //
-  // The next-token check is set-based, not prefix-based: token-prefix's
-  // valid values themselves start with `--` (e.g. `--token-prefix --bolt`),
-  // so a blanket "if next starts with --" reject would silently drop
-  // every space-form invocation of that flag. Instead, we consult a
-  // known set of CLI option names — if the next argv token matches a
-  // known option, treat it as the next flag (not a value). Anything
-  // else, including `--bolt`, is accepted as a value.
-  // Set of every documented CLI option so readValueFlag can distinguish
-  // "next argv is the value" from "next argv is the next flag". Keep in
-  // sync with src/cli.ts argv parsing — missing entries cause space-form
-  // value-flags (e.g. `--ds-name acme --quiet`) to incorrectly capture
-  // the next flag as the value.
+  // Set of every documented CLI option so readValueFlag (defined below)
+  // can distinguish "next argv is the value" from "next argv is the
+  // next flag". Scoped to this function so both the legacy flags
+  // (--template / --preset / --bundles / --output-dir / --profile) and
+  // the wc-storybook flags (--ds-name / --token-prefix / --brand-*)
+  // share one parser. Missing entries cause space-form value-flags to
+  // incorrectly capture the next flag as the value.
   const KNOWN_OPTIONS = new Set([
-    // value-bearing options
     '--ds-name',
     '--token-prefix',
     '--brand-tagline',
@@ -195,7 +134,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     '--config',
     '--bundles',
     '--preset',
-    // boolean / mode flags
     '--yes',
     '-y',
     '--json',
@@ -215,11 +153,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
     '--dark-mode',
     '--skip-audit',
     '--offline',
+    '--no-config',
+    '--drupal',
     '--help',
     '-h',
     '--version',
     '-v',
   ]);
+  // Helper: read a value flag accepting either `--flag value` or
+  // `--flag=value`. The repo's own docs use both forms; routing every
+  // value-flag through this helper keeps the two surfaces consistent
+  // (previously --template / --preset / --bundles / --output-dir /
+  // --profile silently dropped the `=` form).
   const readValueFlag = (flag: string): string | null => {
     const eqPrefix = `${flag}=`;
     const eqEntry = argv.find((a) => a.startsWith(eqPrefix));
@@ -230,6 +175,52 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (next === undefined || KNOWN_OPTIONS.has(next)) return null;
     return next;
   };
+
+  // --template (accepts both `--template wc-storybook` and `--template=wc-storybook`)
+  const templateStr = readValueFlag('--template');
+  const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
+
+  if (templateStr !== null && !validFrameworks.includes(templateStr as Framework)) {
+    throw new HelixError(
+      ErrorCode.INVALID_TEMPLATE,
+      `Invalid template: "${templateStr}". Valid options: ${validFrameworks.join(', ')}`,
+    );
+  }
+  const template = templateStr as Framework | null;
+
+  // --preset (accepts both space- and `=`-forms)
+  const presetStr = readValueFlag('--preset');
+
+  if (presetStr !== null && !isValidPreset(presetStr)) {
+    throw new HelixError(
+      ErrorCode.INVALID_PRESET,
+      `Invalid preset: "${presetStr}". Valid presets: standard, blog, healthcare, intranet`,
+    );
+  }
+  const preset = presetStr as DrupalPreset | null;
+
+  // --bundles (accepts both space- and `=`-forms)
+  const bundlesStr = readValueFlag('--bundles');
+  const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
+
+  let bundles: ComponentBundle[] | null = null;
+  if (bundlesStr !== null) {
+    const requested = bundlesStr.split(',').map((s) => s.trim()) as ComponentBundle[];
+    const invalid = requested.filter((b) => !validBundles.includes(b));
+    if (invalid.length > 0) {
+      throw new HelixError(
+        ErrorCode.INVALID_BUNDLE,
+        `Invalid bundle(s): ${invalid.map((b) => `"${b}"`).join(', ')}. Valid options: ${validBundles.join(', ')}`,
+      );
+    }
+    bundles = requested;
+  }
+
+  // --output-dir / -o (accepts both space- and `=`-forms on either alias)
+  const outputDir = readValueFlag('--output-dir') ?? readValueFlag('-o');
+
+  // --profile (accepts both space- and `=`-forms)
+  const profile = readValueFlag('--profile');
 
   // --ds-name (design system codename, used by wc-storybook)
   const dsName = readValueFlag('--ds-name');

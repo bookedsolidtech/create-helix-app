@@ -130,16 +130,33 @@ describe('validateProjectName', () => {
     expect(validateProjectName('   ')).toBe('Project name is required');
   });
 
-  it('rejects a name with a forward slash', () => {
-    expect(validateProjectName('my/app')).toBe(
-      'Project name cannot contain path separators (/ or \\)',
+  it('rejects a name with a forward slash that is NOT an npm scope', () => {
+    // @scope/name is now allowed for publishable library scaffolds
+    // (wc-storybook). A bare slash without the @-prefix is still
+    // rejected because it has no scope semantics — it's a path
+    // separator. The error message comes from the unscoped-pattern
+    // check since `my/app` doesn't match either branch.
+    expect(validateProjectName('my/app')).toMatch(
+      /lowercase letters, numbers, hyphens, and underscores/,
     );
   });
 
   it('rejects a name with a backslash', () => {
     expect(validateProjectName('my\\app')).toBe(
-      'Project name cannot contain path separators (/ or \\)',
+      'Project name cannot contain backslash path separators',
     );
+  });
+
+  it('accepts npm scoped names for publishable libraries', () => {
+    expect(validateProjectName('@acme/design-system')).toBeUndefined();
+    expect(validateProjectName('@booked/ui-kit')).toBeUndefined();
+  });
+
+  it('rejects malformed scoped names', () => {
+    // empty scope or empty name segment
+    expect(validateProjectName('@/x')).toMatch(/Scoped names must follow @scope\/name/);
+    expect(validateProjectName('@a/')).toMatch(/Scoped names must follow @scope\/name/);
+    expect(validateProjectName('@/')).toMatch(/Scoped names must follow @scope\/name/);
   });
 
   it('rejects a name starting with a dot', () => {

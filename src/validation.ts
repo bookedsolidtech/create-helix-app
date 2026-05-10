@@ -48,9 +48,10 @@ export function validateProjectName(value: string): string | undefined {
   // Reject empty strings and whitespace-only strings
   if (!value || !value.trim()) return 'Project name is required';
 
-  // Reject names with path separators
-  if (value.includes('/') || value.includes('\\'))
-    return 'Project name cannot contain path separators (/ or \\)';
+  // Reject backslash separators (Windows path traversal vector). Forward
+  // slash is allowed only as part of an npm scope: `@scope/name`.
+  if (value.includes('\\'))
+    return 'Project name cannot contain backslash path separators';
 
   // Reject names starting with . or ..
   if (value.startsWith('.')) return 'Project name cannot start with a dot';
@@ -61,11 +62,36 @@ export function validateProjectName(value: string): string | undefined {
   // Reject reserved names
   if (RESERVED_NAMES.has(value)) return `"${value}" is a reserved name and cannot be used`;
 
-  // Reject uppercase, spaces, and special characters — only a-z, 0-9, hyphens, underscores allowed
+  // Allow npm scoped names (@scope/name) so library publishers can
+  // scaffold packages like @acme/design-system. Both halves must
+  // independently match the unscoped name pattern. Scope and name are
+  // each validated to prevent `@/x`, `@a/.x`, etc. from sneaking through.
+  if (value.startsWith('@')) {
+    const m = value.match(/^@([a-z0-9][a-z0-9-_]*)\/([a-z0-9][a-z0-9-_]*)$/);
+    if (!m) {
+      return 'Scoped names must follow @scope/name with lowercase letters, numbers, hyphens, and underscores';
+    }
+    return undefined;
+  }
+
+  // Unscoped: only a-z, 0-9, hyphens, underscores allowed
   if (!/^[a-z0-9][a-z0-9-_]*$/.test(value))
     return 'Use only lowercase letters, numbers, hyphens, and underscores (must start with a letter or digit)';
 
   return undefined;
+}
+
+/**
+ * Returns the unscoped portion of an npm-style name. Use this for any
+ * filesystem-derived value (directory name, dsName fallback, etc.)
+ * because path separators in `@scope/pkg` would otherwise traverse.
+ *   unscope('@acme/design-system') → 'design-system'
+ *   unscope('aurora-kit')          → 'aurora-kit'
+ */
+export function unscopeName(name: string): string {
+  if (!name.startsWith('@')) return name;
+  const slash = name.indexOf('/');
+  return slash === -1 ? name : name.slice(slash + 1);
 }
 
 /**
