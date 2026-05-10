@@ -12383,7 +12383,12 @@ if (process.argv.includes('--watch')) {
   // until storybook is restarted. Watching the directory and filtering
   // by filename survives atomic replaces.
   fs.watch(inputDir, (eventType, filename) => {
-    if (filename !== inputFile) return;
+    // On platforms / filesystems where fs.watch delivers filename === null
+    // for directory events (some Linux setups, network drives), accept
+    // the event and let the rebuild run. The match is best-effort —
+    // missing it means we'd silently stop regenerating tokens.css for
+    // those environments, which is worse than a few extra rebuilds.
+    if (filename !== null && filename !== inputFile) return;
     // Ignore events that fire within SELF_WRITE_WINDOW_MS of our own
     // OUTPUT write — without this, fs.watch on macOS loops on its own
     // sibling write to tokens.css and rebuilds every ~3s.
