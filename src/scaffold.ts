@@ -9456,6 +9456,11 @@ const byTier = {
 const meta: Meta = {
   title: 'HELiX/Catalog Overview',
   tags: ['autodocs'],
+  // Tell Storybook's indexer that __catalogTagNames is a NON-story export
+  // (data for tests/tooling). Without this, Storybook tries to render the
+  // string array as a story and the page errors with
+  // "component annotation is missing from the default export".
+  excludeStories: ['__catalogTagNames'],
   parameters: {
     layout: 'padded',
     docs: {
