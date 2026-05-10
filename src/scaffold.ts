@@ -28,6 +28,8 @@ import {
 import { inlineAuditPanelStubSrc } from './scaffold/wc-storybook/audit-stub.js';
 import { getComponentMdxEmissions } from './scaffold/wc-storybook/mdx-components.js';
 import { getAccessibilityMdxEmissions } from './scaffold/wc-storybook/mdx-accessibility.js';
+import { getTokenMdxEmissions } from './scaffold/wc-storybook/mdx-tokens.js';
+import { getSceneEmissions } from './scaffold/wc-storybook/scenes.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -8539,6 +8541,11 @@ const preview: Preview = {
           'Foundations',
           [
             'Tokens',
+            // Phase 4 — Tokens subtree: the existing
+            // foundations/Tokens.mdx index page surfaces first; the
+            // deep-dives + playground follow, then a trailing wildcard
+            // for any future deep-dive.
+            ['Index', 'Borders', 'Shadows', 'Playground', '*'],
             'Color',
             'Typography',
             'Spacing',
@@ -8564,6 +8571,13 @@ const preview: Preview = {
             'Forced Colors',
             'AAA Story Template',
           ],
+          // Phase 4 — top-level Patterns namespace surfaces composition
+          // examples (the cross-domain-neutral scenes ported from helix).
+          // The patterns catalog index lives under Welcome/Patterns
+          // (already pinned above); this entry orders the new Scenes
+          // subtree first, with a wildcard for future pattern additions.
+          'Patterns',
+          ['Scenes', '*'],
           'Components',
           'HELiX',
           '*',
@@ -10884,6 +10898,39 @@ Use it for the dominant call-to-action on a screen.
   await safeEnsureDir(path.join(storiesDir, 'accessibility'));
   const a11yMdxEmissions = getAccessibilityMdxEmissions({ dsName: ds, dsClass: ClassName });
   for (const emission of a11yMdxEmissions) {
+    await safeWriteFile(path.join(options.directory, emission.relativePath), emission.content);
+  }
+
+  // ── src/stories/foundations/tokens/{Borders,Shadows}.mdx ─────────────────
+  // Phase 4 — port the 2 token deep-dive MDXes from helix/apps/storybook/
+  // stories/tokens/. These nest under `Foundations/Tokens/*` via title path;
+  // the existing `src/stories/foundations/Tokens.mdx` (with title
+  // `Foundations/Tokens`) becomes the index sibling. Both pages iterate over
+  // the upstream `@helixui/tokens` `tokensByCategory` index to render
+  // radius / width / shadow swatches. Refs: shimmying-roaming-kernighan
+  // plan, Phase 4 (Part A).
+  await safeEnsureDir(path.join(storiesDir, 'foundations', 'tokens'));
+  const tokenMdxEmissions = getTokenMdxEmissions({ dsName: ds, dsClass: ClassName });
+  for (const emission of tokenMdxEmissions) {
+    await safeEnsureDir(path.dirname(path.join(options.directory, emission.relativePath)));
+    await safeWriteFile(path.join(options.directory, emission.relativePath), emission.content);
+  }
+
+  // ── src/stories/patterns/scenes/*.stories.ts + tokens/Tokens.stories.tsx ─
+  // Phase 4 — port 4 cross-domain-neutral scene stories. Three live under
+  // `Patterns/Scenes/*` (Account Setup, Team Dashboard, Settings) and the
+  // playground lives under `Foundations/Tokens/Playground`. Helix's
+  // healthcare-locked patient-intake / provider-dashboard stories were
+  // rewritten as generic SaaS flows per `feedback_realistic_sample_data`.
+  // Every literal `hx-*` tag is rewritten to the consumer's `{ds}-*`;
+  // component-registry imports stay literal so the consumer's `{ds}-*`
+  // classes extend the upstream Helix classes through their scaffolded
+  // `client-element.ts`. Refs: shimmying-roaming-kernighan plan, Phase 4
+  // (Part B).
+  await safeEnsureDir(path.join(storiesDir, 'patterns', 'scenes'));
+  const sceneEmissions = getSceneEmissions({ dsName: ds, dsClass: ClassName });
+  for (const emission of sceneEmissions) {
+    await safeEnsureDir(path.dirname(path.join(options.directory, emission.relativePath)));
     await safeWriteFile(path.join(options.directory, emission.relativePath), emission.content);
   }
 

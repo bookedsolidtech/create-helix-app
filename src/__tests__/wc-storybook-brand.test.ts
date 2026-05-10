@@ -1316,3 +1316,311 @@ describe('wc-storybook Phase 3 — 8 accessibility narrative MDXes', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Token deep-dives + cross-domain-neutral scene stories
+//
+// Asserts the 2 token MDXes (Borders, Shadows) emit under Foundations/Tokens/*
+// and the 4 scene stories (account-setup, team-dashboard, settings,
+// Tokens.stories.tsx playground) emit with their tag substitutions clean.
+// Forbidden healthcare strings are explicitly grepped — must be zero matches
+// across all Phase 4 emissions.
+// ---------------------------------------------------------------------------
+
+describe('wc-storybook Phase 4 — token deep-dive MDXes', () => {
+  it('emits Borders.mdx at foundations/tokens/Borders.mdx with the nested Meta title', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-borders' });
+    await scaffoldProject(opts);
+
+    const bordersPath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'foundations',
+      'tokens',
+      'Borders.mdx',
+    );
+    expect(await fs.pathExists(bordersPath)).toBe(true);
+
+    const src = await fs.readFile(bordersPath, 'utf8');
+    expect(src).toContain('title="Foundations/Tokens/Borders"');
+    // Iterates over upstream `@helixui/tokens` tokensByCategory['border']
+    expect(src).toContain("tokensByCategory['border']");
+    expect(src).toContain('getTokensByPrefix');
+  });
+
+  it('emits Shadows.mdx at foundations/tokens/Shadows.mdx with the nested Meta title', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-shadows' });
+    await scaffoldProject(opts);
+
+    const shadowsPath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'foundations',
+      'tokens',
+      'Shadows.mdx',
+    );
+    expect(await fs.pathExists(shadowsPath)).toBe(true);
+
+    const src = await fs.readFile(shadowsPath, 'utf8');
+    expect(src).toContain('title="Foundations/Tokens/Shadows"');
+    expect(src).toContain("tokensByCategory['shadow']");
+    // Domain-neutral demo card content (NOT "Patient Summary").
+    expect(src).toContain('Project handoff');
+  });
+});
+
+describe('wc-storybook Phase 4 — cross-domain-neutral scene stories', () => {
+  it('emits account-setup.stories.ts under patterns/scenes/', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-account' });
+    await scaffoldProject(opts);
+
+    const filePath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'patterns',
+      'scenes',
+      'account-setup.stories.ts',
+    );
+    expect(await fs.pathExists(filePath)).toBe(true);
+    const src = await fs.readFile(filePath, 'utf8');
+    expect(src).toContain("title: 'Patterns/Scenes/Account Setup'");
+    // Real sign-up flow shape:
+    expect(src).toContain('Create your account');
+    expect(src).toContain('terms of service');
+  });
+
+  it('emits team-dashboard.stories.ts under patterns/scenes/', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-team' });
+    await scaffoldProject(opts);
+
+    const filePath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'patterns',
+      'scenes',
+      'team-dashboard.stories.ts',
+    );
+    expect(await fs.pathExists(filePath)).toBe(true);
+    const src = await fs.readFile(filePath, 'utf8');
+    expect(src).toContain("title: 'Patterns/Scenes/Team Dashboard'");
+    // Generic team admin overview shape:
+    expect(src).toContain('Active members');
+    expect(src).toContain('Pending invites');
+  });
+
+  it('emits settings.stories.ts under patterns/scenes/', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-settings' });
+    await scaffoldProject(opts);
+
+    const filePath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'patterns',
+      'scenes',
+      'settings.stories.ts',
+    );
+    expect(await fs.pathExists(filePath)).toBe(true);
+    const src = await fs.readFile(filePath, 'utf8');
+    expect(src).toContain("title: 'Patterns/Scenes/Settings'");
+    // Healthcare-tinted labels neutralized:
+    expect(src).toContain('Workspace invites');
+    expect(src).toContain('Mentions & comments');
+    // Tabs still wired (general / notifications / accessibility):
+    expect(src).toContain('tab-general');
+    expect(src).toContain('tab-notifications');
+    expect(src).toContain('tab-accessibility');
+  });
+
+  it('emits Tokens.stories.tsx playground under foundations/tokens/', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-playground' });
+    await scaffoldProject(opts);
+
+    const filePath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'foundations',
+      'tokens',
+      'Tokens.stories.tsx',
+    );
+    expect(await fs.pathExists(filePath)).toBe(true);
+    const src = await fs.readFile(filePath, 'utf8');
+    expect(src).toContain("title: 'Foundations/Tokens/Playground'");
+    // The 4 control-rail brands still emit (cascade-contract demo):
+    expect(src).toContain('BrandMeridian');
+    expect(src).toContain('BrandLumen');
+    expect(src).toContain('SharpDense');
+    expect(src).toContain('SoftSpacious');
+  });
+});
+
+describe('wc-storybook Phase 4 — substitution + neutrality guarantees', () => {
+  it('all 4 scenes substitute hx-* → {ds}-* tags (dsName=aurora produces aurora-, zero literal <hx-)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-sub' });
+    await scaffoldProject(opts);
+
+    const sceneFiles = [
+      'src/stories/patterns/scenes/account-setup.stories.ts',
+      'src/stories/patterns/scenes/team-dashboard.stories.ts',
+      'src/stories/patterns/scenes/settings.stories.ts',
+      'src/stories/foundations/tokens/Tokens.stories.tsx',
+    ];
+
+    for (const rel of sceneFiles) {
+      const src = await fs.readFile(path.join(opts.directory, rel), 'utf8');
+
+      // Tag substitution landed — aurora-* appears in body.
+      expect(src, `${rel} must contain aurora- tag references`).toMatch(/aurora-/);
+
+      // No literal `<hx-*` opening tags in body. Strip out the
+      // `@helixui/library/components/hx-*` import lines (those stay
+      // literal — they're the upstream classes the consumer's tags
+      // extend) and the `--hx-` token name references (those stay
+      // literal — they're the published-package token names).
+      const bodyOnly = src
+        .split('\n')
+        .filter((line) => !line.includes("from '@helixui/library/components/hx-"))
+        .join('\n');
+      expect(bodyOnly, `${rel} must NOT contain literal <hx- tags`).not.toMatch(/<hx-/);
+    }
+  });
+
+  it('forbidden healthcare strings: zero matches across all Phase 4 emissions', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-forbidden' });
+    await scaffoldProject(opts);
+
+    const phase4Dirs = [
+      path.join(opts.directory, 'src', 'stories', 'patterns', 'scenes'),
+      path.join(opts.directory, 'src', 'stories', 'foundations', 'tokens'),
+    ];
+
+    const forbidden = [
+      'patient',
+      'MRN',
+      'clinic',
+      'intake',
+      'provider',
+      'chart',
+      'appointment',
+      'prescription',
+      'medication',
+      'consent form',
+    ];
+
+    for (const dir of phase4Dirs) {
+      const files = await fs.readdir(dir);
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        const stat = await fs.stat(filePath);
+        if (!stat.isFile()) continue;
+        const content = await fs.readFile(filePath, 'utf8');
+        for (const term of forbidden) {
+          const re = new RegExp(`\\b${term}\\b`, 'gi');
+          expect(
+            content.match(re),
+            `${file} must contain zero matches of forbidden term "${term}"`,
+          ).toBeNull();
+        }
+      }
+    }
+  });
+
+  it('all 4 scenes import expect + userEvent + within from storybook/test (NOT @storybook/jest)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-imports' });
+    await scaffoldProject(opts);
+
+    const sceneFiles = [
+      'src/stories/patterns/scenes/account-setup.stories.ts',
+      'src/stories/patterns/scenes/team-dashboard.stories.ts',
+      'src/stories/patterns/scenes/settings.stories.ts',
+    ];
+
+    for (const rel of sceneFiles) {
+      const src = await fs.readFile(path.join(opts.directory, rel), 'utf8');
+      expect(src, `${rel} must import from storybook/test`).toMatch(
+        /from\s+['"]storybook\/test['"]/,
+      );
+      expect(src, `${rel} must NOT import from @storybook/jest (deprecated)`).not.toMatch(
+        /@storybook\/jest/,
+      );
+    }
+  });
+
+  it('Phase 4 scenes use Lit html`` template render functions', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-lit' });
+    await scaffoldProject(opts);
+
+    const sceneFiles = [
+      'src/stories/patterns/scenes/account-setup.stories.ts',
+      'src/stories/patterns/scenes/team-dashboard.stories.ts',
+      'src/stories/patterns/scenes/settings.stories.ts',
+      'src/stories/foundations/tokens/Tokens.stories.tsx',
+    ];
+
+    for (const rel of sceneFiles) {
+      const src = await fs.readFile(path.join(opts.directory, rel), 'utf8');
+      // `html\`` (template-tagged literal) must appear in render functions.
+      expect(src, `${rel} must use Lit html\`\` render templates`).toMatch(/html`/);
+      // `import { html } from 'lit'` import must be present.
+      expect(src, `${rel} must import html from 'lit'`).toMatch(/from\s+['"]lit['"]/);
+    }
+  });
+
+  it('preview.ts storySort accommodates Foundations/Tokens/* nesting + Patterns/Scenes/*', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-sort' });
+    await scaffoldProject(opts);
+
+    const previewPath = path.join(opts.directory, '.storybook', 'preview.ts');
+    const src = await fs.readFile(previewPath, 'utf8');
+
+    // Tokens subtree explicit ordering:
+    expect(src).toContain("'Borders'");
+    expect(src).toContain("'Shadows'");
+    expect(src).toContain("'Playground'");
+
+    // Patterns subtree explicit ordering with Scenes pinned first:
+    const orderHead = src.indexOf('order: [');
+    expect(orderHead).toBeGreaterThanOrEqual(0);
+    const orderTail = src.indexOf('\n      },', orderHead);
+    const orderBody = src.slice(orderHead, orderTail);
+    const stripped = orderBody
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+
+    // 'Patterns' must appear as a top-level entry with a nested sub-array
+    // starting with 'Scenes'.
+    expect(stripped).toContain("'Patterns'");
+    expect(stripped).toContain("'Scenes'");
+    const patternsIdx = stripped.indexOf("'Patterns'");
+    const scenesIdx = stripped.indexOf("'Scenes'", patternsIdx);
+    expect(scenesIdx, "'Scenes' must follow 'Patterns'").toBeGreaterThan(patternsIdx);
+  });
+
+  it('existing _snippets.ts and prior accessibility pages still emit (no regression)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase4-noregress' });
+    await scaffoldProject(opts);
+
+    // Phase 3 outputs must still ship:
+    expect(
+      await fs.pathExists(
+        path.join(opts.directory, 'src', 'stories', 'accessibility', '_snippets.ts'),
+      ),
+    ).toBe(true);
+    expect(
+      await fs.pathExists(
+        path.join(opts.directory, 'src', 'stories', 'accessibility', 'Dashboard.mdx'),
+      ),
+    ).toBe(true);
+    // Existing Tokens.mdx index page (one directory UP from the new
+    // Tokens subtree) must still emit:
+    expect(
+      await fs.pathExists(path.join(opts.directory, 'src', 'stories', 'foundations', 'Tokens.mdx')),
+    ).toBe(true);
+  });
+});
