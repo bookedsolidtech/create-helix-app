@@ -103,6 +103,32 @@ export function unscopeName(name: string): string {
 }
 
 /**
+ * Frameworks that publish as a library (have a meaningful `@scope/name`
+ * package identity). Other frameworks scaffold app-style projects whose
+ * generated tools (Stencil's namespace field, Ember's modulePrefix and
+ * asset URLs) don't tolerate path separators in the project name.
+ */
+export const LIBRARY_FRAMEWORKS: ReadonlySet<string> = new Set(['wc-storybook']);
+
+/**
+ * Returns an error message if `name` is a scoped @scope/x value used
+ * with a framework that cannot consume scoped names. Returns undefined
+ * for unscoped names, or for scoped names targeting a library template.
+ * Call AFTER validateProjectName so this only deals with already-valid
+ * shapes.
+ */
+export function validateScopedNameForFramework(
+  name: string,
+  framework: string | null | undefined,
+): string | undefined {
+  if (!name.startsWith('@')) return undefined;
+  if (framework && LIBRARY_FRAMEWORKS.has(framework)) return undefined;
+  return `Scoped names like "${name}" are only supported for library templates (${[
+    ...LIBRARY_FRAMEWORKS,
+  ].join(', ')}). Use the unscoped basename instead.`;
+}
+
+/**
  * Validates a directory path for filesystem safety.
  * Rejects path traversal sequences, null bytes, and non-printable characters.
  * Returns an error message string on failure, or undefined if valid.

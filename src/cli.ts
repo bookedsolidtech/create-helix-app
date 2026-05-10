@@ -17,6 +17,7 @@ import {
   validateDsName,
   validateTokenPrefix,
   unscopeName,
+  validateScopedNameForFramework,
 } from './validation.js';
 import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
@@ -254,6 +255,18 @@ export async function runJsonScaffold(
       success: false,
       error: `Invalid template: "${templateArg}". Valid options: ${validFrameworks.join(', ')}`,
     };
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(1);
+  }
+
+  // Reject scoped names for frameworks that can't consume them (Stencil's
+  // namespace, Ember's modulePrefix and asset URLs both choke on `/` /
+  // `@`). validateProjectName itself permits scoped shapes for library
+  // templates; the framework gate runs after we know which template was
+  // picked.
+  const scopeErr = validateScopedNameForFramework(name, templateArg);
+  if (scopeErr) {
+    const result: ScaffoldJsonResult = { success: false, error: scopeErr };
     console.log(JSON.stringify(result, null, 2));
     process.exit(1);
   }
@@ -738,17 +751,33 @@ ${presetList}
           validate: validateProjectName,
         }),
 
-      framework: () =>
-        templateArg !== null
-          ? Promise.resolve(templateArg as Framework)
-          : p.select({
-              message: 'Which framework?',
-              options: TEMPLATES.map((t) => ({
-                value: t.id as Framework,
-                label: t.color(t.name),
-                hint: t.hint,
-              })),
-            }),
+      framework: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const resolveFramework = async (): Promise<Framework> => {
+          const fw =
+            templateArg !== null
+              ? (templateArg as Framework)
+              : ((await p.select({
+                  message: 'Which framework?',
+                  options: TEMPLATES.map((t) => ({
+                    value: t.id as Framework,
+                    label: t.color(t.name),
+                    hint: t.hint,
+                  })),
+                })) as Framework);
+          // Reject scoped names paired with non-library frameworks. By
+          // the time the framework prompt resolves we know both pieces;
+          // emit a clear error rather than letting Stencil/Ember choke
+          // downstream on `@scope/...` interpolation in their config.
+          const enteredName = (ctx.results.name as string | undefined) ?? '';
+          const scopeErr = validateScopedNameForFramework(enteredName, fw);
+          if (scopeErr) {
+            p.cancel(scopeErr);
+            process.exit(1);
+          }
+          return fw;
+        };
+        return resolveFramework();
+      },
 
       componentBundles: () =>
         bundlesFromFlag !== null

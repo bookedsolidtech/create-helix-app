@@ -23,6 +23,7 @@ import {
   validatePreset,
   validateDsName,
   validateTokenPrefix,
+  validateScopedNameForFramework,
 } from './validation.js';
 import type {
   Framework,
@@ -291,6 +292,13 @@ export function validate(options: Partial<ScaffoldOptions>): ValidationResult {
   if (options.framework !== undefined) {
     if (!validateFramework(options.framework)) {
       errors['framework'] = `Unknown framework: "${options.framework}"`;
+    } else if (options.name !== undefined && !errors['name']) {
+      // Scoped names are only valid for library templates. Stencil and
+      // Ember interpolate the project name into namespace fields and
+      // asset URLs that can't contain `/` or `@`. Run this gate after
+      // the basic name + framework checks pass.
+      const scopeErr = validateScopedNameForFramework(options.name, options.framework);
+      if (scopeErr) errors['name'] = scopeErr;
     }
   } else {
     errors['framework'] = 'Framework is required';
