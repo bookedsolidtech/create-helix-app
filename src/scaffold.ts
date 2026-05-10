@@ -12971,8 +12971,25 @@ export default defineConfig({
         emitDeclarationOnly: true,
         noEmit: false,
       },
-      include: ['src'],
-      exclude: ['node_modules', 'dist', 'storybook-static', '.storybook', 'src/**/*.test.ts'],
+      // Library declaration build only walks the publishable surface:
+      // base classes + components + the index barrel + tokens. Storybook
+      // story files import root-level artifacts (helix.storybook.config,
+      // custom-elements.json, _components/HelixDocsPage) that live
+      // outside rootDir: 'src', and they're not part of the library
+      // anyway — including them would error out the declaration build
+      // and ship .d.ts files for stories no consumer would import.
+      include: ['src/index.ts', 'src/base/**/*.ts', 'src/components/**/*.ts', 'src/tokens/**/*.ts'],
+      exclude: [
+        'node_modules',
+        'dist',
+        'storybook-static',
+        '.storybook',
+        'src/stories',
+        'src/**/*.test.ts',
+        'src/**/*.stories.ts',
+        'src/**/*.stories.tsx',
+        'src/**/*.mdx',
+      ],
     },
     { spaces: 2 },
   );

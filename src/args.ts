@@ -168,14 +168,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Helper: read a value flag accepting either `--flag value` or `--flag=value`.
   // The repo's own docs use both forms; the previous space-only parser
   // silently dropped `--flag=value` and the scaffold fell back to defaults,
-  // breaking non-interactive automation.
+  // breaking non-interactive automation. Also guards against the case
+  // `--flag --next-flag value` where the space-form parser would
+  // otherwise consume `--next-flag` as the value and produce a misleading
+  // validation error downstream — now returns null when the next argv
+  // token starts with `--` (i.e. it's another option, not a value).
   const readValueFlag = (flag: string): string | null => {
     const eqPrefix = `${flag}=`;
     const eqEntry = argv.find((a) => a.startsWith(eqPrefix));
     if (eqEntry !== undefined) return eqEntry.slice(eqPrefix.length);
     const idx = argv.indexOf(flag);
     if (idx === -1) return null;
-    return argv[idx + 1] ?? null;
+    const next = argv[idx + 1];
+    if (next === undefined || next.startsWith('--')) return null;
+    return next;
   };
 
   // --ds-name (design system codename, used by wc-storybook)
