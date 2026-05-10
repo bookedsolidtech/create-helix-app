@@ -514,7 +514,20 @@ async function writePackageJson(
           './tokens.css': './dist/tokens.css',
         },
         files: ['dist'],
-        sideEffects: ['**/*.css', './dist/index.js'],
+        // Mark every component module as side-effectful, not just the
+        // root barrel. Each `dist/components/<tag>/index.js` runs
+        // `customElements.define(...)` at module-load via Lit's
+        // @customElement decorator. Bundlers that honor
+        // `package.json#sideEffects` (Rollup, esbuild, webpack) tree-
+        // shake the component modules if they're not listed — consumers
+        // doing `import { AuroraButton } from '<pkg>'` end up with the
+        // class but no registered tag, so `<aurora-button>` shows up as
+        // an unknown element at runtime.
+        sideEffects: [
+          '**/*.css',
+          './dist/index.js',
+          './dist/components/**',
+        ],
       }
     : {};
   const pkg = {
@@ -635,9 +648,11 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         // runs `pnpm cem:analyze`.
         // `dev` is the canonical entrypoint the CLI's outro tells users
         // to run after install. wc-storybook's dev surface is Storybook,
-        // so alias dev → storybook to honor the contract. Keeps both
-        // commands discoverable.
-        dev: 'pnpm run storybook',
+        // so alias dev → the same literal command chain `storybook` runs.
+        // We inline the chain (rather than `pnpm run storybook`) because
+        // the scaffold supports npm + yarn too — `pnpm run storybook` would
+        // fail with "pnpm: command not found" on npm-only environments.
+        dev: 'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
         storybook:
           'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
         'build-storybook':
