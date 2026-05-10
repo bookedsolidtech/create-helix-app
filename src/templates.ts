@@ -324,6 +324,12 @@ export const TEMPLATES: TemplateConfig[] = [
       playwright: '^1.50.0',
       vite: '^6.4.0',
       typescript: '^5.7.0',
+      // .storybook/main.ts imports node:path / node:url and the generated
+      // tsconfig includes the .storybook directory in the type-check
+      // graph. Without @types/node declared, a fresh wc-storybook scaffold
+      // can fail `pnpm type-check` on the first run when the typings are
+      // not transitively hoisted by the package manager.
+      '@types/node': '^22.0.0',
       // React is required because the scaffold emits .tsx docs helpers
       // (HelixDocsPage, A11yStatusCard, ConsumerObligations, etc.) that
       // import from 'react' and '@storybook/addon-docs/blocks'. Storybook

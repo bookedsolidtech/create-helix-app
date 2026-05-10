@@ -9125,8 +9125,21 @@ import { ${ClassName}ButtonStyles } from './${ds}-button.styles.js';
  * primary action surface across the system.
  *
  * NOTE: JSDoc IS the CEM data layer for Track 1 components. Cross-package
- * CEM inheritance does not auto-resolve, so @cssprop blocks are inlined
- * here so @custom-elements-manifest/analyzer surfaces them on this tag.
+ * CEM inheritance does not auto-resolve, so @cssprop / accessibility
+ * metadata blocks are inlined here so @custom-elements-manifest/analyzer
+ * surfaces them on this tag. Without these, A11yStatusCard /
+ * APGPatternCard render empty for the consumer's button page even though
+ * the upstream HelixButton it extends ships full conformance metadata.
+ *
+ * ─── AAA + APG conformance (inherited from HelixButton 3.3.1) ─────────────
+ *
+ * @aaaCertified true
+ * @aaaCertifiedDate 2026-04-21
+ * @ariaPattern button
+ * @ariaPatternSource https://www.w3.org/WAI/ARIA/apg/patterns/button/
+ * @keyboardActivate Enter, Space
+ * @keyboardDisabledSuppresses true
+ * @summary Brand-styled button. Inherits the HelixButton AAA contract — focus ring meets 3:1 against any background, label color pair meets 7:1, and click is suppressed when disabled or loading.
  *
  * @cssprop [${prefix}-button-bg=var(${prefix}-color-action-primary-bg)] - Resting fill.
  * @cssprop [${prefix}-button-hover-bg=var(${prefix}-color-action-primary-bg-hover)] - Hover fill.
@@ -9908,7 +9921,14 @@ export function InlineAuditPanel({
  * + keyboard-contract JSDoc tags.
  */
 import * as React from 'react';
-import customElements from '@helixui/library/custom-elements.json';
+// Local CEM contains the consumer's own components (e.g. \`\${ds}-button\`)
+// after \`cem analyze\` populates \`<root>/custom-elements.json\` from src/.
+// Helix CEM ships every hx-* declaration. We try local first, then fall
+// back to Helix — the local manifest is the only source for scaffold-
+// emitted conformance pages, while the catalog (HELiX/*) pages need
+// Helix as the source of truth.
+import localCustomElements from '../../../custom-elements.json';
+import helixCustomElements from '@helixui/library/custom-elements.json';
 
 interface KeyboardContract {
   activate?: readonly string[];
@@ -9929,12 +9949,15 @@ interface CemDeclaration {
 const declCache = new Map<string, CemDeclaration | null>();
 function findDeclaration(tag: string): CemDeclaration | null {
   if (declCache.has(tag)) return declCache.get(tag) ?? null;
-  const cem = customElements as { modules?: Array<{ declarations?: CemDeclaration[] }> };
-  for (const mod of cem.modules ?? []) {
-    for (const decl of mod.declarations ?? []) {
-      if (decl?.tagName === tag) {
-        declCache.set(tag, decl);
-        return decl;
+  for (const cem of [localCustomElements, helixCustomElements] as Array<{
+    modules?: Array<{ declarations?: CemDeclaration[] }>;
+  }>) {
+    for (const mod of cem.modules ?? []) {
+      for (const decl of mod.declarations ?? []) {
+        if (decl?.tagName === tag) {
+          declCache.set(tag, decl);
+          return decl;
+        }
       }
     }
   }
@@ -10089,9 +10112,14 @@ export function APGPatternCard({
  *
  * Visual language inherits from \`helix-docs.css\` token-driven primitives
  * (no hardcoded colors / spacing). Pair with \`a11y-card.css\` (Phase 3c).
+ *
+ * Lookup order: local CEM (consumer-extended tags like \`\${ds}-button\`)
+ * first, then Helix's upstream CEM. Resolving against Helix alone returned
+ * null for every conformance page on a freshly-scaffolded local component.
  */
 import * as React from 'react';
-import customElements from '@helixui/library/custom-elements.json';
+import localCustomElements from '../../../custom-elements.json';
+import helixCustomElements from '@helixui/library/custom-elements.json';
 
 interface KeyboardContract {
   activate?: readonly string[];
@@ -10139,12 +10167,16 @@ function findDeclaration(tag: string): CemDeclaration | null {
   if (declarationCache.has(tag)) {
     return declarationCache.get(tag) ?? null;
   }
-  const cem = customElements as { modules?: Array<{ declarations?: CemDeclaration[] }> };
-  for (const mod of cem.modules ?? []) {
-    for (const decl of mod.declarations ?? []) {
-      if (decl?.tagName === tag) {
-        declarationCache.set(tag, decl);
-        return decl;
+  // Local CEM first (consumer's own tags), then Helix.
+  for (const cem of [localCustomElements, helixCustomElements] as Array<{
+    modules?: Array<{ declarations?: CemDeclaration[] }>;
+  }>) {
+    for (const mod of cem.modules ?? []) {
+      for (const decl of mod.declarations ?? []) {
+        if (decl?.tagName === tag) {
+          declarationCache.set(tag, decl);
+          return decl;
+        }
       }
     }
   }
