@@ -502,14 +502,16 @@ async function writePackageJson(
         types: './dist/index.d.ts',
         // Component styles live in Lit `css` tagged templates inside each
         // component's compiled JS — there is no separate dist/style.css
-        // to expose. Advertising one would hand consumers a 404 path.
-        // Token CSS lives in @helixui/tokens (a peer dep) — consumers
-        // import that directly.
+        // bundle to expose. The brand token layer (--{prefix}-* variables)
+        // IS shipped as dist/tokens.css — the build chain copies
+        // src/tokens/tokens.css into dist/. Consumers import it once at
+        // their app root: `import '<pkg>/tokens.css';`.
         exports: {
           '.': {
             types: './dist/index.d.ts',
             import: './dist/index.js',
           },
+          './tokens.css': './dist/tokens.css',
         },
         files: ['dist'],
         sideEffects: ['**/*.css', './dist/index.js'],
@@ -631,21 +633,29 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         // means setCustomElementsManifest() loads an empty stub and every
         // autodocs API table renders blank until the consumer manually
         // runs `pnpm cem:analyze`.
+        // `dev` is the canonical entrypoint the CLI's outro tells users
+        // to run after install. wc-storybook's dev surface is Storybook,
+        // so alias dev → storybook to honor the contract. Keeps both
+        // commands discoverable.
+        dev: 'pnpm run storybook',
         storybook:
           'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
         'build-storybook':
           'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && storybook build',
-        // Library publish chain: build tokens → bundle JS → emit .d.ts.
-        // The .d.ts emit step is critical — without it, downstream TS
-        // consumers see "Could not find a declaration file for module"
-        // errors and lose autocomplete for every exported component.
-        // --project tsconfig.build.json scopes declaration emit to src/
-        // only (rootDir=src) so output lands at dist/index.d.ts — the
-        // path package.json's "types" field advertises. The default
-        // tsconfig.json includes src + .storybook, which would emit
-        // dist/src/index.d.ts and break the typed-import contract.
+        // Library publish chain: build tokens → bundle JS → emit .d.ts →
+        // copy tokens.css into dist/. Each step is critical:
+        //   - build-tokens generates src/tokens/tokens.css
+        //   - vite build bundles src/index.ts to dist/index.js
+        //   - tsc --project tsconfig.build.json emits dist/index.d.ts
+        //     (rootDir=src so types land at the path package.json's
+        //     "types" field advertises, not dist/src/index.d.ts)
+        //   - The final node copy ships dist/tokens.css so installers of
+        //     the published library can `import "<pkg>/tokens.css"` to
+        //     get the brand token layer. Without this, consumers see
+        //     unstyled components because --{prefix}-* variables are
+        //     never defined at :root.
         build:
-          'tsx scripts/build-tokens.ts && vite build && tsc --project tsconfig.build.json',
+          'tsx scripts/build-tokens.ts && vite build && tsc --project tsconfig.build.json && node -e "require(\'fs\').copyFileSync(\'src/tokens/tokens.css\',\'dist/tokens.css\')"',
         test: 'vitest run',
         'test:ui': 'vitest --ui',
         'type-check': 'tsc --noEmit',
@@ -654,8 +664,12 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         'build:tokens': 'tsx scripts/build-tokens.ts',
         'watch:tokens': 'tsx scripts/build-tokens.ts --watch',
         'tokens:sync': 'tsx scripts/sync-tokens.ts',
-        'tokens:refresh-platform':
-          "node -e \"const{createRequire}=require('module');const r=createRequire(__filename);const fs=require('fs');fs.copyFileSync(r.resolve('@helixui/tokens/tokens.json'),'src/tokens/tokens.json');console.log('tokens.json reset from @helixui/tokens');\"",
+        // Resets src/tokens/tokens.json from the upstream @helixui/tokens
+        // platform shape. The previous one-liner used createRequire(__filename),
+        // which throws ERR_INVALID_ARG_VALUE under `node -e` because
+        // __filename evaluates to "[eval]". Delegating to a real file
+        // (scripts/refresh-tokens.ts) avoids that runtime error class.
+        'tokens:refresh-platform': 'tsx scripts/refresh-tokens.ts',
       };
     case 'vanilla':
       return {
@@ -12141,6 +12155,23 @@ if (process.argv.includes('--watch')) {
   );
 
   // ── scripts/sync-tokens.ts — Figma REST pull + transform ─────────────────
+
+  // Reset src/tokens/tokens.json from the upstream @helixui/tokens shape.
+  // Wraps the prior inline `node -e` one-liner that crashed because
+  // createRequire(__filename) under `node -e` evaluates __filename to
+  // the literal "[eval]" and throws ERR_INVALID_ARG_VALUE. A real source
+  // file gets a real file URL so createRequire(import.meta.url) resolves.
+  await safeWriteFile(
+    path.join(scriptsDir, 'refresh-tokens.ts'),
+    `import { copyFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const upstream = require.resolve('@helixui/tokens/tokens.json');
+copyFileSync(upstream, 'src/tokens/tokens.json');
+console.log(\`tokens.json reset from \${upstream}\`);
+`,
+  );
 
   await safeWriteFile(
     path.join(scriptsDir, 'sync-tokens.ts'),
