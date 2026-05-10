@@ -67,7 +67,12 @@ The scaffolded Storybook ships:
 - **Cover.mdx** with brand tagline + vertical chips + quick-start commands.
 - **Overview.mdx** explaining the three-tier token cascade (primitive → semantic → component).
 - **Foundations** — 7 MDX pages: Tokens, Color, Typography, Spacing, Layout, Brand, Accessibility. All live-bound to the consumer's `var({prefix}-*)` tokens.
-- **Per-component AAA conformance pages** with hero scenarios + auto-injected `A11yStatusCard` reading from CEM `helixMeta.aaa.*`.
+- **Token deep-dives** — dedicated `Foundations/Tokens/Borders` and `Foundations/Tokens/Shadows` pages with live swatches, plus a `Foundations/Tokens/Playground` story for interactive token inspection.
+- **Per-component AAA conformance pages** — 8 hand-authored MDXes (button, card, checkbox, dialog, form, select, tabs, text-input) parameterized by `{dsName}` so `<aurora-card>`, `<aurora-form>` etc. render the consumer's tags. Each ships hero scenarios + auto-injected `A11yStatusCard` reading from CEM `helixMeta.aaa.*` + APG pattern card + consumer obligations.
+- **Accessibility narrative** — top-level `Accessibility/*` namespace with 8 pages: Dashboard, AAA Story Template, Keyboard Contracts, Success Criteria, Consumer Obligations, Focus Management, Contrast Deep-Dive, Forced Colors. Editorial content modeled on HELiX's own Storybook depth.
+- **Scene stories** — 3 cross-domain-neutral pattern playgrounds (`Account Setup`, `Team Dashboard`, `Settings`) demonstrating composition of multiple components in real flows.
+- **React helper components** — `TokenSwatchGrid`, `ContrastMatrix`, `RatioCard`, `CodeBlock`, `CodeTabs`, plus `useResolvedToken` hook and APCA `contrast` util. Available under `src/stories/_components/` for consumers to compose their own MDXes.
+- **`InlineAuditPanel` opt-in pattern** — ships as a no-op stub by default. Consumers wire their own `markdown` prop to surface per-component AAA-AUDIT content (the audit source lives inside the HELiX monorepo and isn't published; see `docs/FOLLOW-UP-shared-storybook-kit.md` for the trigger conditions that would make this live).
 - **Token-driven manager chrome** — light / dark / high-contrast modes via `@helixui/tokens`. FOUC-prevention sync scripts so dark/HC pages don't flash white on reload.
 - **Brand toolbar** + persistence via `localStorage["helix:storybook:globals"]`.
 - **8 Storybook addons** — a11y, docs, themes, vitest, designs, links, pseudo-states, chromatic-com.
@@ -113,6 +118,10 @@ When scaffolding a framework project, you can select which component bundles to 
 - **HELiX Design Tokens** -- CSS custom properties for theming
 - **Dark Mode Support** -- automatic dark mode via `prefers-color-scheme`
 - **Example Pages** -- forms, dashboard, and settings page examples
+
+## Roadmap
+
+- **`@helixui/storybook-kit` shared package extraction** — deferred. See [docs/FOLLOW-UP-shared-storybook-kit.md](./docs/FOLLOW-UP-shared-storybook-kit.md) for trigger conditions and scope sketch. Today's wc-storybook factory ports helix's Storybook depth at scaffold time; a future iteration may consume a shared kit instead.
 
 ## Requirements
 
