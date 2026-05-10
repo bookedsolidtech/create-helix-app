@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import pc from 'picocolors';
 import * as p from '@clack/prompts';
@@ -499,12 +500,16 @@ async function writePackageJson(
         main: './dist/index.js',
         module: './dist/index.js',
         types: './dist/index.d.ts',
+        // Component styles live in Lit `css` tagged templates inside each
+        // component's compiled JS — there is no separate dist/style.css
+        // to expose. Advertising one would hand consumers a 404 path.
+        // Token CSS lives in @helixui/tokens (a peer dep) — consumers
+        // import that directly.
         exports: {
           '.': {
             types: './dist/index.d.ts',
             import: './dist/index.js',
           },
-          './style.css': './dist/style.css',
         },
         files: ['dist'],
         sideEffects: ['**/*.css', './dist/index.js'],
@@ -10195,8 +10200,13 @@ export function A11yStatusCard({ tag }: A11yStatusCardProps): React.ReactElement
   // expressions that would require careful escaping otherwise. Static-
   // file copy avoids the escape hazard entirely.
 
+  // Use fileURLToPath to convert import.meta.url into a real OS path.
+  // `new URL(...).pathname` returns malformed paths on Windows
+  // (`/C:/Users/...`) and percent-encodes spaces (`%20`), which makes
+  // every fs.copy() below fail silently and ship stub CSS files. The
+  // node:url helper handles platform + encoding correctly.
   const cssTemplatesDir = path.join(
-    new URL('.', import.meta.url).pathname,
+    path.dirname(fileURLToPath(import.meta.url)),
     '..',
     'assets',
     'wc-storybook',
