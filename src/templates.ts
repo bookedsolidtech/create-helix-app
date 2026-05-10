@@ -305,6 +305,10 @@ export const TEMPLATES: TemplateConfig[] = [
       tsx: '^4.19.0',
       vitest: '^3.0.0',
       '@vitest/browser': '^3.0.0',
+      // @vitest/ui is required by `pnpm test:ui` (vitest --ui). Without it
+      // the script fails immediately on a fresh scaffold with vitest's
+      // missing-package error. Pinned at the same major as vitest.
+      '@vitest/ui': '^3.0.0',
       // playwright is required by @vitest/browser when browser.provider is
       // 'playwright' (vitest.config.ts ships with that setting). Pinning here
       // avoids a fail-on-first-run when consumers boot vitest right after

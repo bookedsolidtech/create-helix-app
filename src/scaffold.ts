@@ -7,6 +7,7 @@ import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions, AnyTemplateConfig } from './types.js';
 import { HelixError, ErrorCode } from './errors.js';
+import { validateDsName, validateTokenPrefix } from './validation.js';
 import { HookManager, buildHookContext } from './plugins/hooks.js';
 import { loadHelixRcHooks } from './plugins/config-loader.js';
 import { discoverPlugins } from './plugins/plugin-discovery.js';
@@ -84,6 +85,27 @@ async function safeWriteFile(filePath: string, content: string): Promise<void> {
     return;
   }
   await fs.writeFile(filePath, content);
+}
+
+/**
+ * Escape user-supplied prose before embedding it into a generated MDX file.
+ * MDX-significant characters (`<`, `{`, `}`, `` ` ``) survive raw interpolation
+ * and break the doc compiler — `Care < Chaos` becomes the start of a JSX tag
+ * during `storybook build`. We escape them as HTML entities, which MDX
+ * preserves through to the rendered output as the literal characters.
+ *
+ * Used for brandTagline, brandVerticals, and heroScenarios — anything the
+ * caller passes through ProjectOptions or the Phase 1 prompts. NOT used for
+ * code spans / fenced code where the raw value is the point.
+ */
+function escapeMdxText(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\{/g, '&#123;')
+    .replace(/\}/g, '&#125;')
+    .replace(/`/g, '&#96;');
 }
 
 async function safeWriteJson(
@@ -538,12 +560,16 @@ async function writePackageJson(
     ...libraryEntrypoints,
     scripts: getScripts(options),
     dependencies: {
-      // wc-storybook pins Helix tokens at its own centralized 3.3.1 version via
-      // the template entry; other frameworks get the legacy 0.3.0 default when
-      // designTokens is opted in. Order matters: template spread wins for
-      // wc-storybook, the optional 0.3.0 wins for everything else only if the
-      // template hasn't already declared @helixui/tokens.
-      ...(options.designTokens ? { '@helixui/tokens': '^0.3.0' } : {}),
+      // wc-storybook pins Helix tokens at its own centralized 3.3.1 version
+      // via peerDependencies + devDependencies (action.* / on-{role}-strong /
+      // on-dark-* contract). Other frameworks get the legacy 0.3.0 default
+      // when designTokens is opted in — but ONLY if the template did not
+      // already declare its own version, otherwise the default would inject
+      // an incompatible spec alongside the template's pin and produce a
+      // package.json with two conflicting versions of the same package.
+      ...(options.designTokens && !isLibraryTemplate
+        ? { '@helixui/tokens': '^0.3.0' }
+        : {}),
       ...template.dependencies,
     },
     devDependencies: {
@@ -8159,7 +8185,25 @@ body {
 // ─── wc-storybook: Design System Factory ─────────────────────────────────────
 
 async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
-  const ds = options.dsName ?? 'my-ds';
+  // Defensive validation — programmatic callers (scaffoldProject() invoked
+  // directly without going through CLI/JSON parsing) can otherwise pass
+  // dsName values like '../../outside' that get interpolated into
+  // path.join() targets below. The CLI / JSON paths validate, but this
+  // entry point is a public API surface that must self-defend.
+  const dsRaw = options.dsName ?? 'my-ds';
+  const dsErr = validateDsName(dsRaw);
+  if (dsErr) {
+    throw new HelixError(ErrorCode.PATH_TRAVERSAL, `Invalid dsName "${dsRaw}": ${dsErr}`);
+  }
+  const tokenPrefixRaw = options.tokenPrefix ?? `--${dsRaw}`;
+  const tokenPrefixErr = validateTokenPrefix(tokenPrefixRaw);
+  if (tokenPrefixErr) {
+    throw new HelixError(
+      ErrorCode.PATH_TRAVERSAL,
+      `Invalid tokenPrefix "${tokenPrefixRaw}": ${tokenPrefixErr}`,
+    );
+  }
+  const ds = dsRaw;
   // Default the token prefix to `--{dsName}` so the consumer's brand layer
   // and the upstream Helix layer don't collide. Defaulting to `--hx`
   // produced cyclic self-references like
@@ -10557,11 +10601,14 @@ export default HelixDocsPage;
   await safeEnsureDir(referenceComponentsDir);
 
   const heroForButton = (options.heroScenarios ?? []).find((s) => s.componentId === `${ds}-button`);
-  const heroTitle = heroForButton?.title ?? 'Sign in to your workspace';
-  const heroBody =
+  const heroTitle = escapeMdxText(heroForButton?.title ?? 'Sign in to your workspace');
+  const heroBody = escapeMdxText(
     heroForButton?.body ??
-    `A primary action lifted into a real product moment — the same ${ds}-button you compose into forms, dashboards, and toolbars.`;
-  const taglineLine = options.brandTagline ? `> ${options.brandTagline}\n\n` : '';
+      `A primary action lifted into a real product moment — the same ${ds}-button you compose into forms, dashboards, and toolbars.`,
+  );
+  const taglineLine = options.brandTagline
+    ? `> ${escapeMdxText(options.brandTagline)}\n\n`
+    : '';
 
   await safeWriteFile(
     path.join(referenceComponentsDir, `${ds}-button.mdx`),
@@ -10952,8 +10999,12 @@ main().catch((err) => {
   await safeEnsureDir(foundationsDir);
   await safeEnsureDir(patternsDir);
 
-  const taglineLineMdx = options.brandTagline ? `> _${options.brandTagline}_\n\n` : '';
-  const verticalsList = (options.brandVerticals ?? []).filter((v) => v.length > 0);
+  const taglineLineMdx = options.brandTagline
+    ? `> _${escapeMdxText(options.brandTagline)}_\n\n`
+    : '';
+  const verticalsList = (options.brandVerticals ?? [])
+    .filter((v) => v.length > 0)
+    .map((v) => escapeMdxText(v));
   // Phase 5 v2 — chip row uses classes from helix-narrative.css so the
   // styling resolves through var(--hx-color-*) tokens. Override at the
   // consumer level by re-defining the same tokens or styling the
@@ -11299,7 +11350,7 @@ The \`${prefix}-*\` namespace flows through the same cascade as HELiX's \`--hx-*
 
 ${
   options.brandTagline
-    ? `> ${options.brandTagline}\n\nThat tagline lives in \`Cover.mdx\`. The full voice sits with you.`
+    ? `> ${escapeMdxText(options.brandTagline)}\n\nThat tagline lives in \`Cover.mdx\`. The full voice sits with you.`
     : `Brand voice lives with you — taglines, vertical-specific copy, hero scenarios. The factory ships neutral defaults so the design system reads as a generic starter; replace them in your fork.`
 }
 
