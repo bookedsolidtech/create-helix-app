@@ -71,6 +71,14 @@ export function validateProjectName(value: string): string | undefined {
     if (!m) {
       return 'Scoped names must follow @scope/name with lowercase letters, numbers, hyphens, and underscores';
     }
+    // The basename (the part after `/`) becomes the directory name and
+    // dsName fallback, so reserved-name checks must run against it too.
+    // Without this, @acme/node_modules or @acme/__proto__ would pass
+    // even though the basename alone would be rejected.
+    const basename = m[2];
+    if (RESERVED_NAMES.has(basename)) {
+      return `"${basename}" is a reserved name and cannot be used (within @${m[1]}/...)`;
+    }
     return undefined;
   }
 

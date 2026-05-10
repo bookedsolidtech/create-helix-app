@@ -16,6 +16,7 @@ import {
   validateDirectory,
   validateDsName,
   validateTokenPrefix,
+  unscopeName,
 } from './validation.js';
 import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
@@ -337,13 +338,16 @@ export async function runJsonScaffold(
     dryRun: opts.isDryRun,
     force: opts.isForce,
     verbose: opts.isVerbose,
-    // dsName: pass through explicit --ds-name when valid; otherwise pass
-    // the name only when it's a valid dsName, else undefined so the
-    // scaffolder falls back to 'my-ds'. Same forgiveness as interactive +
-    // API paths.
-    dsName:
-      opts.dsNameFromArgs ??
-      (validateDsName(name) === undefined ? name : undefined),
+    // dsName: pass through explicit --ds-name when valid; otherwise
+    // strip the @scope/ prefix and pass the basename when it's a valid
+    // dsName, else undefined so the scaffolder falls back to 'my-ds'.
+    // Same forgiveness as interactive + API paths — `@acme/design-system`
+    // resolves to dsName='design-system', not 'my-ds'.
+    dsName: (() => {
+      if (opts.dsNameFromArgs) return opts.dsNameFromArgs;
+      const candidate = unscopeName(name);
+      return validateDsName(candidate) === undefined ? candidate : undefined;
+    })(),
     // For wc-storybook, default tokenPrefix to --{validDsName} so the
     // consumer's brand layer gets its own namespace; defaulting to --hx
     // caused cyclic self-references in the bridge layer and dropped the
@@ -351,13 +355,12 @@ export async function runJsonScaffold(
     // brand bridge). Falls back to undefined when neither --token-prefix
     // nor a valid name is available — scaffolder then derives from its
     // resolved dsName ('my-ds' worst case).
-    tokenPrefix:
-      opts.tokenPrefixFromArgs ??
-      (templateArg === 'wc-storybook'
-        ? validateDsName(opts.dsNameFromArgs ?? name) === undefined
-          ? `--${opts.dsNameFromArgs ?? name}`
-          : undefined
-        : '--hx'),
+    tokenPrefix: (() => {
+      if (opts.tokenPrefixFromArgs) return opts.tokenPrefixFromArgs;
+      if (templateArg !== 'wc-storybook') return '--hx';
+      const candidate = opts.dsNameFromArgs ?? unscopeName(name);
+      return validateDsName(candidate) === undefined ? `--${candidate}` : undefined;
+    })(),
     // Brand-storytelling fields — wc-storybook factory only. Optional with
     // cross-domain neutral defaults so JSON / --yes flows don't break and
     // sample copy honors the realistic-sample-data rule (no domain lock).
@@ -813,14 +816,17 @@ ${presetList}
         // 'acme-ui'. The interactive group records the typed name under
         // ctx.results.name; falling back to that gives sensible defaults.
         const enteredName = (ctx.results.name as string | undefined) ?? null;
-        const dsDefault =
+        // Strip the @scope/ prefix before validating as a dsName candidate
+        // so '@acme/design-system' surfaces 'design-system' as the prompt
+        // default — same forgiveness as the JSON / API paths. Without this,
+        // scoped names always fell back to 'my-ds' even though the
+        // unscoped basename is itself a perfectly valid dsName.
+        const rawDsDefault =
           dsNameFromArgs ??
           enteredName ??
           projectName ??
           'my-ds';
-        // Only seed the prompt if the candidate passes dsName validation —
-        // names like @scope/pkg are valid project names but invalid dsNames,
-        // so fall back to 'my-ds' rather than offering an invalid default.
+        const dsDefault = unscopeName(rawDsDefault);
         const dsInitial =
           validateDsName(dsDefault) === undefined ? dsDefault : 'my-ds';
         return p.text({
