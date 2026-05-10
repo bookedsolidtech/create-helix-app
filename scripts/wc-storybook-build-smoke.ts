@@ -720,7 +720,7 @@ async function main(): Promise<void> {
     }
 
     // Brand-prompt assertions on the cover entry
-    const cover = probes.find((p) => p.storyId === 'cover--docs');
+    const cover = probes.find((p) => p.storyId === 'welcome-cover--docs');
     if (cover) {
       if (!cover.contentSnippet.includes('Calm finance for everyone')) {
         failures.push({

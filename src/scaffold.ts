@@ -8512,37 +8512,32 @@ const preview: Preview = {
       // Editorial flow above engineering. Phase 4 expands the inner
       // ordering for Foundations + Patterns. Drupal omitted — wc-storybook
       // factory does not ship Drupal stories.
-      // Editorial-first IA. Top-level order matches the way a designer
-      // reads the system — narrative entry (Cover/Overview/Patterns),
-      // then design language (Foundations), then the consumer's own
-      // brand components (Components), then the upstream catalog
-      // (HELiX), with Archive at the bottom for retired entries.
-      // Nested Foundations ordering follows the cascade: Tokens →
-      // semantic groups (Color/Typography/Spacing/Layout) → Brand →
-      // Accessibility → raw Token Swatches at the end. Without this
-      // explicit nesting Storybook falls back to alphabetical and
-      // Welcome (legacy) sat above Token Swatches / Tokens / Typography.
+      // Editorial-first IA. Welcome sits at the top — Introduction is
+      // the technical onboarding (commands, what-this-thing-is), Cover
+      // is the brand identity (tagline + verticals), Overview is the
+      // three-tier cascade explainer, Patterns is the composition index.
+      // Foundations follows with the cascade order baked in (Tokens →
+      // semantic groups → Brand → Accessibility → raw swatches), then
+      // the consumer's own Components, then the upstream HELiX catalog.
+      // Without explicit nesting Storybook falls back to alphabetical
+      // and pages drift out of intended reading order.
       storySort: {
         order: [
-          'Cover',
-          'Overview',
-          'Patterns',
+          'Welcome',
+          ['Introduction', 'Cover', 'Overview', 'Patterns'],
+          'Foundations',
           [
-            'Foundations',
-            [
-              'Tokens',
-              'Color',
-              'Typography',
-              'Spacing',
-              'Layout',
-              'Brand',
-              'Accessibility',
-              'Token Swatches',
-            ],
+            'Tokens',
+            'Color',
+            'Typography',
+            'Spacing',
+            'Layout',
+            'Brand',
+            'Accessibility',
+            'Token Swatches',
           ],
           'Components',
           'HELiX',
-          'Archive',
           '*',
         ],
       },
@@ -11046,12 +11041,13 @@ function componentImportPath(tag: string): string {
 
 // Per-tag default slot content for catalog stories. The universal
 // "placeholder text" default reads visually wrong on components whose
-// slot is non-textual (icons, avatars, images, dividers, spinners).
-// Empty string drops the slot entirely — Lit just renders the host.
-// Initials / icon names are realistic placeholders that read as
-// intentional rather than copy-paste filler.
+// slot is non-textual (icons, avatars, images, dividers, spinners) or
+// whose slot expects a specific phrase length / shape (alerts, dialogs,
+// stats). Empty string drops the slot entirely — Lit just renders the
+// host. Realistic generic content per the realistic-sample-data rule
+// (no Lorem, no domain lock).
 const CATALOG_DEFAULT_CONTENT: Record<string, string> = {
-  'hx-avatar': 'JD',
+  // visual-only / shape-only — no slot text
   'hx-icon': '',
   'hx-icon-button': '',
   'hx-image': '',
@@ -11066,13 +11062,102 @@ const CATALOG_DEFAULT_CONTENT: Record<string, string> = {
   'hx-slider': '',
   'hx-toggle-button': '',
   'hx-switch': '',
-  'hx-checkbox': 'Accept terms',
-  'hx-radio': 'Option',
+  'hx-pagination': '',
+  'hx-number-input': '',
+  'hx-date-picker': '',
+  'hx-time-picker': '',
+  'hx-text-input': '',
+  'hx-textarea': '',
+  'hx-select': '',
+  'hx-combobox': '',
+  'hx-file-upload': '',
+  'hx-counter': '',
+  'hx-format-date': '',
+  'hx-visually-hidden': '',
+  'hx-style-scope': '',
+  'hx-theme': '',
+  'hx-status-indicator': '',
+  // initials / single-token labels
+  'hx-avatar': 'JD',
   'hx-tag': 'Tag',
   'hx-badge': 'New',
+  'hx-checkbox': 'Accept terms',
+  'hx-radio': 'Option',
   'hx-link': 'Documentation',
   'hx-button': 'Button',
+  'hx-split-button': 'Action',
+  'hx-toggle-button': '',
+  'hx-step': 'Step',
+  'hx-tab': 'Overview',
+  'hx-th': 'Column',
+  'hx-td': 'Cell',
+  'hx-tr': '',
+  'hx-thead': '',
+  'hx-tbody': '',
+  'hx-tfoot': '',
+  'hx-stat': '1,234',
+  'hx-clinical-status': 'Active',
+  'hx-help-text': 'Optional helper text',
+  'hx-field-label': 'Label',
+  // composable item-types — short noun phrase
+  'hx-menu-item': 'Menu item',
+  'hx-menu-divider': '',
+  'hx-list-item': 'List item',
+  'hx-nav-item': 'Nav item',
+  'hx-tree-item': 'Tree item',
+  'hx-breadcrumb-item': 'Settings',
+  'hx-accordion-item': 'Section',
+  'hx-carousel-item': 'Slide',
+  'hx-tab-panel': 'Panel content',
+  'hx-structured-list-row': '',
+  // surface-style — short message
+  'hx-alert': 'Your changes have been saved.',
+  'hx-banner': 'Upgrade available — read the changelog.',
+  'hx-toast': 'Saved.',
+  'hx-tooltip': 'Helpful context',
+  'hx-popover': 'Popover content',
+  'hx-popup': 'Popup content',
+  'hx-dialog': 'Are you sure you want to continue?',
+  'hx-drawer': 'Drawer content goes here.',
+  // container / layout — short demonstrative
+  'hx-card': 'Card body content goes here.',
+  'hx-container': 'Container',
+  'hx-grid': '',
+  'hx-grid-item': '',
+  'hx-stack': '',
+  'hx-list': '',
+  'hx-menu': '',
+  'hx-nav': '',
+  'hx-side-nav': '',
+  'hx-top-nav': '',
+  'hx-tabs': '',
+  'hx-accordion': '',
+  'hx-breadcrumb': '',
+  'hx-button-group': '',
+  'hx-checkbox-group': '',
+  'hx-radio-group': '',
+  'hx-action-bar': '',
+  'hx-form': '',
+  'hx-field': '',
+  'hx-overflow-menu': '',
+  'hx-toast-stack': '',
+  'hx-table': '',
+  'hx-data-table': '',
+  'hx-tree-view': '',
+  'hx-carousel': '',
+  'hx-steps': '',
+  'hx-structured-list': '',
+  'hx-split-panel': '',
+  // typography
   'hx-text': 'Helix is a brand-extensible component platform.',
+  'hx-prose': 'Body copy that demonstrates the prose treatment.',
+  // copy-button / code-snippet — show the action
+  'hx-copy-button': 'Copy',
+  'hx-code-snippet': 'npm install @helixui/library',
+  // patient banner — fintech/wellness scaffold won't typically use this,
+  // but if rendered, give it generic vital-style copy that reads as
+  // realistic without being healthcare-locked.
+  'hx-patient-banner': '',
 };
 
 function renderStoryFile(decl: CemDeclaration): string {
@@ -11153,7 +11238,10 @@ const meta: Meta = {
       })
       .filter(Boolean)
       .join(' ');
-    const slot = (args as Record<string, unknown>).content ?? 'placeholder text';
+    // Empty string when no content is configured — far cleaner than
+    // "placeholder text" leaking through on a tag that wasn't covered
+    // by CATALOG_DEFAULT_CONTENT yet.
+    const slot = (args as Record<string, unknown>).content ?? '';
     // Some Helix tags are CHILD components — they only render inside a
     // specific parent (e.g. hx-carousel-item inside hx-carousel,
     // hx-tab/hx-tab-panel inside hx-tabs). Rendered standalone they
@@ -11265,7 +11353,7 @@ main().catch((err) => {
   // .hx-narrative-chip class.
   const verticalsRowMdx =
     verticalsList.length > 0
-      ? `<ul className="hx-narrative-chip-row">\n${verticalsList
+      ? `<ul aria-label="Brand verticals" className="hx-narrative-chip-row">\n${verticalsList
           .map((v) => `  <li className="hx-narrative-chip">${v}</li>`)
           .join('\n')}\n</ul>\n\n`
       : '';
@@ -11276,7 +11364,7 @@ main().catch((err) => {
     path.join(storiesDir, 'Cover.mdx'),
     `import { Meta } from '@storybook/addon-docs/blocks';
 
-<Meta title="Cover" />
+<Meta title="Welcome/Cover" />
 
 # ${dsTitle}
 
@@ -11319,7 +11407,7 @@ Edit \`helix.storybook.config.ts\` to hide upstream HELiX components when you've
     path.join(storiesDir, 'Overview.mdx'),
     `import { Meta } from '@storybook/addon-docs/blocks';
 
-<Meta title="Overview" />
+<Meta title="Welcome/Overview" />
 
 # Overview
 
@@ -11331,7 +11419,7 @@ ${dsTitle} extends HELiX through a three-tier token cascade. Every component you
   <div className="hx-narrative-card hx-narrative-card--raised">
     <h3 className="hx-narrative-card-title">1. Primitive ramps</h3>
     <div className="hx-narrative-card-body">
-      <code>--hx-color-primary-{'{50..900}'}</code>, <code>${prefix}-color-primary-{'{50..900}'}</code> — raw color values, never bound directly to layout.
+      <code>--hx-color-primary-{'{50..950}'}</code>, <code>${prefix}-color-primary-{'{50..950}'}</code> — raw color values, never bound directly to layout.
     </div>
   </div>
   <div className="hx-narrative-card">
@@ -11377,7 +11465,7 @@ ${dsTitle} adds a fourth tier on top: \`${prefix}-*\`. Use it for design-system-
 \`\`\`css
 /* ${dsTitle} brand override */
 :root {
-  ${prefix}-color-primary: #ff6b35;
+  ${prefix}-color-primary: var(--hx-color-primary-600); /* example override */
 }
 \`\`\`
 
@@ -11587,7 +11675,7 @@ ${taglineLineMdx}${dsTitle} expresses your brand at the **\`${prefix}-*\`** laye
 \`\`\`css
 /* src/tokens/tokens.css */
 :root {
-  ${prefix}-color-primary: #ff6b35;
+  ${prefix}-color-primary: var(--hx-color-primary-600); /* example override */
   ${prefix}-color-primary-fg: #ffffff;
   ${prefix}-font-family-heading: 'YourBrand Display', system-ui, sans-serif;
 }
@@ -11675,7 +11763,7 @@ Animation respects \`prefers-reduced-motion: reduce\`. Components degrade to ins
     path.join(patternsDir, 'Index.mdx'),
     `import { Meta } from '@storybook/addon-docs/blocks';
 
-<Meta title="Patterns" />
+<Meta title="Welcome/Patterns" />
 
 # Patterns
 
@@ -11693,14 +11781,14 @@ The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the first 
   );
 
   // ── src/stories/Welcome.stories.ts ───────────────────────────────────────
-  // Title nested under 'Archive/' so the stub doesn't sit ABOVE the
-  // active foundation pages in the sidebar (alphabetical fallback put
-  // 'Welcome (legacy)' as the first child of Foundations, masking
-  // Tokens / Typography / Token Swatches which are the real entry
-  // points). Archive lives at the bottom of the sidebar — see the
-  // storySort config in preview.ts. Cover.mdx is the canonical root
-  // entry; this stub stays for backwards-compat with consumers who
-  // bookmarked /story/welcome--introduction.
+  // Welcome/Introduction is the canonical first story — technical
+  // onboarding (commands, features, what-this-thing-is). Cover, Overview,
+  // and Patterns nest as sibling MDX entries under the same Welcome
+  // section, giving the sidebar a single "where to start" group at the
+  // top. Earlier iterations parked this page as 'Foundations/Welcome
+  // (legacy)' or 'Archive/Welcome (legacy)' — both wrong: the content is
+  // accurate and useful, and burying it under another section made the
+  // sidebar's intended entry point invisible.
 
   await safeWriteFile(
     path.join(storiesDir, 'Welcome.stories.ts'),
@@ -11708,7 +11796,7 @@ The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the first 
 import { html } from 'lit';
 
 const meta: Meta = {
-  title: 'Archive/Welcome (legacy)',
+  title: 'Welcome/Introduction',
   parameters: {
     layout: 'fullscreen',
     docs: { page: null },

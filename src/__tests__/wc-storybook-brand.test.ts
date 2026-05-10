@@ -678,7 +678,7 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
       path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
       'utf-8',
     );
-    expect(src).toContain('<Meta title="Cover" />');
+    expect(src).toContain('<Meta title="Welcome/Cover" />');
     // Cover surfaces the consumer's dsTitle in the H1.
     expect(src).toContain('# Aurora');
   });
@@ -728,7 +728,7 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
       path.join(opts.directory, 'src', 'stories', 'Overview.mdx'),
       'utf-8',
     );
-    expect(src).toContain('<Meta title="Overview" />');
+    expect(src).toContain('<Meta title="Welcome/Overview" />');
     // The 3 tiers: primitive, semantic, component.
     expect(src).toContain('Primitive ramps');
     expect(src).toContain('Semantic aliases');
@@ -786,7 +786,7 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
       path.join(opts.directory, 'src', 'stories', 'patterns', 'Index.mdx'),
       'utf-8',
     );
-    expect(src).toContain('<Meta title="Patterns" />');
+    expect(src).toContain('<Meta title="Welcome/Patterns" />');
     // dsName='aurora' should surface in the Forms suggestion.
     expect(src).toContain('aurora-button');
   });
