@@ -8392,13 +8392,44 @@ import '@helixui/tokens/tokens.css';
 import { HelixButton } from '@helixui/library';
 (window as unknown as { __helixUiAnchor: typeof HelixButton }).__helixUiAnchor = HelixButton;
 import '../src/tokens/tokens.css';
-import customElements from '../custom-elements.json';
+import consumerCem from '../custom-elements.json';
+// Helix's own custom-elements manifest ships every hx-* declaration
+// (description, attribute table, slots, CSS parts, css custom props).
+// The autodocs lookup is keyed by tag, so without merging Helix's manifest
+// in, every catalog page (HELiX/*) loses its CEM-backed API tables and
+// description blocks.
+import helixCem from '@helixui/library/custom-elements.json';
 import { helixBackgroundsForMode, HELIX_THEME_MODES } from './manager-theme';
 import { HelixDocsPage } from './docs/HelixDocsPage';
 
+// Merge consumer + upstream Helix CEM into one manifest. Consumer modules
+// win on tag conflicts so a locally-extended <my-button> overrides
+// Helix's <my-button> declaration if both happen to exist.
+type CemModule = { declarations?: Array<{ tagName?: string }>; [k: string]: unknown };
+type CemManifest = { schemaVersion?: string; modules?: CemModule[]; [k: string]: unknown };
+const mergedCem: CemManifest = (() => {
+  const consumer = consumerCem as CemManifest;
+  const helix = helixCem as CemManifest;
+  const consumerTags = new Set<string>();
+  for (const mod of consumer.modules ?? []) {
+    for (const d of mod.declarations ?? []) {
+      if (d.tagName) consumerTags.add(d.tagName);
+    }
+  }
+  const helixModules = (helix.modules ?? []).filter((mod) => {
+    const declTags = (mod.declarations ?? []).map((d) => d.tagName).filter(Boolean) as string[];
+    return declTags.every((tag) => !consumerTags.has(tag));
+  });
+  return {
+    schemaVersion: consumer.schemaVersion ?? helix.schemaVersion,
+    modules: [...(consumer.modules ?? []), ...helixModules],
+  };
+})();
+
 // Load the Custom Elements Manifest so autodocs API tables are populated
-// with properties, events, slots, CSS parts, and CSS custom properties.
-setCustomElementsManifest(customElements as Record<string, unknown>);
+// with properties, events, slots, CSS parts, and CSS custom properties for
+// BOTH the consumer's components and every upstream hx-* tag.
+setCustomElementsManifest(mergedCem as Record<string, unknown>);
 
 /**
  * Viewport breakpoints sourced from @helixui/tokens.
