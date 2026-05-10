@@ -325,7 +325,17 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
     expect(await fs.pathExists(file)).toBe(true);
     const src = await fs.readFile(file, 'utf-8');
     expect(src).toContain('export interface APGPatternCardProps');
-    expect(src).toContain("import customElements from '@helixui/library/custom-elements.json'");
+    // Both A11yStatusCard and APGPatternCard now look up tags in BOTH
+    // the consumer's local CEM (../../../custom-elements.json) AND
+    // upstream Helix's CEM. Local takes precedence so locally-extended
+    // tags like ${ds}-button resolve to the consumer's declarations
+    // first, with Helix as the fallback for catalog (HELiX/*) pages.
+    expect(src).toContain(
+      "import localCustomElements from '../../../custom-elements.json'",
+    );
+    expect(src).toContain(
+      "import helixCustomElements from '@helixui/library/custom-elements.json'",
+    );
     expect(src).toContain('keyboardContract');
     expect(src).toContain('ariaPattern');
     // Defensive null return when no helixMeta is found — guard against
@@ -343,7 +353,17 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
     expect(await fs.pathExists(file)).toBe(true);
     const src = await fs.readFile(file, 'utf-8');
     expect(src).toContain('export interface A11yStatusCardProps');
-    expect(src).toContain("import customElements from '@helixui/library/custom-elements.json'");
+    // Both A11yStatusCard and APGPatternCard now look up tags in BOTH
+    // the consumer's local CEM (../../../custom-elements.json) AND
+    // upstream Helix's CEM. Local takes precedence so locally-extended
+    // tags like ${ds}-button resolve to the consumer's declarations
+    // first, with Helix as the fallback for catalog (HELiX/*) pages.
+    expect(src).toContain(
+      "import localCustomElements from '../../../custom-elements.json'",
+    );
+    expect(src).toContain(
+      "import helixCustomElements from '@helixui/library/custom-elements.json'",
+    );
     // The 9 capability badges must all emit, even if their helixMeta
     // fields are unset (the badges themselves return null when truthy=false).
     for (const cap of [
