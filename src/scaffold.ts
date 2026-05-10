@@ -131,6 +131,27 @@ async function safeCopyDir(src: string, dest: string): Promise<void> {
   await fs.copy(src, dest);
 }
 
+/**
+ * Dry-run-safe single-file copy. Records the destination + size in the
+ * dry-run entries (so `--dry-run` reports exactly what would land on
+ * disk) and short-circuits before any actual write. Use this for any
+ * static asset copy at scaffold time — bare fs.copy() bypasses the
+ * dry-run contract and writes anyway, which silently changes consumer
+ * state during a "preview" command.
+ */
+async function safeCopyFile(src: string, dest: string): Promise<void> {
+  if (_dryRunActive) {
+    try {
+      const stat = await fs.stat(src);
+      _dryRunEntries.push({ path: dest, size: stat.size });
+    } catch {
+      _dryRunEntries.push({ path: dest, size: 0 });
+    }
+    return;
+  }
+  await fs.copy(src, dest);
+}
+
 async function walkDirRecursive(dir: string): Promise<string[]> {
   const results: string[] = [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -10441,7 +10462,10 @@ export function A11yStatusCard({ tag }: A11yStatusCardProps): React.ReactElement
     const src = path.join(cssTemplatesDir, cssFile);
     const dest = path.join(docsContainerDir, cssFile);
     try {
-      await fs.copy(src, dest);
+      // safeCopyFile honors --dry-run by recording the entry and skipping
+      // the actual write. Bare fs.copy() bypassed the dry-run contract
+      // and silently wrote CSS to disk during preview commands.
+      await safeCopyFile(src, dest);
     } catch {
       // CSS asset missing — emit a stub so the consumer's preview.ts import
       // does not 404. The visual treatment falls back to Storybook defaults

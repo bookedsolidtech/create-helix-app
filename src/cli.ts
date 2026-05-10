@@ -317,14 +317,21 @@ export async function runJsonScaffold(
     // forgiveness as interactive/API.
   }
 
+  // wc-storybook is a TypeScript + token-pipeline factory. The interactive
+  // CLI and API both coerce typescript / designTokens to true regardless of
+  // user input — JSON mode must do the same so `--json --template
+  // wc-storybook --no-typescript` doesn't produce a broken scaffold where
+  // tsconfig.json / token files are skipped while the generator still
+  // emits .ts components.
+  const isWcStorybook = templateArg === 'wc-storybook';
   const options: import('./types.js').ProjectOptions = {
     name,
     directory,
     framework: templateArg as Framework,
     componentBundles: bundles,
-    typescript: opts.typescriptFlag,
+    typescript: isWcStorybook ? true : opts.typescriptFlag,
     eslint: opts.eslintFlag,
-    designTokens: opts.tokensFlag,
+    designTokens: isWcStorybook ? true : opts.tokensFlag,
     darkMode: opts.darkModeFlag,
     installDeps: !opts.isNoInstall,
     dryRun: opts.isDryRun,
