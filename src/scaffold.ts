@@ -8512,15 +8512,37 @@ const preview: Preview = {
       // Editorial flow above engineering. Phase 4 expands the inner
       // ordering for Foundations + Patterns. Drupal omitted — wc-storybook
       // factory does not ship Drupal stories.
+      // Editorial-first IA. Top-level order matches the way a designer
+      // reads the system — narrative entry (Cover/Overview/Patterns),
+      // then design language (Foundations), then the consumer's own
+      // brand components (Components), then the upstream catalog
+      // (HELiX), with Archive at the bottom for retired entries.
+      // Nested Foundations ordering follows the cascade: Tokens →
+      // semantic groups (Color/Typography/Spacing/Layout) → Brand →
+      // Accessibility → raw Token Swatches at the end. Without this
+      // explicit nesting Storybook falls back to alphabetical and
+      // Welcome (legacy) sat above Token Swatches / Tokens / Typography.
       storySort: {
         order: [
           'Cover',
           'Overview',
-          'Accessibility',
-          'Foundations',
           'Patterns',
-          'Playground',
+          [
+            'Foundations',
+            [
+              'Tokens',
+              'Color',
+              'Typography',
+              'Spacing',
+              'Layout',
+              'Brand',
+              'Accessibility',
+              'Token Swatches',
+            ],
+          ],
           'Components',
+          'HELiX',
+          'Archive',
           '*',
         ],
       },
@@ -9532,7 +9554,10 @@ export function deriveArgTypes(
 
 /**
  * Derive default args from CEM defaults. Strips surrounding single quotes the
- * analyzer emits for literal strings.
+ * analyzer emits for literal strings, and ignores the literal strings
+ * 'undefined' / 'null' which the analyzer emits when a property has no
+ * declared default — emitting them verbatim caused stories to render
+ * \`count="undefined"\` which the badge then coerced to NaN.
  */
 export function deriveArgs(decl: CemDeclaration): Record<string, unknown> {
   const args: Record<string, unknown> = {};
@@ -9540,6 +9565,10 @@ export function deriveArgs(decl: CemDeclaration): Record<string, unknown> {
     const name = attr.fieldName ?? attr.name;
     if (attr.default === undefined) continue;
     const raw = attr.default;
+    // CEM analyzer emits the literal string "undefined" / "null" when a
+    // TS field has no initializer. Treat those as "no default" so the
+    // generated story doesn't render \`<hx-badge count="undefined">\`.
+    if (raw === 'undefined' || raw === 'null') continue;
     if (raw === 'true') args[name] = true;
     else if (raw === 'false') args[name] = false;
     else if (/^'[^']*'$/.test(raw)) args[name] = raw.slice(1, -1);
@@ -11015,12 +11044,44 @@ function componentImportPath(tag: string): string {
   return '';
 }
 
+// Per-tag default slot content for catalog stories. The universal
+// "placeholder text" default reads visually wrong on components whose
+// slot is non-textual (icons, avatars, images, dividers, spinners).
+// Empty string drops the slot entirely — Lit just renders the host.
+// Initials / icon names are realistic placeholders that read as
+// intentional rather than copy-paste filler.
+const CATALOG_DEFAULT_CONTENT: Record<string, string> = {
+  'hx-avatar': 'JD',
+  'hx-icon': '',
+  'hx-icon-button': '',
+  'hx-image': '',
+  'hx-divider': '',
+  'hx-spinner': '',
+  'hx-skeleton': '',
+  'hx-progress-bar': '',
+  'hx-progress-ring': '',
+  'hx-meter': '',
+  'hx-color-picker': '',
+  'hx-rating': '',
+  'hx-slider': '',
+  'hx-toggle-button': '',
+  'hx-switch': '',
+  'hx-checkbox': 'Accept terms',
+  'hx-radio': 'Option',
+  'hx-tag': 'Tag',
+  'hx-badge': 'New',
+  'hx-link': 'Documentation',
+  'hx-button': 'Button',
+  'hx-text': 'Helix is a brand-extensible component platform.',
+};
+
 function renderStoryFile(decl: CemDeclaration): string {
   const tag = decl.tagName!;
   const tier = classifyTier(decl);
   const className = pascal(tag);
   const argTypes = deriveArgTypes(decl);
-  const args = { content: 'placeholder text', ...deriveArgs(decl) };
+  const defaultContent = CATALOG_DEFAULT_CONTENT[tag] ?? 'placeholder text';
+  const args = { content: defaultContent, ...deriveArgs(decl) };
   // Build an argName → HTML-attribute-name map straight from the CEM.
   // \`deriveArgs / deriveArgTypes\` key off \`fieldName\` (the JS property,
   // e.g. \`size\`) when present, but the actual DOM attribute can differ
@@ -11632,10 +11693,14 @@ The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the first 
   );
 
   // ── src/stories/Welcome.stories.ts ───────────────────────────────────────
-  // Phase 5 v3 — title nested as 'Foundations/Welcome (legacy)' so it
-  // collapses under Foundations rather than floating at the sidebar
-  // root. Cover.mdx is the canonical root entry; this stub stays for
-  // backwards-compat with consumers who linked at /story/welcome--introduction.
+  // Title nested under 'Archive/' so the stub doesn't sit ABOVE the
+  // active foundation pages in the sidebar (alphabetical fallback put
+  // 'Welcome (legacy)' as the first child of Foundations, masking
+  // Tokens / Typography / Token Swatches which are the real entry
+  // points). Archive lives at the bottom of the sidebar — see the
+  // storySort config in preview.ts. Cover.mdx is the canonical root
+  // entry; this stub stays for backwards-compat with consumers who
+  // bookmarked /story/welcome--introduction.
 
   await safeWriteFile(
     path.join(storiesDir, 'Welcome.stories.ts'),
@@ -11643,7 +11708,7 @@ The \`heroScenarios\` prompt in \`create-helix\` is the easy on-ramp: the first 
 import { html } from 'lit';
 
 const meta: Meta = {
-  title: 'Foundations/Welcome (legacy)',
+  title: 'Archive/Welcome (legacy)',
   parameters: {
     layout: 'fullscreen',
     docs: { page: null },
