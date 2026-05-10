@@ -771,10 +771,28 @@ ${presetList}
           }
           return Promise.resolve(dsNameFromArgs);
         }
+        // Resolve the project name from the prompt-result context if the
+        // user just typed it in this same wizard run — `projectName` is the
+        // captured CLI positional which is null when invoked as plain
+        // `npx create-helix`, so accepting defaults always seeded
+        // dsName='my-ds' even when the user picked a great name like
+        // 'acme-ui'. The interactive group records the typed name under
+        // ctx.results.name; falling back to that gives sensible defaults.
+        const enteredName = (ctx.results.name as string | undefined) ?? null;
+        const dsDefault =
+          dsNameFromArgs ??
+          enteredName ??
+          projectName ??
+          'my-ds';
+        // Only seed the prompt if the candidate passes dsName validation —
+        // names like @scope/pkg are valid project names but invalid dsNames,
+        // so fall back to 'my-ds' rather than offering an invalid default.
+        const dsInitial =
+          validateDsName(dsDefault) === undefined ? dsDefault : 'my-ds';
         return p.text({
           message: 'Design system codename',
-          placeholder: 'my-ds',
-          initialValue: projectName ?? 'my-ds',
+          placeholder: dsInitial,
+          initialValue: dsInitial,
           validate: (v) => validateDsName(v),
         });
       },

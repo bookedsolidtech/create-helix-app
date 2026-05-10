@@ -44,7 +44,8 @@
     "@clack/prompts": "^0.10.0",
     "fast-glob": "^3.3.3",
     "fs-extra": "^11.3.0",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "@helixui/tokens": "^3.3.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
