@@ -614,21 +614,26 @@ describe('wc-storybook integration', () => {
     expect(exists).toBe(false);
   });
 
-  it('pins Helix 3.3.1 in package.json dependencies', async () => {
+  it('pins Helix 3.3.1 in package.json (peerDependencies + devDependencies)', async () => {
     const o = opts('wcs-helix3');
     await scaffoldProject(o);
-    const pkg = await readJson<{ dependencies: Record<string, string> }>(
-      o.directory,
-      'package.json',
-    );
+    const pkg = await readJson<{
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    }>(o.directory, 'package.json');
     // 3.3.1 is the version that emits the cascade tokens this scaffold
     // expects (action.* semantic tier, on-{role}-strong text tokens,
-    // on-dark-* border tokens). Pinning the cascade contract version.
-    expect(pkg.dependencies['@helixui/library']).toBe('^3.3.1');
-    // @helixui/tokens: centralized pin is 3.3.1, but when designTokens=true the
-    // scaffold may layer an additional tokens entry; accept either explicit 3.3.1
-    // or the default tokens pin.
-    expect(pkg.dependencies['@helixui/tokens']).toBeDefined();
+    // on-dark-* border tokens). The library-mode template pins the
+    // cascade contract via peerDependencies (consumer-host requirement)
+    // + devDependencies (local pipeline). NOT runtime dependencies —
+    // putting Helix in `dependencies` would let downstream apps install
+    // a duplicate runtime alongside the host's own copy.
+    expect(pkg.dependencies['@helixui/library']).toBeUndefined();
+    expect(pkg.peerDependencies?.['@helixui/library']).toBe('^3.3.1');
+    expect(pkg.devDependencies['@helixui/library']).toBe('^3.3.1');
+    expect(pkg.peerDependencies?.['@helixui/tokens']).toBe('^3.3.1');
+    expect(pkg.devDependencies['@helixui/tokens']).toBe('^3.3.1');
   });
 
   it('pins @helixui/library as a peerDependency at the cascade-contract version (^3.3.1)', async () => {

@@ -528,12 +528,20 @@ async function writePackageJson(
         // IS shipped as dist/tokens.css — the build chain copies
         // src/tokens/tokens.css into dist/. Consumers import it once at
         // their app root: `import '<pkg>/tokens.css';`.
+        // Top-level customElements field is a Web Components convention
+        // (https://github.com/webcomponents/custom-elements-manifest) —
+        // IDE / tooling looks for it at the package root. Pointing at
+        // dist/custom-elements.json (copied by the build chain) lets
+        // downstream consumers see component metadata without expecting
+        // the un-published top-level custom-elements.json.
+        customElements: './dist/custom-elements.json',
         exports: {
           '.': {
             types: './dist/index.d.ts',
             import: './dist/index.js',
           },
           './tokens.css': './dist/tokens.css',
+          './custom-elements.json': './dist/custom-elements.json',
         },
         files: ['dist'],
         // Mark every component module as side-effectful, not just the
@@ -683,20 +691,29 @@ function getScripts(options: ProjectOptions): Record<string, string> {
           'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
         'build-storybook':
           'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && storybook build',
-        // Library publish chain: build tokens → bundle JS → emit .d.ts →
-        // copy tokens.css into dist/. Each step is critical:
+        // Library publish chain: build tokens → cem analyze (refresh
+        // custom-elements.json from src/components/*) → bundle JS →
+        // emit .d.ts → copy tokens.css + custom-elements.json into dist/.
+        // Each step is critical:
         //   - build-tokens generates src/tokens/tokens.css
+        //   - cem analyze regenerates custom-elements.json from current
+        //     source so the published manifest reflects what was bundled
         //   - vite build bundles src/index.ts to dist/index.js
         //   - tsc --project tsconfig.build.json emits dist/index.d.ts
         //     (rootDir=src so types land at the path package.json's
         //     "types" field advertises, not dist/src/index.d.ts)
-        //   - The final node copy ships dist/tokens.css so installers of
-        //     the published library can `import "<pkg>/tokens.css"` to
-        //     get the brand token layer. Without this, consumers see
-        //     unstyled components because --{prefix}-* variables are
-        //     never defined at :root.
+        //   - The final node copy ships dist/tokens.css so consumers can
+        //     `import "<pkg>/tokens.css"` to get the brand token layer.
+        //     Without it, components render unstyled because --{prefix}-*
+        //     variables are never defined at :root.
+        //   - dist/custom-elements.json ships the CEM next to dist/. Most
+        //     IDE / docs tooling (VS Code's lit-plugin, jetbrains-lit,
+        //     storybook autodocs in downstream consumers) reads it for
+        //     props / events / slots. files: ['dist'] excluded the
+        //     top-level custom-elements.json, so consumers got no
+        //     metadata even after the author ran cem:analyze.
         build:
-          'tsx scripts/build-tokens.ts && vite build && tsc --project tsconfig.build.json && node -e "require(\'fs\').copyFileSync(\'src/tokens/tokens.css\',\'dist/tokens.css\')"',
+          'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && vite build && tsc --project tsconfig.build.json && node -e "const fs=require(\'fs\');fs.copyFileSync(\'src/tokens/tokens.css\',\'dist/tokens.css\');fs.copyFileSync(\'custom-elements.json\',\'dist/custom-elements.json\')"',
         test: 'vitest run',
         'test:ui': 'vitest --ui',
         'type-check': 'tsc --noEmit',
