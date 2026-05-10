@@ -8160,7 +8160,16 @@ body {
 
 async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   const ds = options.dsName ?? 'my-ds';
-  const prefix = options.tokenPrefix ?? '--hx';
+  // Default the token prefix to `--{dsName}` so the consumer's brand layer
+  // and the upstream Helix layer don't collide. Defaulting to `--hx`
+  // produced cyclic self-references like
+  // `--hx-button-bg: var(--hx-button-bg, var(--hx-color-action-primary-bg))`,
+  // which CSS treats as invalid and drops — the entire bridge / override
+  // surface stopped working on default scaffolds. The dsName-derived
+  // prefix gives every consumer a unique namespace by default while
+  // still letting them pass `--token-prefix --hx` explicitly if they
+  // really want to share Helix's prefix.
+  const prefix = options.tokenPrefix ?? `--${ds}`;
   const ClassName = toPascalCase(ds);
   const BaseClass = `${ClassName}Element`;
   const dsTitle = ds
@@ -9015,33 +9024,33 @@ import { ${ClassName}ButtonStyles } from './${ds}-button.styles.js';
  * CEM inheritance does not auto-resolve, so @cssprop blocks are inlined
  * here so @custom-elements-manifest/analyzer surfaces them on this tag.
  *
- * @cssprop [--${ds}-button-bg=var(--${ds}-color-action-primary-bg)] - Resting fill.
- * @cssprop [--${ds}-button-hover-bg=var(--${ds}-color-action-primary-bg-hover)] - Hover fill.
- * @cssprop [--${ds}-button-active-bg=var(--${ds}-color-action-primary-bg-active)] - Pressed fill.
- * @cssprop [--${ds}-button-color=var(--${ds}-color-text-on-primary)] - Foreground color.
- * @cssprop [--${ds}-button-border-color=var(--${ds}-color-action-secondary-border)] - Border color.
- * @cssprop [--${ds}-button-border-radius=var(--${ds}-border-radius-md)] - Border radius.
- * @cssprop [--${ds}-button-font-family=var(--${ds}-font-family-sans)] - Font family.
- * @cssprop [--${ds}-button-font-weight=var(--${ds}-font-weight-semibold)] - Font weight.
- * @cssprop [--${ds}-button-focus-ring-color=var(--${ds}-focus-ring-color)] - Focus ring color.
+ * @cssprop [${prefix}-button-bg=var(${prefix}-color-action-primary-bg)] - Resting fill.
+ * @cssprop [${prefix}-button-hover-bg=var(${prefix}-color-action-primary-bg-hover)] - Hover fill.
+ * @cssprop [${prefix}-button-active-bg=var(${prefix}-color-action-primary-bg-active)] - Pressed fill.
+ * @cssprop [${prefix}-button-color=var(${prefix}-color-text-on-primary)] - Foreground color.
+ * @cssprop [${prefix}-button-border-color=var(${prefix}-color-action-secondary-border)] - Border color.
+ * @cssprop [${prefix}-button-border-radius=var(${prefix}-border-radius-md)] - Border radius.
+ * @cssprop [${prefix}-button-font-family=var(${prefix}-font-family-sans)] - Font family.
+ * @cssprop [${prefix}-button-font-weight=var(${prefix}-font-weight-semibold)] - Font weight.
+ * @cssprop [${prefix}-button-focus-ring-color=var(${prefix}-focus-ring-color)] - Focus ring color.
  *
  * ─── Semantic action.* tier (system-wide override surface) ────────────────
  *
- * @cssprop [--${ds}-color-action-primary-bg] - Primary resting fill (3.2.1 semantic).
- * @cssprop [--${ds}-color-action-primary-bg-hover] - Primary hover fill.
- * @cssprop [--${ds}-color-action-primary-bg-active] - Primary pressed fill.
- * @cssprop [--${ds}-color-action-primary-bg-inverted-hover] - Primary hover fill on dark.
- * @cssprop [--${ds}-color-action-secondary-bg] - Secondary resting fill.
- * @cssprop [--${ds}-color-action-secondary-bg-hover] - Secondary hover fill.
- * @cssprop [--${ds}-color-action-secondary-border] - Secondary outline border.
- * @cssprop [--${ds}-color-action-ghost-bg-hover] - Ghost hover fill.
- * @cssprop [--${ds}-color-action-danger-bg] - Danger resting fill.
- * @cssprop [--${ds}-color-action-danger-bg-hover] - Danger hover fill.
- * @cssprop [--${ds}-color-action-danger-bg-active] - Danger pressed fill.
- * @cssprop [--${ds}-color-text-on-primary] - Foreground for primary fill (AA-tuned).
- * @cssprop [--${ds}-color-text-on-primary-strong] - White override for primary-{600,700} fills.
- * @cssprop [--${ds}-color-text-on-error] - Foreground for danger fill.
- * @cssprop [--${ds}-color-text-on-error-strong] - White override for error-{600,700} fills.
+ * @cssprop [${prefix}-color-action-primary-bg] - Primary resting fill (3.2.1 semantic).
+ * @cssprop [${prefix}-color-action-primary-bg-hover] - Primary hover fill.
+ * @cssprop [${prefix}-color-action-primary-bg-active] - Primary pressed fill.
+ * @cssprop [${prefix}-color-action-primary-bg-inverted-hover] - Primary hover fill on dark.
+ * @cssprop [${prefix}-color-action-secondary-bg] - Secondary resting fill.
+ * @cssprop [${prefix}-color-action-secondary-bg-hover] - Secondary hover fill.
+ * @cssprop [${prefix}-color-action-secondary-border] - Secondary outline border.
+ * @cssprop [${prefix}-color-action-ghost-bg-hover] - Ghost hover fill.
+ * @cssprop [${prefix}-color-action-danger-bg] - Danger resting fill.
+ * @cssprop [${prefix}-color-action-danger-bg-hover] - Danger hover fill.
+ * @cssprop [${prefix}-color-action-danger-bg-active] - Danger pressed fill.
+ * @cssprop [${prefix}-color-text-on-primary] - Foreground for primary fill (AA-tuned).
+ * @cssprop [${prefix}-color-text-on-primary-strong] - White override for primary-{600,700} fills.
+ * @cssprop [${prefix}-color-text-on-error] - Foreground for danger fill.
+ * @cssprop [${prefix}-color-text-on-error-strong] - White override for error-{600,700} fills.
  *
  * ─── Helix-internal hooks (advanced — bridge already maps these) ──────────
  *
@@ -12280,31 +12289,52 @@ if (!defaultModeId) {
   process.exit(1);
 }
 
-// Resolve Figma's COLOR object to #rrggbb.
+// Resolve Figma's COLOR object to #rrggbb or #rrggbbaa. The 'a' channel
+// is preserved when present and < 1 — otherwise common overlay/scrim
+// tokens (e.g. a 70% white scrim) get serialised as opaque #ffffff and
+// the generated design system renders the wrong colour.
 function toHex(raw: unknown): string | null {
   if (!raw || typeof raw !== 'object') return null;
-  const c = raw as { r?: number; g?: number; b?: number };
+  const c = raw as { r?: number; g?: number; b?: number; a?: number };
   if (typeof c.r !== 'number' || typeof c.g !== 'number' || typeof c.b !== 'number') return null;
   const h = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
-  return '#' + h(c.r) + h(c.g) + h(c.b);
+  const base = '#' + h(c.r) + h(c.g) + h(c.b);
+  if (typeof c.a === 'number' && c.a < 1) return base + h(c.a);
+  return base;
 }
 
 // Token name patterns that resolve to unitless numbers in CSS (font-weight,
-// opacity, line-height, z-index, *-duration-*, *-density-*). Append nothing
-// for these — appending 'px' would emit invalid CSS like \`font-weight: 600px\`.
-// Path-aware so it matches both flat (\`font-weight\`) and nested
+// opacity, line-height, z-index, *-density-*). Append nothing for these —
+// appending 'px' would emit invalid CSS like \`font-weight: 600px\`. Path-
+// aware so it matches both flat (\`font-weight\`) and nested
 // (\`font/weight/regular\`) Figma variable names.
+//
+// Note: \`duration\` is intentionally NOT in this list. Duration tokens
+// resolve to time values and need a 'ms' suffix — see DURATION_PATTERNS.
 const UNITLESS_PATTERNS: readonly RegExp[] = [
   /(?:^|[/-])font[-/]weight(?:$|[/-])/i,
   /(?:^|[/-])opacity(?:$|[/-])/i,
   /(?:^|[/-])line[-/]height(?:$|[/-])/i,
   /(?:^|[/-])z[-/]index(?:$|[/-])/i,
-  /(?:^|[/-])duration(?:$|[/-])/i,
   /(?:^|[/-])density(?:$|[/-])/i,
+];
+
+// Token name patterns that resolve to CSS time values. These get a 'ms'
+// suffix so build-tokens emits \`--…-duration-fast: 200ms\` rather than the
+// invalid \`--…-duration-fast: 200\` that breaks every transition / animation
+// reading the variable.
+const DURATION_PATTERNS: readonly RegExp[] = [
+  /(?:^|[/-])duration(?:$|[/-])/i,
+  /(?:^|[/-])transition[-/]duration(?:$|[/-])/i,
+  /(?:^|[/-])animation[-/]duration(?:$|[/-])/i,
 ];
 
 function isUnitlessName(name: string): boolean {
   return UNITLESS_PATTERNS.some((re) => re.test(name));
+}
+
+function isDurationName(name: string): boolean {
+  return DURATION_PATTERNS.some((re) => re.test(name));
 }
 
 // Walk VARIABLE_ALIAS refs until we reach a literal leaf, bounded for safety.
@@ -12329,7 +12359,11 @@ function resolveValue(raw: unknown, name: string, depth = 0): string | null {
 
   const hex = toHex(raw);
   if (hex) return hex;
-  if (typeof raw === 'number') return isUnitlessName(name) ? String(raw) : String(raw) + 'px';
+  if (typeof raw === 'number') {
+    if (isDurationName(name)) return String(raw) + 'ms';
+    if (isUnitlessName(name)) return String(raw);
+    return String(raw) + 'px';
+  }
   if (typeof raw === 'string') return raw;
   return null;
 }
