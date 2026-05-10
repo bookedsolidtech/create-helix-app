@@ -385,10 +385,16 @@ export async function runJsonScaffold(
         name,
         directory,
         framework: templateArg,
-        typescript: opts.typescriptFlag,
-        eslint: opts.eslintFlag,
-        darkMode: opts.darkModeFlag,
-        designTokens: opts.tokensFlag,
+        // Echo the EFFECTIVE flags (after wc-storybook coercion) so JSON
+        // consumers see what was actually scaffolded, not the raw CLI
+        // input. wc-storybook always emits TypeScript + tokens
+        // regardless of --no-typescript / --no-tokens; reporting
+        // `typescript: false` while the project contains tsconfig.json
+        // and .ts sources misleads any tooling that reads this payload.
+        typescript: options.typescript,
+        eslint: options.eslint,
+        darkMode: options.darkMode,
+        designTokens: options.designTokens,
         bundles: bundles,
       },
       files,
@@ -961,7 +967,17 @@ ${presetList}
 
   // ── Dependency audit ─────────────────────────────────────────────────────
   if (!skipAudit) {
-    const templateDeps = template?.dependencies ?? {};
+    // Audit every package the template adds to the consumer project, not
+    // just `dependencies`. wc-storybook is a library-mode template that
+    // puts almost the entire toolchain (Storybook, Vite, Playwright,
+    // ESLint, Helix packages) in devDependencies + peerDependencies —
+    // auditing only `dependencies` would silently skip vulnerability /
+    // license coverage on most of the actual install footprint.
+    const templateDeps = {
+      ...(template?.dependencies ?? {}),
+      ...(template?.devDependencies ?? {}),
+      ...(template?.peerDependencies ?? {}),
+    };
     const auditResult = await auditDependencies(templateDeps);
     if (!auditResult.networkError) {
       for (const v of auditResult.vulnerabilities) {

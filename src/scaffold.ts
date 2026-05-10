@@ -8308,6 +8308,7 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
     path.join(storybookDir, 'main.ts'),
     `import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { createRequire } from 'node:module';
 import type { StorybookConfig } from '@storybook/web-components-vite';
 
 const config: StorybookConfig = {
@@ -8373,7 +8374,13 @@ const config: StorybookConfig = {
 export default config;
 
 function getAbsolutePath(value: string): string {
-  return dirname(fileURLToPath(import.meta.resolve(\`\${value}/package.json\`)));
+  // \`createRequire().resolve()\` works on every Node 20.x release, while
+  // \`import.meta.resolve()\` only became unflagged in newer 20.x. The CLI
+  // advertises Node ^20 support, so using import.meta.resolve here would
+  // break \`pnpm storybook\` / \`pnpm build-storybook\` for users on the
+  // earlier Node 20 versions still in our supported range.
+  const require = createRequire(import.meta.url);
+  return dirname(require.resolve(\`\${value}/package.json\`));
 }
 `,
   );
