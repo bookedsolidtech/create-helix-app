@@ -12994,6 +12994,28 @@ export default defineConfig({
     { spaces: 2 },
   );
 
+  // ── src/vite-env.d.ts — ambient module declarations ─────────────────────
+  // .storybook/preview.ts and the docs helpers import bare CSS files
+  // (./docs/helix-docs.css, etc.). Vite handles these at runtime via
+  // its CSS plugin, but TypeScript needs a shim to resolve the imports
+  // during `pnpm type-check` and the declaration-emit step in
+  // `pnpm build`. Without this, both fail with TS2307: Cannot find
+  // module './docs/helix-docs.css' or its corresponding type declarations.
+  await safeWriteFile(
+    path.join(srcDir, 'vite-env.d.ts'),
+    `/// <reference types="vite/client" />
+
+// Vite handles CSS imports at the build layer. TypeScript needs an
+// ambient module declaration to type-check the bare \`import './foo.css';\`
+// pattern used throughout .storybook/ and src/stories/.
+declare module '*.css';
+declare module '*.json' {
+  const value: unknown;
+  export default value;
+}
+`,
+  );
+
   // ── custom-elements.json — CEM stub (populated by pnpm run cem:analyze) ──
 
   await safeWriteJson(

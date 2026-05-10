@@ -191,14 +191,23 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
     }
   }
 
+  // wc-storybook is a Lit + TypeScript + token-pipeline factory that
+  // ALWAYS emits TypeScript and the token build pipeline. Honoring a
+  // caller-supplied typescript:false / designTokens:false would put the
+  // pre-pass into JS-mode (non-TS eslint config, no token files) while
+  // the wc-storybook generator still wrote .ts components — `npm run
+  // lint` and `pnpm type-check` would break immediately. Force both
+  // modes on for this template, matching what cli.ts does for the
+  // interactive path.
+  const wcStorybookForce = options.framework === 'wc-storybook';
   await scaffoldProject({
     name: options.name,
     directory: options.directory,
     framework: options.framework,
     componentBundles: options.componentBundles ?? ['all'],
-    typescript: options.typescript ?? true,
+    typescript: wcStorybookForce ? true : (options.typescript ?? true),
     eslint: options.eslint ?? true,
-    designTokens: options.designTokens ?? true,
+    designTokens: wcStorybookForce ? true : (options.designTokens ?? true),
     darkMode: options.darkMode ?? false,
     installDeps: options.installDeps ?? false,
     dryRun: options.dryRun ?? false,

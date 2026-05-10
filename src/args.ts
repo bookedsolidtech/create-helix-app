@@ -175,7 +175,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // known set of CLI option names — if the next argv token matches a
   // known option, treat it as the next flag (not a value). Anything
   // else, including `--bolt`, is accepted as a value.
+  // Set of every documented CLI option so readValueFlag can distinguish
+  // "next argv is the value" from "next argv is the next flag". Keep in
+  // sync with src/cli.ts argv parsing — missing entries cause space-form
+  // value-flags (e.g. `--ds-name acme --quiet`) to incorrectly capture
+  // the next flag as the value.
   const KNOWN_OPTIONS = new Set([
+    // value-bearing options
     '--ds-name',
     '--token-prefix',
     '--brand-tagline',
@@ -189,19 +195,26 @@ export function parseArgs(argv: string[]): ParsedArgs {
     '--config',
     '--bundles',
     '--preset',
+    // boolean / mode flags
     '--yes',
     '-y',
     '--json',
     '--dry-run',
     '--force',
     '--verbose',
+    '--quiet',
+    '-q',
     '--no-install',
     '--no-eslint',
     '--no-tokens',
+    '--no-typescript',
+    '--no-dark-mode',
     '--typescript',
     '--eslint',
     '--tokens',
     '--dark-mode',
+    '--skip-audit',
+    '--offline',
     '--help',
     '-h',
     '--version',
