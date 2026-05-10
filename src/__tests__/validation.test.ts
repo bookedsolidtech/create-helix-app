@@ -62,12 +62,22 @@ describe('validateDsName', () => {
 // ---------------------------------------------------------------------------
 
 describe('validateTokenPrefix', () => {
-  it('accepts the default --hx', () => {
-    expect(validateTokenPrefix('--hx')).toBeUndefined();
+  // --hx is now reserved for the upstream HELiX namespace. Allowing it
+  // would let scaffolders emit cyclic bridge declarations (a generated
+  // `--hx-button-bg: var(--hx-button-bg, ...)` rule which CSS drops
+  // silently). Consumer brands must pick their own prefix.
+  it('rejects --hx as reserved for upstream HELiX', () => {
+    expect(validateTokenPrefix('--hx')).toMatch(/reserved for the upstream HELiX/);
   });
 
   it('accepts a hyphenated suffix', () => {
     expect(validateTokenPrefix('--my-ds')).toBeUndefined();
+  });
+
+  it('accepts brand-specific prefixes', () => {
+    expect(validateTokenPrefix('--acme')).toBeUndefined();
+    expect(validateTokenPrefix('--bolt')).toBeUndefined();
+    expect(validateTokenPrefix('--aurora')).toBeUndefined();
   });
 
   it('rejects empty string', () => {

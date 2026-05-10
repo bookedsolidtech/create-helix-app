@@ -141,6 +141,14 @@ export function validateTokenPrefix(prefix: string): string | undefined {
   if (!prefix) return 'Required';
   if (!/^--[a-z][a-z0-9-]*$/.test(prefix))
     return 'Must start with -- followed by a lowercase identifier (e.g. --bolt)';
+  // Reject --hx specifically for wc-storybook. The factory emits a bridge
+  // layer like `--{prefix}-button-bg: var(--{prefix}-button-bg, var(--hx-…))`
+  // — when {prefix} === --hx the declaration becomes a cyclic
+  // self-reference that CSS parsing silently drops, killing the entire
+  // override surface. Helix's namespace is reserved for the upstream
+  // platform; consumer brands need a unique prefix.
+  if (prefix === '--hx')
+    return '--hx is reserved for the upstream HELiX platform and would create cyclic bridge declarations. Pick a brand-specific prefix (e.g. --acme, --bolt).';
   return undefined;
 }
 

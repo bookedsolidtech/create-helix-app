@@ -21,8 +21,16 @@ import {
   validateDirectory,
   validateFramework,
   validatePreset,
+  validateDsName,
+  validateTokenPrefix,
 } from './validation.js';
-import type { Framework, ComponentBundle, TemplateConfig, PresetConfig } from './types.js';
+import type {
+  Framework,
+  ComponentBundle,
+  TemplateConfig,
+  PresetConfig,
+  HeroScenario,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -56,6 +64,26 @@ export interface ScaffoldOptions {
   dryRun?: boolean;
   /** Overwrite existing non-empty directory (default: false) */
   force?: boolean;
+  /**
+   * Design system codename. Becomes the custom-element tag prefix and class
+   * name root (e.g. dsName='aurora' → <aurora-button>, AuroraButton).
+   * Defaults to the project name when valid as a dsName, else 'my-ds'.
+   * wc-storybook only — ignored by other framework templates.
+   */
+  dsName?: string;
+  /**
+   * CSS custom property prefix for the brand token layer (e.g. '--aurora').
+   * Defaults to `--{dsName}` so the consumer's brand layer gets a unique
+   * namespace. Cannot be `--hx` (reserved for upstream HELiX, would create
+   * cyclic bridge declarations). wc-storybook only.
+   */
+  tokenPrefix?: string;
+  /** Brand tagline rendered on the Cover page. wc-storybook only. */
+  brandTagline?: string;
+  /** Brand verticals — populates the Storybook brand toolbar. wc-storybook only. */
+  brandVerticals?: string[];
+  /** Per-component hero scenes. wc-storybook only. */
+  heroScenarios?: HeroScenario[];
 }
 
 /**
@@ -159,6 +187,14 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
     installDeps: options.installDeps ?? false,
     dryRun: options.dryRun ?? false,
     force: options.force ?? false,
+    // wc-storybook naming + brand fields. Forwarded as-is so the
+    // scaffolder's own defaults (dsName ← project name, tokenPrefix ←
+    // --{ds}, brand prompts ← cross-domain neutral) apply when omitted.
+    dsName: options.dsName,
+    tokenPrefix: options.tokenPrefix,
+    brandTagline: options.brandTagline,
+    brandVerticals: options.brandVerticals,
+    heroScenarios: options.heroScenarios,
   });
 
   const result: ScaffoldResult = {
@@ -241,6 +277,19 @@ export function validate(options: Partial<ScaffoldOptions>): ValidationResult {
     if (invalid.length > 0) {
       errors['componentBundles'] = `Unknown component bundle(s): ${invalid.join(', ')}`;
     }
+  }
+
+  // wc-storybook naming validation. dsName + tokenPrefix get interpolated
+  // into directory paths and class names — programmatic callers must not
+  // be able to pass values that traverse outside options.directory or
+  // emit cyclic bridge declarations.
+  if (options.dsName !== undefined) {
+    const err = validateDsName(options.dsName);
+    if (err) errors['dsName'] = err;
+  }
+  if (options.tokenPrefix !== undefined) {
+    const err = validateTokenPrefix(options.tokenPrefix);
+    if (err) errors['tokenPrefix'] = err;
   }
 
   return {
