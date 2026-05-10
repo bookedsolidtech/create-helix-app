@@ -488,11 +488,34 @@ async function writePackageJson(
   // setting "type": "module" would cause ReferenceError: require is not defined.
   const useEsm = options.framework !== 'ember';
   const peerDependencies = template.peerDependencies;
+  // Library-mode templates (wc-storybook today) publish their compiled
+  // dist/ to npm — they need main / exports / types entry points so
+  // `import { AuroraButton } from 'my-design-system'` resolves. App-style
+  // templates (react-next, svelte-kit, etc.) do not — they're the END
+  // app, not a reusable library.
+  const isLibraryTemplate = options.framework === 'wc-storybook';
+  const libraryEntrypoints = isLibraryTemplate
+    ? {
+        main: './dist/index.js',
+        module: './dist/index.js',
+        types: './dist/index.d.ts',
+        exports: {
+          '.': {
+            types: './dist/index.d.ts',
+            import: './dist/index.js',
+          },
+          './style.css': './dist/style.css',
+        },
+        files: ['dist'],
+        sideEffects: ['**/*.css', './dist/index.js'],
+      }
+    : {};
   const pkg = {
     name: options.name,
     version: '0.1.0',
-    private: true,
+    ...(isLibraryTemplate ? {} : { private: true }),
     ...(useEsm ? { type: 'module' } : {}),
+    ...libraryEntrypoints,
     scripts: getScripts(options),
     dependencies: {
       // wc-storybook pins Helix tokens at its own centralized 3.3.1 version via
@@ -607,7 +630,12 @@ function getScripts(options: ProjectOptions): Record<string, string> {
           'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && concurrently -n tokens,sb -c blue,magenta "tsx scripts/build-tokens.ts --watch" "storybook dev -p 6006"',
         'build-storybook':
           'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && tsx scripts/generate-catalog.ts && storybook build',
-        build: 'tsx scripts/build-tokens.ts && vite build',
+        // Library publish chain: build tokens → bundle JS → emit .d.ts.
+        // The .d.ts emit step is critical — without it, downstream TS
+        // consumers see "Could not find a declaration file for module"
+        // errors and lose autocomplete for every exported component.
+        build:
+          'tsx scripts/build-tokens.ts && vite build && tsc --emitDeclarationOnly --declaration --outDir dist',
         test: 'vitest run',
         'test:ui': 'vitest --ui',
         'type-check': 'tsc --noEmit',
@@ -12551,7 +12579,13 @@ export default defineConfig({
       fileName: 'index',
     },
     rollupOptions: {
-      external: ['lit', /^lit\\//],
+      // Externalize Lit AND every @helixui/* package. If @helixui/library
+      // gets inlined into dist/, downstream consumers that also import
+      // raw hx-* components end up with two copies of the Helix runtime
+      // and trip duplicate customElements.define() registrations
+      // (e.g. "hx-button" already defined). Helix packages MUST stay
+      // peer dependencies, declared and shared by the consumer.
+      external: ['lit', /^lit\\//, /^@helixui\\//],
       output: {
         preserveModules: true,
       },
