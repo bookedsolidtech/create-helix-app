@@ -258,10 +258,14 @@ export async function runJsonScaffold(
     process.exit(1);
   }
 
+  // Default the output directory to the UNSCOPED name. `@acme/design-system`
+  // would otherwise create `./@acme/design-system/` as nested directories;
+  // unscoping yields `./design-system/`. The package.json still records
+  // the full scoped name; this only affects the on-disk folder layout.
   const directory =
     opts.outputDirArg !== null
       ? path.resolve(process.cwd(), opts.outputDirArg)
-      : path.resolve(process.cwd(), name);
+      : path.resolve(process.cwd(), unscopeName(name));
 
   const bundles: ComponentBundle[] =
     opts.bundlesFromFlag ?? (['core', 'forms'] as ComponentBundle[]);
@@ -910,10 +914,14 @@ ${presetList}
 
   const options: ProjectOptions = {
     name: project.name as string,
+    // Same unscoping as the JSON path: scoped names like
+    // @acme/design-system land in ./design-system/ rather than nested
+    // ./@acme/design-system/ directories. package.json records the full
+    // scoped name; only the on-disk folder is unscoped.
     directory:
       outputDirArg !== null
         ? path.resolve(process.cwd(), outputDirArg)
-        : path.resolve(process.cwd(), project.name as string),
+        : path.resolve(process.cwd(), unscopeName(project.name as string)),
     framework: project.framework as Framework,
     componentBundles: project.componentBundles as ComponentBundle[],
     // wc-storybook is a Lit + TypeScript + token-pipeline factory. The
