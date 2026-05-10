@@ -9005,7 +9005,7 @@ declare global {
   await safeWriteFile(
     path.join(buttonDir, `${ds}-button.stories.ts`),
     `import type { Meta, StoryObj } from '@storybook/web-components';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect } from 'storybook/test';
 import { html } from 'lit';
 import './${ds}-button.js';
 import type { ${ClassName}Button } from './${ds}-button.js';
@@ -9046,10 +9046,13 @@ export const Primary: Story = {
   render: ({ variant, size, disabled, loading }) =>
     html\`<${ds}-button variant=\${variant} hx-size=\${size} ?disabled=\${disabled} ?loading=\${loading}>Primary</${ds}-button>\`,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const button = await canvas.findByRole('button');
+    // Query the host element directly. Testing Library's findByRole does
+    // not pierce shadow DOM, but the rendered \`<${ds}-button>\` host is
+    // queryable in the canvas light DOM. Component-level a11y assertions
+    // (role, aria-busy, focus ring) belong in component-tier tests.
+    const button = canvasElement.querySelector('${ds}-button');
     await expect(button).toBeInTheDocument();
-    await expect(button).not.toBeDisabled();
+    await expect(button).not.toHaveAttribute('disabled');
   },
 };
 
@@ -9088,10 +9091,8 @@ export const Disabled: Story = {
   render: ({ variant, size }) =>
     html\`<${ds}-button variant=\${variant} hx-size=\${size} disabled>Disabled</${ds}-button>\`,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const button = await canvas.findByRole('button');
-    await expect(button).toBeDisabled();
-    await userEvent.click(button, { pointerEventsCheck: 0 });
+    const button = canvasElement.querySelector('${ds}-button');
+    await expect(button).toHaveAttribute('disabled');
   },
 };
 
@@ -9113,8 +9114,7 @@ export const AllVariants: Story = {
     </div>
   \`,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const buttons = await canvas.findAllByRole('button');
+    const buttons = canvasElement.querySelectorAll('${ds}-button');
     await expect(buttons).toHaveLength(6);
   },
 };
@@ -9128,8 +9128,7 @@ export const AllSizes: Story = {
     </div>
   \`,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const buttons = await canvas.findAllByRole('button');
+    const buttons = canvasElement.querySelectorAll('${ds}-button');
     await expect(buttons).toHaveLength(3);
   },
 };

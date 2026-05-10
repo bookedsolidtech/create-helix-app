@@ -43,7 +43,8 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'fs-extra';
-import { chromium, type Browser, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
 import { scaffoldProject } from '../src/scaffold.js';
 import type { ProjectOptions } from '../src/types.js';
 
@@ -56,6 +57,18 @@ const PORT = Number(process.env.PORT ?? 6116);
 const URL = `http://localhost:${PORT}`;
 const SKIP_INSTALL = process.env.SKIP_INSTALL === '1';
 const KEEP_RUNNING = process.env.KEEP_RUNNING === '1';
+const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR ?? '/tmp/helix-smoke-screenshots';
+const REPORT_PATH = process.env.REPORT_PATH ?? '/tmp/helix-smoke-report.json';
+// Chromium dies after rendering ~3-5 pages on macOS when each navigation
+// triggers Storybook's docs-page lazy compilation, MDX render, and an
+// inline a11y scan. Rotating the browser every BATCH_SIZE pages dodges
+// the renderer-process resource ceiling. Smaller batches = more browser
+// startup overhead but bulletproof; bigger batches = faster but flaky.
+const BATCH_SIZE = Number(process.env.BATCH_SIZE ?? 4);
+// Subset filter — env var to override (e.g. SUBSET=cover,foundations runs
+// only ids whose title matches one of those substrings, case-insensitive).
+const SUBSET = process.env.SUBSET ?? '';
+const SKIP_A11Y = process.env.SKIP_A11Y === '1';
 
 const FIXED_OPTIONS: ProjectOptions = {
   name: 'build-smoke',
@@ -76,22 +89,35 @@ const FIXED_OPTIONS: ProjectOptions = {
 interface StoryProbe {
   id: string;
   viewMode: 'docs' | 'story';
+  title: string;
 }
 
-// A representative sample. Walking all 242 catalog entries is overkill — and
-// Chromium on macOS gets unstable past ~5 docs page navigations because
-// every Storybook docs.page eagerly compiles a lot of MDX. The five below
-// exercise: brand-prompt rendering (cover), narrative IA (overview), pattern
-// stub (patterns), one foundation page (color), one per-component conformance
-// page (aurora-button). hx-button mount is verified separately via a story
-// (not docs) URL after the loop.
-const STORIES_TO_PROBE: StoryProbe[] = [
-  { id: 'cover--docs', viewMode: 'docs' },
-  { id: 'overview--docs', viewMode: 'docs' },
-  { id: 'patterns--docs', viewMode: 'docs' },
-  { id: 'foundations-color--docs', viewMode: 'docs' },
-  { id: 'components-aurorabutton-conformance--docs', viewMode: 'docs' },
-];
+// Pull every entry out of /index.json and walk all of them. Chromium dies
+// after 5-10 docs renders on macOS, so the loop launches a fresh browser
+// every BATCH_SIZE pages — each batch starts with a clean renderer.
+async function loadAllStories(): Promise<StoryProbe[]> {
+  const res = await fetch(`${URL}/index.json`);
+  const data = (await res.json()) as {
+    entries?: Record<string, { id: string; title: string; type: string; name: string }>;
+  };
+  const entries = Object.values(data.entries ?? {});
+  const stories: StoryProbe[] = entries.map((e) => ({
+    id: e.id,
+    viewMode: e.type === 'docs' ? 'docs' : 'story',
+    title: e.title,
+  }));
+  // Deterministic order for reproducible reports
+  stories.sort((a, b) => a.id.localeCompare(b.id));
+  if (SUBSET) {
+    const needles = SUBSET.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+    return stories.filter((s) =>
+      needles.some(
+        (n) => s.id.toLowerCase().includes(n) || s.title.toLowerCase().includes(n),
+      ),
+    );
+  }
+  return stories;
+}
 
 // Console messages that always pollute Storybook + are safe to ignore.
 const CONSOLE_NOISE = [
@@ -121,8 +147,18 @@ function ok(label: string): void {
 
 // ─── Browser probe ───────────────────────────────────────────────────────
 
+interface A11yViolation {
+  id: string;
+  impact: 'minor' | 'moderate' | 'serious' | 'critical' | null;
+  description: string;
+  nodes: number;
+}
+
 interface PageProbeResult {
   storyId: string;
+  title: string;
+  viewMode: 'docs' | 'story';
+  status: 'ok' | 'empty' | 'error' | 'crashed';
   consoleErrors: string[];
   pageErrors: string[];
   vitePluginErrors: string[];
@@ -130,13 +166,31 @@ interface PageProbeResult {
   bodyBgColor: string;
   hasContent: boolean;
   contentSnippet: string;
+  screenshotPath: string | null;
+  a11yViolations: A11yViolation[];
+  a11ySerious: number;
+  a11yCritical: number;
 }
 
-async function probePage(page: Page, story: StoryProbe): Promise<PageProbeResult> {
+async function probePage(
+  ctx: BrowserContext,
+  story: StoryProbe,
+  index: number,
+  total: number,
+): Promise<PageProbeResult> {
   const storyId = story.id;
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   const vitePluginErrors: string[] = [];
+  let screenshotPath: string | null = null;
+  let a11yViolations: A11yViolation[] = [];
+  let a11ySerious = 0;
+  let a11yCritical = 0;
+  let status: PageProbeResult['status'] = 'ok';
+
+  // Fresh page per probe inside the batch. We're inside a fresh browser
+  // (rotated every BATCH_SIZE), so creating a page here is cheap.
+  const page = await ctx.newPage();
 
   const onConsole = (msg: import('playwright').ConsoleMessage) => {
     if (msg.type() !== 'error') return;
@@ -157,47 +211,61 @@ async function probePage(page: Page, story: StoryProbe): Promise<PageProbeResult
   page.on('console', onConsole);
   page.on('pageerror', onPageError);
 
-  // Navigate directly to the preview iframe — no manager UI, no nested iframe.
   const target = `${URL}/iframe.html?id=${encodeURIComponent(storyId)}&viewMode=${story.viewMode}`;
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
 
-  // Wait until Storybook's loading skeleton (`sb-preparing-*`) is gone AND
-  // real story/docs content has rendered (≥200 chars). Skeleton selectors
-  // are tolerated as missing — older Storybook builds skip them.
   await page
     .waitForFunction(
-      () => {
+      (mode: 'docs' | 'story') => {
         const skeleton = document.querySelector(
           '.sb-preparing-story, .sb-preparing-docs, .sb-loader',
         );
         if (skeleton) return false;
-        const root =
-          document.querySelector('#storybook-docs') ??
-          document.querySelector('#storybook-root') ??
-          document.body;
-        return (root.textContent ?? '').trim().length > 200;
+        if (mode === 'docs') {
+          const root =
+            document.querySelector('#storybook-docs') ??
+            document.querySelector('#storybook-root') ??
+            document.body;
+          return (root.textContent ?? '').trim().length > 200;
+        }
+        // Story view: any rendered child under #storybook-root means the
+        // story has mounted. No text-length threshold — icon-only stories
+        // are valid.
+        const storyRoot = document.querySelector('#storybook-root');
+        return !!(storyRoot && storyRoot.children.length > 0);
       },
+      story.viewMode,
       { timeout: 8000 },
     )
     .catch(() => {});
 
-  let probe: Omit<PageProbeResult, 'storyId' | 'consoleErrors' | 'pageErrors' | 'vitePluginErrors'>;
+  let probe: Pick<
+    PageProbeResult,
+    'bodyTextColor' | 'bodyBgColor' | 'hasContent' | 'contentSnippet'
+  >;
   try {
-    probe = await page.evaluate(() => {
-      const root =
-        document.querySelector('#storybook-docs') ??
-        document.querySelector('#storybook-root') ??
-        document.body;
+    probe = await page.evaluate((mode: 'docs' | 'story') => {
+      // For story canvas pages we look at #storybook-root (the rendered
+      // component); for docs pages we look at #storybook-docs (the MDX
+      // page wrapper). Each has a different empty-vs-rendered threshold.
+      const docsRoot = document.querySelector('#storybook-docs');
+      const storyRoot = document.querySelector('#storybook-root');
+      const root = mode === 'docs' ? (docsRoot ?? storyRoot ?? document.body) : (storyRoot ?? docsRoot ?? document.body);
       const bodyTextColor = window.getComputedStyle(document.body).color;
       const bodyBgColor = window.getComputedStyle(document.body).backgroundColor;
       const text = (root.textContent ?? '').trim();
+      // Story view: any rendered DOM element under #storybook-root is
+      // success — text content can be 0 chars (e.g. an icon-only button).
+      // Docs view: requires a substantive MDX render (>50 chars).
+      const hasContent =
+        mode === 'docs' ? text.length > 50 : root.children.length > 0 || text.length > 0;
       return {
         bodyTextColor,
         bodyBgColor,
-        hasContent: text.length > 50,
+        hasContent,
         contentSnippet: text.slice(0, 400),
       };
-    });
+    }, story.viewMode);
   } catch (err) {
     probe = {
       bodyTextColor: 'eval-failed',
@@ -205,12 +273,63 @@ async function probePage(page: Page, story: StoryProbe): Promise<PageProbeResult
       hasContent: false,
       contentSnippet: `evaluate error: ${err instanceof Error ? err.message : String(err)}`,
     };
+    status = 'crashed';
+  }
+
+  // Screenshot every page so the user can SEE every component.
+  // Viewport-only (1280x900) — fullPage=true rasterizes the entire scroll
+  // surface, which compounds chromium's renderer memory pressure across
+  // a long walk and trips the resource ceiling sooner.
+  try {
+    const safeId = storyId.replace(/[^a-z0-9._-]/gi, '_');
+    screenshotPath = `${SCREENSHOT_DIR}/${String(index).padStart(3, '0')}-${safeId}.png`;
+    await page.screenshot({ path: screenshotPath, timeout: 6000 });
+  } catch (err) {
+    pageErrors.push(`screenshot failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Run axe-core a11y scan. Skipped via SKIP_A11Y=1 for fast smoke checks.
+  if (!SKIP_A11Y && status !== 'crashed') {
+    try {
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      a11yViolations = results.violations.map((v) => ({
+        id: v.id,
+        impact: v.impact ?? null,
+        description: v.description,
+        nodes: v.nodes.length,
+      }));
+      a11ySerious = a11yViolations.filter((v) => v.impact === 'serious').length;
+      a11yCritical = a11yViolations.filter((v) => v.impact === 'critical').length;
+    } catch (err) {
+      pageErrors.push(`axe failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  if (status === 'ok' && !probe.hasContent) status = 'empty';
+  if (status === 'ok' && (consoleErrors.length || pageErrors.length || vitePluginErrors.length)) {
+    status = 'error';
   }
 
   page.off('console', onConsole);
   page.off('pageerror', onPageError);
+  await page.close().catch(() => {});
 
-  return { storyId, consoleErrors, pageErrors, vitePluginErrors, ...probe };
+  return {
+    storyId,
+    title: story.title,
+    viewMode: story.viewMode,
+    status,
+    consoleErrors,
+    pageErrors,
+    vitePluginErrors,
+    screenshotPath,
+    a11yViolations,
+    a11ySerious,
+    a11yCritical,
+    ...probe,
+  };
 }
 
 function isWhiteOnWhite(textColor: string, bgColor: string): boolean {
@@ -416,65 +535,63 @@ async function main(): Promise<void> {
       ok(`index entry count >=100 (${entryCount})`);
     }
 
-    step('launching headless chromium');
-    browser = await chromium.launch();
-    browser.on('disconnected', () => {
-      // eslint-disable-next-line no-console
-      console.error('[chromium] browser disconnected unexpectedly');
-    });
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-    ctx.on('close', () => {
-      // eslint-disable-next-line no-console
-      console.error('[chromium] context closed unexpectedly');
-    });
-    const page = await ctx.newPage();
+    step('loading every story from /index.json');
+    const stories = await loadAllStories();
+    step(
+      `walking ${stories.length} stories in batches of ${BATCH_SIZE} (browser rotated per batch)`,
+    );
 
-    // hx-button mount probe — run FIRST while chromium is fresh. Walking
-    // many docs pages bloats the renderer process and kills it; deferring
-    // this to after the loop has been unreliable.
+    await fs.ensureDir(SCREENSHOT_DIR);
+    await fs.emptyDir(SCREENSHOT_DIR);
+
+    const probes: PageProbeResult[] = [];
+    const totalBatches = Math.ceil(stories.length / BATCH_SIZE);
+
+    // hx-button mount probe — runs once with its OWN browser before the
+    // main walk so a freshly-bundled storybook is exercised first.
     step('verifying hx-button web component mounts (story canvas)');
     let buttonProbe: { registered: boolean; count: number; hasShadow: boolean } = {
       registered: false,
       count: 0,
       hasShadow: false,
     };
-    try {
-      const buttonPage = await ctx.newPage();
-      await buttonPage
-        .goto(`${URL}/iframe.html?id=helix-atoms-hx-button--default&viewMode=story`, {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000,
-        })
-        .catch(() => {});
-      await buttonPage
-        .waitForFunction(
-          () => {
-            const el = document.querySelector('hx-button') as HTMLElement | null;
-            return (
-              !!el &&
-              !!window.customElements.get('hx-button') &&
-              !!el.shadowRoot &&
-              el.shadowRoot.children.length > 0
-            );
-          },
-          { timeout: 12000 },
-        )
-        .catch(() => {});
-      buttonProbe = await buttonPage.evaluate(() => {
-        const buttons = document.querySelectorAll('hx-button');
-        const first = buttons[0] as HTMLElement | undefined;
-        return {
-          registered: !!window.customElements.get('hx-button'),
-          count: buttons.length,
-          hasShadow: !!(first && first.shadowRoot && first.shadowRoot.children.length > 0),
-        };
-      });
-      await buttonPage.close().catch(() => {});
-    } catch (err) {
-      failures.push({
-        check: 'hx-button-probe',
-        detail: `evaluate failed: ${err instanceof Error ? err.message : String(err)}`,
-      });
+    {
+      const probeBrowser = await chromium.launch();
+      try {
+        const probeCtx = await probeBrowser.newContext({ viewport: { width: 1280, height: 900 } });
+        const buttonPage = await probeCtx.newPage();
+        await buttonPage
+          .goto(`${URL}/iframe.html?id=helix-atoms-hx-button--default&viewMode=story`, {
+            waitUntil: 'domcontentloaded',
+            timeout: 15000,
+          })
+          .catch(() => {});
+        await buttonPage
+          .waitForFunction(
+            () => {
+              const el = document.querySelector('hx-button') as HTMLElement | null;
+              return (
+                !!el &&
+                !!window.customElements.get('hx-button') &&
+                !!el.shadowRoot &&
+                el.shadowRoot.children.length > 0
+              );
+            },
+            { timeout: 12000 },
+          )
+          .catch(() => {});
+        buttonProbe = await buttonPage.evaluate(() => {
+          const buttons = document.querySelectorAll('hx-button');
+          const first = buttons[0] as HTMLElement | undefined;
+          return {
+            registered: !!window.customElements.get('hx-button'),
+            count: buttons.length,
+            hasShadow: !!(first && first.shadowRoot && first.shadowRoot.children.length > 0),
+          };
+        });
+      } finally {
+        await probeBrowser.close().catch(() => {});
+      }
     }
     if (!buttonProbe.registered) {
       failures.push({
@@ -495,47 +612,114 @@ async function main(): Promise<void> {
       ok(`hx-button registered + mounted (${buttonProbe.count} elements, shadow populated)`);
     }
 
-    step(`walking ${STORIES_TO_PROBE.length} stories…`);
-    const probes: PageProbeResult[] = [];
-    for (let i = 0; i < STORIES_TO_PROBE.length; i++) {
-      const story = STORIES_TO_PROBE[i];
-      step(`  [${i + 1}/${STORIES_TO_PROBE.length}] ${story.id} (${story.viewMode})`);
-      const result = await probePage(page, story);
-      probes.push(result);
+    // Walk every story. Rotate the browser process every BATCH_SIZE pages
+    // — Chromium's renderer process leaks resources across Storybook docs
+    // navigations and dies after ~5-10 pages on macOS. Fresh browser per
+    // batch is the only stable way to cover 200+ entries in one run.
+    for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+      const start = batchIdx * BATCH_SIZE;
+      const end = Math.min(start + BATCH_SIZE, stories.length);
+      const batchStories = stories.slice(start, end);
+      step(
+        `── batch ${batchIdx + 1}/${totalBatches} (${batchStories.length} pages, ${start + 1}–${end} of ${stories.length}) ──`,
+      );
 
-      if (result.pageErrors.length > 0) {
-        failures.push({
-          check: `pageError ${story.id}`,
-          detail: result.pageErrors.slice(0, 2).join(' || '),
-        });
+      browser = await chromium.launch();
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+
+      let crashedMidBatch = false;
+      for (let i = 0; i < batchStories.length; i++) {
+        const story = batchStories[i];
+        const globalIdx = start + i;
+        step(
+          `  [${globalIdx + 1}/${stories.length}] ${story.viewMode}:${story.id} (${story.title})`,
+        );
+        let result: PageProbeResult;
+        try {
+          result = await probePage(ctx, story, globalIdx + 1, stories.length);
+        } catch (err) {
+          // Browser/context died mid-batch. Record the failure, abort the
+          // rest of this batch, and fall through to the next iteration of
+          // the outer loop which will spin up a fresh browser.
+          crashedMidBatch = true;
+          // eslint-disable-next-line no-console
+          console.error(
+            `[smoke] batch ${batchIdx + 1} crashed at ${story.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          result = {
+            storyId: story.id,
+            title: story.title,
+            viewMode: story.viewMode,
+            status: 'crashed',
+            consoleErrors: [],
+            pageErrors: [`browser-crash: ${err instanceof Error ? err.message : String(err)}`],
+            vitePluginErrors: [],
+            bodyTextColor: 'crashed',
+            bodyBgColor: 'crashed',
+            hasContent: false,
+            contentSnippet: '',
+            screenshotPath: null,
+            a11yViolations: [],
+            a11ySerious: 0,
+            a11yCritical: 0,
+          };
+          probes.push(result);
+          break;
+        }
+        probes.push(result);
+
+        if (result.pageErrors.length > 0) {
+          failures.push({
+            check: `pageError ${story.id}`,
+            detail: result.pageErrors.slice(0, 2).join(' || '),
+          });
+        }
+        if (result.vitePluginErrors.length > 0) {
+          failures.push({
+            check: `viteImportFailure ${story.id}`,
+            detail: result.vitePluginErrors.slice(0, 1).join(' || '),
+          });
+        }
+        if (result.consoleErrors.length > 0) {
+          failures.push({
+            check: `consoleError ${story.id}`,
+            detail: result.consoleErrors.slice(0, 2).join(' || '),
+          });
+        }
+        if (!result.hasContent) {
+          failures.push({
+            check: `emptyContent ${story.id}`,
+            detail: `bodyText too short: "${result.contentSnippet.slice(0, 80)}"`,
+          });
+        }
+        if (isWhiteOnWhite(result.bodyTextColor, result.bodyBgColor)) {
+          failures.push({
+            check: `whiteOnWhite ${story.id}`,
+            detail: `text=${result.bodyTextColor} bg=${result.bodyBgColor}`,
+          });
+        }
+        if (result.a11yCritical > 0) {
+          const ids = result.a11yViolations
+            .filter((v) => v.impact === 'critical')
+            .map((v) => v.id)
+            .join(', ');
+          failures.push({
+            check: `a11yCritical ${story.id}`,
+            detail: `${result.a11yCritical} critical violation(s): ${ids}`,
+          });
+        }
       }
-      if (result.vitePluginErrors.length > 0) {
-        failures.push({
-          check: `viteImportFailure ${story.id}`,
-          detail: result.vitePluginErrors.slice(0, 1).join(' || '),
-        });
-      }
-      if (result.consoleErrors.length > 0) {
-        failures.push({
-          check: `consoleError ${story.id}`,
-          detail: result.consoleErrors.slice(0, 2).join(' || '),
-        });
-      }
-      if (!result.hasContent) {
-        failures.push({
-          check: `emptyContent ${story.id}`,
-          detail: `bodyText too short: "${result.contentSnippet.slice(0, 80)}"`,
-        });
-      }
-      if (isWhiteOnWhite(result.bodyTextColor, result.bodyBgColor)) {
-        failures.push({
-          check: `whiteOnWhite ${story.id}`,
-          detail: `text=${result.bodyTextColor} bg=${result.bodyBgColor}`,
-        });
+
+      await ctx.close().catch(() => {});
+      await browser.close().catch(() => {});
+      browser = undefined;
+      if (crashedMidBatch) {
+        // eslint-disable-next-line no-console
+        console.error(`[smoke] batch ${batchIdx + 1} aborted; continuing with next batch`);
       }
     }
 
-    // Specific assertions on contracts
+    // Brand-prompt assertions on the cover entry
     const cover = probes.find((p) => p.storyId === 'cover--docs');
     if (cover) {
       if (!cover.contentSnippet.includes('Calm finance for everyone')) {
@@ -552,20 +736,76 @@ async function main(): Promise<void> {
       }
     }
 
-    await ctx.close();
+    // ─── Aggregate report ────────────────────────────────────────────────
+    const seriousTotal = probes.reduce((acc, p) => acc + p.a11ySerious, 0);
+    const criticalTotal = probes.reduce((acc, p) => acc + p.a11yCritical, 0);
+    const okCount = probes.filter((p) => p.status === 'ok').length;
+    const emptyCount = probes.filter((p) => p.status === 'empty').length;
+    const errorCount = probes.filter((p) => p.status === 'error').length;
+    const crashedCount = probes.filter((p) => p.status === 'crashed').length;
 
-    // ─── Report ──────────────────────────────────────────────────────────
+    const summary = {
+      walkedAt: new Date().toISOString(),
+      total: stories.length,
+      ok: okCount,
+      empty: emptyCount,
+      error: errorCount,
+      crashed: crashedCount,
+      a11ySeriousTotal: seriousTotal,
+      a11yCriticalTotal: criticalTotal,
+      indexEntries: entryCount,
+      failures,
+      probes: probes.map((p) => ({
+        id: p.storyId,
+        title: p.title,
+        viewMode: p.viewMode,
+        status: p.status,
+        consoleErrors: p.consoleErrors.length,
+        pageErrors: p.pageErrors.length,
+        vitePluginErrors: p.vitePluginErrors.length,
+        a11ySerious: p.a11ySerious,
+        a11yCritical: p.a11yCritical,
+        a11yViolations: p.a11yViolations,
+        screenshot: p.screenshotPath,
+        contentSnippet: p.contentSnippet.slice(0, 120),
+        bodyTextColor: p.bodyTextColor,
+        bodyBgColor: p.bodyBgColor,
+      })),
+    };
+    await fs.writeJson(REPORT_PATH, summary, { spaces: 2 });
+
+    step(
+      `summary: ${okCount} ok, ${emptyCount} empty, ${errorCount} error, ${crashedCount} crashed | a11y: ${criticalTotal} critical, ${seriousTotal} serious`,
+    );
+    step(`screenshots: ${SCREENSHOT_DIR}/  |  report: ${REPORT_PATH}`);
+
     if (failures.length === 0) {
       ok(
-        `ALL CHECKS PASSED — ${STORIES_TO_PROBE.length} stories walked, ${entryCount} index entries`,
+        `ALL CHECKS PASSED — ${stories.length} stories walked, ${entryCount} index entries, ${criticalTotal + seriousTotal} a11y issues`,
       );
       await cleanup();
       process.exit(0);
     } else {
       // eslint-disable-next-line no-console
       console.error(`\n[smoke] ✗ ${failures.length} failure(s):\n`);
+      const grouped: Record<string, number> = {};
       for (const f of failures) {
+        const kind = f.check.split(' ')[0];
+        grouped[kind] = (grouped[kind] ?? 0) + 1;
+      }
+      // eslint-disable-next-line no-console
+      console.error(
+        `[smoke] failure breakdown: ${Object.entries(grouped)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ')}\n`,
+      );
+      // Print first 30 detailed; rest summarized in the JSON report.
+      for (const f of failures.slice(0, 30)) {
         fail(f.check, f.detail);
+      }
+      if (failures.length > 30) {
+        // eslint-disable-next-line no-console
+        console.error(`[smoke] (... ${failures.length - 30} more in ${REPORT_PATH})`);
       }
       await cleanup();
       process.exit(1);
