@@ -128,17 +128,24 @@ describe.each(ALL_FRAMEWORKS)('scaffold-all-frameworks: %s', (framework) => {
     }
   });
 
-  it('package.json includes @helixui/library in dependencies', async () => {
+  it('package.json declares @helixui/library somewhere', async () => {
     if (framework === 'vanilla') return; // vanilla uses CDN, not npm dep
     const o = makeOpts(framework, 'helix-dep');
     await scaffoldProject(o);
     const pkg = (await readJson(path.join(o.directory, 'package.json'))) as {
       dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
     };
-    expect(
-      pkg.dependencies['@helixui/library'],
-      'expected @helixui/library in dependencies',
-    ).toBeDefined();
+    // wc-storybook publishes as a library — Helix lives in peerDependencies
+    // (consumer-host contract) + devDependencies (local pipeline) rather
+    // than runtime `dependencies`. App-style templates still declare it
+    // in dependencies as before. Either form is valid.
+    const declared =
+      pkg.dependencies['@helixui/library'] ??
+      pkg.peerDependencies?.['@helixui/library'] ??
+      pkg.devDependencies?.['@helixui/library'];
+    expect(declared, `expected @helixui/library declared in ${framework} package.json`).toBeDefined();
   });
 
   it('tsconfig.json exists with strict mode when typescript=true', async () => {

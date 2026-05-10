@@ -504,10 +504,14 @@ describe('wc-storybook integration', () => {
     // separate step so callers compose (or rely on the `storybook` concurrent
     // watch:tokens) rather than paying for an implicit rebuild every sync.
     expect(pkg.scripts['tokens:sync']).toBe('tsx scripts/sync-tokens.ts');
-    // The old @helixui-copy behavior is preserved as tokens:refresh-platform for re-bootstrap.
-    expect(pkg.scripts['tokens:refresh-platform']).toBeDefined();
-    expect(pkg.scripts['tokens:refresh-platform']).toContain('@helixui/tokens/tokens.json');
-    expect(pkg.scripts['tokens:refresh-platform']).not.toContain('pnpm build:tokens');
+    // tokens:refresh-platform delegates to scripts/refresh-tokens.ts (a
+    // real source file) instead of an inline `node -e` one-liner that
+    // crashed with ERR_INVALID_ARG_VALUE because `node -e` evaluates
+    // __filename to the literal "[eval]" and breaks createRequire.
+    expect(pkg.scripts['tokens:refresh-platform']).toBe('tsx scripts/refresh-tokens.ts');
+    // refresh-tokens.ts itself resolves @helixui/tokens at runtime.
+    const refreshScript = await readText(o.directory, 'scripts/refresh-tokens.ts');
+    expect(refreshScript).toContain("'@helixui/tokens/tokens.json'");
     expect(pkg.scripts['build:tokens']).toBe('tsx scripts/build-tokens.ts');
     expect(pkg.scripts['watch:tokens']).toBe('tsx scripts/build-tokens.ts --watch');
   });
@@ -518,9 +522,21 @@ describe('wc-storybook integration', () => {
     const pkg = await readJson<{
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
+      peerDependencies?: Record<string, string>;
     }>(o.directory, 'package.json');
+    // lit is the only RUNTIME dependency. Helix packages are externalised
+    // by vite.config.ts, declared as peerDependencies (consumer host
+    // contract) and devDependencies (local pipeline). Putting them in
+    // `dependencies` would let downstream apps install a second copy of
+    // the Helix runtime alongside the host's, tripping duplicate
+    // customElements.define() registrations.
     expect(pkg.dependencies['lit']).toBeDefined();
-    expect(pkg.dependencies['@helixui/library']).toBeDefined();
+    expect(pkg.dependencies['@helixui/library']).toBeUndefined();
+    expect(pkg.dependencies['@helixui/tokens']).toBeUndefined();
+    expect(pkg.peerDependencies?.['@helixui/library']).toBeDefined();
+    expect(pkg.peerDependencies?.['@helixui/tokens']).toBeDefined();
+    expect(pkg.devDependencies['@helixui/library']).toBeDefined();
+    expect(pkg.devDependencies['@helixui/tokens']).toBeDefined();
     expect(pkg.devDependencies['storybook']).toBeDefined();
     expect(pkg.devDependencies['@storybook/web-components']).toBeDefined();
     expect(pkg.devDependencies['@storybook/web-components-vite']).toBeDefined();
@@ -568,8 +584,23 @@ describe('wc-storybook integration', () => {
     expect(vite).toContain("formats: ['es']");
   });
 
-  it('defaults to my-ds when no dsName provided', async () => {
+  it('falls back to the project name when it is a valid dsName', async () => {
+    // Project name 'wcs-defaults' passes validateDsName, so the
+    // scaffolder uses it as dsName instead of the 'my-ds' worst-case
+    // fallback. This matches the CLI's interactive default and prevents
+    // generic <my-ds-button> tags for API callers who supply only `name`.
     const o = opts('wcs-defaults', { dsName: undefined, tokenPrefix: undefined });
+    await scaffoldProject(o);
+    const base = await readText(o.directory, 'src/base/wcs-defaults-element.ts');
+    expect(base).toContain('extends HelixElement');
+    expect(base).toContain('WcsDefaultsElement');
+  });
+
+  it('falls back to my-ds when project name is not a valid dsName', async () => {
+    // Project names like '123-app' are valid as npm names but invalid as
+    // dsNames (validateDsName rejects leading digits). Scaffolder must
+    // gracefully degrade to 'my-ds' rather than emit invalid identifiers.
+    const o = opts('123-app', { dsName: undefined, tokenPrefix: undefined });
     await scaffoldProject(o);
     const base = await readText(o.directory, 'src/base/my-ds-element.ts');
     expect(base).toContain('extends HelixElement');
