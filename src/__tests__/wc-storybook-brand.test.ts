@@ -994,3 +994,122 @@ describe('wc-storybook Phase 1 — helpers.ts emitter module', () => {
     expect(src).not.toContain('packages/hx-library');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2 — 7 component conformance MDXes
+//
+// Validates the new src/scaffold/wc-storybook/mdx-components.ts module:
+// emits one MDX per ported helix component with tag-name + class-name
+// substitution, no ?raw / monorepo paths leak through, and the title
+// taxonomy matches Components/{DsClass}*/Conformance per the existing
+// button MDX pattern.
+// ---------------------------------------------------------------------------
+
+const PHASE2_COMPONENTS = [
+  'card',
+  'checkbox',
+  'dialog',
+  'form',
+  'select',
+  'tabs',
+  'text-input',
+] as const;
+
+const PHASE2_PASCAL_BY_TAG: Record<(typeof PHASE2_COMPONENTS)[number], string> = {
+  card: 'Card',
+  checkbox: 'Checkbox',
+  dialog: 'Dialog',
+  form: 'Form',
+  select: 'Select',
+  tabs: 'Tabs',
+  'text-input': 'TextInput',
+};
+
+describe('wc-storybook Phase 2 — 7 component conformance MDXes', () => {
+  for (const component of PHASE2_COMPONENTS) {
+    it(`emits src/stories/components/aurora-${component}.mdx`, async () => {
+      const opts = makeWcStorybookOptions({ name: `phase2-${component}-emits` });
+      await scaffoldProject(opts);
+      const fp = path.join(
+        opts.directory,
+        'src',
+        'stories',
+        'components',
+        `aurora-${component}.mdx`,
+      );
+      expect(await fs.pathExists(fp), `aurora-${component}.mdx should exist`).toBe(true);
+      const src = await fs.readFile(fp, 'utf-8');
+      // Sanity: meaningful content, not a 0-byte stub.
+      expect(src.length, `aurora-${component}.mdx should be non-empty`).toBeGreaterThan(500);
+    });
+  }
+
+  for (const component of PHASE2_COMPONENTS) {
+    it(`aurora-${component}.mdx substitutes <hx-${component}> → <aurora-${component}>`, async () => {
+      const opts = makeWcStorybookOptions({ name: `phase2-${component}-tag` });
+      await scaffoldProject(opts);
+      const fp = path.join(
+        opts.directory,
+        'src',
+        'stories',
+        'components',
+        `aurora-${component}.mdx`,
+      );
+      const src = await fs.readFile(fp, 'utf-8');
+      // Positive: scaffolded ds-prefixed tag is present.
+      expect(src).toMatch(new RegExp(`<aurora-${component}\\b`));
+      // Negative: literal helix tag did NOT leak through. The scaffolder
+      // owns the substitution surface; if hx-* leaks here, the consumer's
+      // emitted MDX talks about a tag they have not registered.
+      expect(src).not.toMatch(new RegExp(`<hx-${component}\\b`));
+    });
+  }
+
+  it('all 7 emitted MDXes contain zero forbidden monorepo / Vite ?raw / dropped-component references', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-forbidden-strings' });
+    await scaffoldProject(opts);
+    const dir = path.join(opts.directory, 'src', 'stories', 'components');
+    const forbidden = [
+      '?raw',
+      'packages/hx-library',
+      'apps/storybook/scripts',
+      'AAAConformanceCard',
+    ];
+    for (const component of PHASE2_COMPONENTS) {
+      const fp = path.join(dir, `aurora-${component}.mdx`);
+      const src = await fs.readFile(fp, 'utf-8');
+      for (const needle of forbidden) {
+        expect(
+          src.includes(needle),
+          `aurora-${component}.mdx must not contain forbidden string "${needle}"`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('all 7 emitted MDX titles are namespaced under Components/{DsClass}*/Conformance', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-titles' });
+    await scaffoldProject(opts);
+    const dir = path.join(opts.directory, 'src', 'stories', 'components');
+    for (const component of PHASE2_COMPONENTS) {
+      const fp = path.join(dir, `aurora-${component}.mdx`);
+      const src = await fs.readFile(fp, 'utf-8');
+      const expectedPascal = PHASE2_PASCAL_BY_TAG[component];
+      expect(
+        src,
+        `aurora-${component}.mdx should declare a Components/Aurora${expectedPascal} title`,
+      ).toContain(`<Meta title="Components/Aurora${expectedPascal}/Conformance" />`);
+    }
+  });
+
+  it('class-name substitution: dsName=aurora produces AuroraCard (not HxCard) in card MDX', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase2-class-sub' });
+    await scaffoldProject(opts);
+    const fp = path.join(opts.directory, 'src', 'stories', 'components', 'aurora-card.mdx');
+    const src = await fs.readFile(fp, 'utf-8');
+    // Positive: scaffolded class form appears (heading + variant-gallery reference).
+    expect(src).toContain('AuroraCard');
+    // Negative: literal helix class form did NOT leak.
+    expect(src).not.toContain('HxCard');
+  });
+});

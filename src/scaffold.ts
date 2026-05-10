@@ -22,6 +22,7 @@ import {
   contrastMatrixSrc,
 } from './scaffold/wc-storybook/helpers.js';
 import { inlineAuditPanelStubSrc } from './scaffold/wc-storybook/audit-stub.js';
+import { getComponentMdxEmissions } from './scaffold/wc-storybook/mdx-components.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -10818,6 +10819,21 @@ Use it for the dominant call-to-action on a screen.
 />
 `,
   );
+
+  // ── src/stories/components/{ds}-{card,checkbox,dialog,form,select,tabs,text-input}.mdx
+  //
+  // Phase 2 — port 7 component conformance MDXes from helix/apps/storybook/
+  // stories/components/. Each is parameterized by dsName + dsClass so the
+  // scaffolded `aurora` design system gets {aurora-card, aurora-form, ...}
+  // pages with matching {AuroraCard, ...} class references. Healthcare-vertical
+  // demo content was rewritten to cross-domain neutral flows per
+  // `feedback_realistic_sample_data`. NO `?raw` AAA-AUDIT.md imports survive
+  // the port (audit content is opt-in via the InlineAuditPanel stub from
+  // Phase 1). Refs: shimmying-roaming-kernighan plan, Phase 2.
+  const componentMdxEmissions = getComponentMdxEmissions({ dsName: ds, dsClass: ClassName });
+  for (const emission of componentMdxEmissions) {
+    await safeWriteFile(path.join(options.directory, emission.relativePath), emission.content);
+  }
 
   // ── helix.storybook.config.ts ────────────────────────────────────────────
   // Consumer-facing knob for hiding upstream Helix components, docs pages,
