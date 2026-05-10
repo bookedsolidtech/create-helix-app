@@ -201,12 +201,11 @@
   margin: 0 0 32px;
   padding: 40px 32px;
   border-radius: 16px;
-  background:
-    linear-gradient(
-      135deg,
-      var(--hx-color-action-primary-bg, #0f7078) 0%,
-      var(--hx-color-action-primary-bg-hover, #0d5e64) 100%
-    );
+  background: linear-gradient(
+    135deg,
+    var(--hx-color-action-primary-bg, #0f7078) 0%,
+    var(--hx-color-action-primary-bg-hover, #0d5e64) 100%
+  );
   color: var(--hx-color-text-on-primary-strong, #ffffff);
   position: relative;
   overflow: hidden;
@@ -217,12 +216,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(
-      ellipse at top right,
-      rgba(255, 255, 255, 0.12),
-      transparent 60%
-    );
+  background: radial-gradient(ellipse at top right, rgba(255, 255, 255, 0.12), transparent 60%);
 }
 
 .hx-cover-hero > * {

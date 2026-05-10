@@ -194,7 +194,9 @@ async function main(): Promise<void> {
   }
   await fs.writeFile(GALLERY_PATH, html, 'utf8');
   // eslint-disable-next-line no-console
-  console.log(`gallery written: ${GALLERY_PATH} (${report.probes.length} cards across ${sections.length} sections)`);
+  console.log(
+    `gallery written: ${GALLERY_PATH} (${report.probes.length} cards across ${sections.length} sections)`,
+  );
 }
 
 main().catch((err) => {

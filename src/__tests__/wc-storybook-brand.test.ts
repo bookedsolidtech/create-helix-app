@@ -258,7 +258,13 @@ describe('wc-storybook Phase 3a — docs React components', () => {
     expect(src).toContain("import * as React from 'react';");
   });
 
-  it('emits InlineAuditPanel.tsx with consumer-overridable github base URL', async () => {
+  it('emits InlineAuditPanel.tsx as an opt-in no-op stub (Phase 1 lift)', async () => {
+    // Phase 1 of the shimmying-roaming-kernighan plan replaced the prior
+    // live-port InlineAuditPanel (which read AAA-AUDIT.md via Vite's `?raw`
+    // from a monorepo-internal path) with an opt-in stub. The component
+    // still ships under the same import path so existing MDX imports keep
+    // working, but renders nothing unless the consumer passes their own
+    // `markdown` prop.
     const opts = makeWcStorybookOptions({ name: 'phase3a-inline-audit' });
     await scaffoldProject(opts);
     const file = path.join(opts.directory, 'src', 'stories', '_components', 'InlineAuditPanel.tsx');
@@ -266,13 +272,10 @@ describe('wc-storybook Phase 3a — docs React components', () => {
     const src = await fs.readFile(file, 'utf-8');
     expect(src).toContain('export interface InlineAuditPanelProps');
     expect(src).toContain('export function InlineAuditPanel(');
-    // The githubBlobBase prop lets a consumer point at THEIR repo instead
-    // of bookedsolidtech/helix — critical for downstream design systems.
-    expect(src).toContain('githubBlobBase?:');
-    // Default still points at upstream Helix (consumer can override).
-    expect(src).toContain(
-      'https://github.com/bookedsolidtech/helix/blob/main/packages/hx-library/',
-    );
+    // Stub contract: opt-in markdown prop; renders null when omitted.
+    expect(src).toContain('markdown?:');
+    expect(src).toContain('opt-in stub');
+    // CEM coupling never belonged here — keep the negative assertion.
     expect(src).not.toContain('@helixui/library/custom-elements.json');
   });
 
@@ -307,9 +310,13 @@ describe('wc-storybook Phase 3a — docs React components', () => {
       path.join(opts.directory, 'src', 'stories', '_components', 'InlineAuditPanel.tsx'),
       'utf-8',
     );
-    // Two-segment ${} interpolation must reach the consumer un-mangled.
-    expect(audit).toContain('`${githubBlobBase}${path}`');
-    expect(audit).not.toContain('\\${githubBlobBase}');
+    // Phase 1 stub: the surviving template-literal interpolation is the
+    // aria-label `Inline AAA audit for ${tag}`. Assert it reaches the
+    // consumer un-mangled (no \${...} escape artifact). The previous
+    // `${githubBlobBase}${path}` URL-construction expression was removed
+    // when the github "View on GitHub" footer left with the live impl.
+    expect(audit).toContain('`Inline AAA audit for ${tag}`');
+    expect(audit).not.toContain('\\${tag}');
   });
 });
 
@@ -330,9 +337,7 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
     // upstream Helix's CEM. Local takes precedence so locally-extended
     // tags like ${ds}-button resolve to the consumer's declarations
     // first, with Helix as the fallback for catalog (HELiX/*) pages.
-    expect(src).toContain(
-      "import localCustomElements from '../../../custom-elements.json'",
-    );
+    expect(src).toContain("import localCustomElements from '../../../custom-elements.json'");
     expect(src).toContain(
       "import helixCustomElements from '@helixui/library/custom-elements.json'",
     );
@@ -358,9 +363,7 @@ describe('wc-storybook Phase 3b — CEM-coupled docs cards', () => {
     // upstream Helix's CEM. Local takes precedence so locally-extended
     // tags like ${ds}-button resolve to the consumer's declarations
     // first, with Helix as the fallback for catalog (HELiX/*) pages.
-    expect(src).toContain(
-      "import localCustomElements from '../../../custom-elements.json'",
-    );
+    expect(src).toContain("import localCustomElements from '../../../custom-elements.json'");
     expect(src).toContain(
       "import helixCustomElements from '@helixui/library/custom-elements.json'",
     );
@@ -872,5 +875,122 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
     expect(css).toContain('var(--hx-color-text-primary');
     expect(css).toContain('var(--hx-color-surface-default');
     expect(css).toContain('var(--hx-color-border-subtle');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 1 — shimmying-roaming-kernighan plan
+//
+// Port of 7 helix React helpers (TokenSwatchGrid, ContrastMatrix, RatioCard,
+// CodeBlock, CodeTabs, useResolvedToken, contrast) plus TokenRef (transitive
+// dependency of ContrastMatrix) into a new emitter module at
+// src/scaffold/wc-storybook/helpers.ts. InlineAuditPanel emission is
+// replaced with an opt-in no-op stub.
+// ---------------------------------------------------------------------------
+
+import {
+  contrastSrc as helperContrastSrc,
+  useResolvedTokenSrc as helperUseResolvedTokenSrc,
+  tokenSwatchGridSrc as helperTokenSwatchGridSrc,
+  contrastMatrixSrc as helperContrastMatrixSrc,
+} from '../scaffold/wc-storybook/helpers.js';
+import { inlineAuditPanelStubSrc } from '../scaffold/wc-storybook/audit-stub.js';
+import { getTemplate } from '../templates.js';
+
+describe('wc-storybook Phase 1 — ported React helpers', () => {
+  it('emits all 8 helper files into src/stories/_components/ with non-empty content', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase1-helpers' });
+    await scaffoldProject(opts);
+    const docs = path.join(opts.directory, 'src', 'stories', '_components');
+    const files = [
+      'contrast.ts',
+      'useResolvedToken.ts',
+      'RatioCard.tsx',
+      'TokenSwatchGrid.tsx',
+      'TokenRef.tsx',
+      'CodeBlock.tsx',
+      'CodeTabs.tsx',
+      'ContrastMatrix.tsx',
+    ];
+    for (const fname of files) {
+      const fp = path.join(docs, fname);
+      expect(await fs.pathExists(fp), `${fname} should exist`).toBe(true);
+      const src = await fs.readFile(fp, 'utf-8');
+      // Sanity: every helper has meaningful content (not a 0-byte stub).
+      expect(src.length, `${fname} should be non-empty`).toBeGreaterThan(200);
+    }
+  });
+
+  it('stub InlineAuditPanel.tsx renders nothing by default and has no monorepo-path imports', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase1-stub' });
+    await scaffoldProject(opts);
+    const fp = path.join(opts.directory, 'src', 'stories', '_components', 'InlineAuditPanel.tsx');
+    expect(await fs.pathExists(fp)).toBe(true);
+    const src = await fs.readFile(fp, 'utf-8');
+    // Stub contract markers from audit-stub.ts.
+    expect(src).toContain('opt-in stub');
+    expect(src).toContain('renders nothing by default');
+    // Critical: no Vite ?raw monorepo imports and no packages/hx-library
+    // path references survive the port.
+    expect(src).not.toContain('?raw');
+    expect(src).not.toContain('packages/hx-library');
+    // The body MUST early-return null when markdown is absent.
+    expect(src).toContain('if (!markdown) return null;');
+  });
+
+  it('Shiki ships as a wc-storybook devDependency', () => {
+    const template = getTemplate('wc-storybook');
+    expect(template).toBeDefined();
+    const devDeps = (template?.devDependencies ?? {}) as Record<string, string>;
+    expect(devDeps.shiki).toBeDefined();
+    // Pinned at the same major as helix/apps/storybook (^4.0.2) so the
+    // grammar / theme exports the CodeBlock helper consumes stay aligned.
+    expect(devDeps.shiki).toMatch(/^\^?4\./);
+  });
+});
+
+describe('wc-storybook Phase 1 — helpers.ts emitter module', () => {
+  it('tokenSwatchGridSrc() imports cssColorToHex from ./contrast and useResolvedTokens from ./useResolvedToken', () => {
+    const src = helperTokenSwatchGridSrc();
+    expect(src).toContain("import { cssColorToHex } from './contrast'");
+    expect(src).toContain("import { useResolvedTokens } from './useResolvedToken'");
+    // Hardcoded --hx-color- prefix is intentional — upstream HelixUI
+    // namespace, not the consumer's brand prefix.
+    expect(src).toContain('--hx-color-');
+  });
+
+  it('contrastSrc() exports the contrast utility surface (cssColorToHex, contrastRatio, gradeRatio)', () => {
+    const src = helperContrastSrc();
+    expect(src).toContain('export function cssColorToHex');
+    expect(src).toContain('export function contrastRatio');
+    expect(src).toContain('export function gradeRatio');
+  });
+
+  it('useResolvedTokenSrc() exports useResolvedToken + useResolvedTokens + readResolvedToken hooks', () => {
+    const src = helperUseResolvedTokenSrc();
+    expect(src).toContain('export function useResolvedToken');
+    expect(src).toContain('export function useResolvedTokens');
+    expect(src).toContain('export function readResolvedToken');
+  });
+
+  it('contrastMatrixSrc() imports the published @helixui/tokens/contrast-data subpath (not a monorepo path)', () => {
+    const src = helperContrastMatrixSrc();
+    expect(src).toContain("import { contrastReport } from '@helixui/tokens/contrast-data';");
+    // Never via Vite ?raw or a packages/* monorepo path.
+    expect(src).not.toContain('?raw');
+    expect(src).not.toContain('packages/');
+    // Transitive deps wired correctly.
+    expect(src).toContain("import { TokenRef } from './TokenRef';");
+    expect(src).toContain("import { contrastRatio, cssColorToHex } from './contrast';");
+  });
+
+  it('inlineAuditPanelStubSrc() emits the React no-op stub contract', () => {
+    const src = inlineAuditPanelStubSrc();
+    expect(src).toContain('opt-in stub');
+    expect(src).toContain('export function InlineAuditPanel');
+    // The stub MUST early-return null when markdown is absent.
+    expect(src).toContain('if (!markdown) return null;');
+    expect(src).not.toContain('?raw');
+    expect(src).not.toContain('packages/hx-library');
   });
 });

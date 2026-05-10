@@ -340,6 +340,17 @@ export const TEMPLATES: TemplateConfig[] = [
       'react-dom': '^19.0.0',
       '@types/react': '^19.0.0',
       '@types/react-dom': '^19.0.0',
+      // Shiki — syntax highlighter consumed by the CodeBlock / CodeTabs
+      // helpers under src/stories/_components/. Pinned to the same major
+      // as helix/apps/storybook so grammar/theme exports stay aligned.
+      // @shikijs/themes and @shikijs/langs are sub-package imports the
+      // CodeBlock helper references directly (e.g.
+      // `import('@shikijs/themes/github-dark-dimmed')`); under pnpm's
+      // strict-hoisting these MUST be declared explicitly so TS module
+      // resolution and runtime imports both succeed in fresh installs.
+      shiki: '^4.0.2',
+      '@shikijs/themes': '^4.0.2',
+      '@shikijs/langs': '^4.0.2',
     },
     features: [
       'web-components',

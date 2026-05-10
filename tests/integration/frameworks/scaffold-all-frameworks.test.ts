@@ -145,7 +145,10 @@ describe.each(ALL_FRAMEWORKS)('scaffold-all-frameworks: %s', (framework) => {
       pkg.dependencies['@helixui/library'] ??
       pkg.peerDependencies?.['@helixui/library'] ??
       pkg.devDependencies?.['@helixui/library'];
-    expect(declared, `expected @helixui/library declared in ${framework} package.json`).toBeDefined();
+    expect(
+      declared,
+      `expected @helixui/library declared in ${framework} package.json`,
+    ).toBeDefined();
   });
 
   it('tsconfig.json exists with strict mode when typescript=true', async () => {

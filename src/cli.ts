@@ -854,14 +854,9 @@ ${presetList}
         // default — same forgiveness as the JSON / API paths. Without this,
         // scoped names always fell back to 'my-ds' even though the
         // unscoped basename is itself a perfectly valid dsName.
-        const rawDsDefault =
-          dsNameFromArgs ??
-          enteredName ??
-          projectName ??
-          'my-ds';
+        const rawDsDefault = dsNameFromArgs ?? enteredName ?? projectName ?? 'my-ds';
         const dsDefault = unscopeName(rawDsDefault);
-        const dsInitial =
-          validateDsName(dsDefault) === undefined ? dsDefault : 'my-ds';
+        const dsInitial = validateDsName(dsDefault) === undefined ? dsDefault : 'my-ds';
         return p.text({
           message: 'Design system codename',
           placeholder: dsInitial,
@@ -962,12 +957,10 @@ ${presetList}
     // .ts files were unchanged). Force them on for wc-storybook so the
     // generated scaffold matches its own contract.
     typescript:
-      project.framework === 'wc-storybook' ||
-      (project.features as string[]).includes('typescript'),
+      project.framework === 'wc-storybook' || (project.features as string[]).includes('typescript'),
     eslint: (project.features as string[]).includes('eslint'),
     designTokens:
-      project.framework === 'wc-storybook' ||
-      (project.features as string[]).includes('tokens'),
+      project.framework === 'wc-storybook' || (project.features as string[]).includes('tokens'),
     darkMode: (project.features as string[]).includes('dark-mode'),
     installDeps: project.installDeps as boolean,
     dryRun: isDryRun,

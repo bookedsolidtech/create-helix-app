@@ -50,8 +50,7 @@ export function validateProjectName(value: string): string | undefined {
 
   // Reject backslash separators (Windows path traversal vector). Forward
   // slash is allowed only as part of an npm scope: `@scope/name`.
-  if (value.includes('\\'))
-    return 'Project name cannot contain backslash path separators';
+  if (value.includes('\\')) return 'Project name cannot contain backslash path separators';
 
   // Reject names starting with . or ..
   if (value.startsWith('.')) return 'Project name cannot start with a dot';

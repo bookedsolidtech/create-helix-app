@@ -109,11 +109,12 @@ async function loadAllStories(): Promise<StoryProbe[]> {
   // Deterministic order for reproducible reports
   stories.sort((a, b) => a.id.localeCompare(b.id));
   if (SUBSET) {
-    const needles = SUBSET.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+    const needles = SUBSET.toLowerCase()
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     return stories.filter((s) =>
-      needles.some(
-        (n) => s.id.toLowerCase().includes(n) || s.title.toLowerCase().includes(n),
-      ),
+      needles.some((n) => s.id.toLowerCase().includes(n) || s.title.toLowerCase().includes(n)),
     );
   }
   return stories;
@@ -250,7 +251,10 @@ async function probePage(
       // page wrapper). Each has a different empty-vs-rendered threshold.
       const docsRoot = document.querySelector('#storybook-docs');
       const storyRoot = document.querySelector('#storybook-root');
-      const root = mode === 'docs' ? (docsRoot ?? storyRoot ?? document.body) : (storyRoot ?? docsRoot ?? document.body);
+      const root =
+        mode === 'docs'
+          ? (docsRoot ?? storyRoot ?? document.body)
+          : (storyRoot ?? docsRoot ?? document.body);
       const bodyTextColor = window.getComputedStyle(document.body).color;
       const bodyBgColor = window.getComputedStyle(document.body).backgroundColor;
       const text = (root.textContent ?? '').trim();

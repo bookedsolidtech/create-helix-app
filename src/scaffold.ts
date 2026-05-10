@@ -11,6 +11,17 @@ import { validateDsName, validateTokenPrefix, unscopeName } from './validation.j
 import { HookManager, buildHookContext } from './plugins/hooks.js';
 import { loadHelixRcHooks } from './plugins/config-loader.js';
 import { discoverPlugins } from './plugins/plugin-discovery.js';
+import {
+  contrastSrc,
+  useResolvedTokenSrc,
+  ratioCardSrc,
+  tokenSwatchGridSrc,
+  tokenRefSrc,
+  codeBlockSrc,
+  codeTabsSrc,
+  contrastMatrixSrc,
+} from './scaffold/wc-storybook/helpers.js';
+import { inlineAuditPanelStubSrc } from './scaffold/wc-storybook/audit-stub.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -574,11 +585,7 @@ async function writePackageJson(
         // doing `import { AuroraButton } from '<pkg>'` end up with the
         // class but no registered tag, so `<aurora-button>` shows up as
         // an unknown element at runtime.
-        sideEffects: [
-          '**/*.css',
-          './dist/index.js',
-          './dist/components/**',
-        ],
+        sideEffects: ['**/*.css', './dist/index.js', './dist/components/**'],
       }
     : {};
   const pkg = {
@@ -596,9 +603,7 @@ async function writePackageJson(
       // already declare its own version, otherwise the default would inject
       // an incompatible spec alongside the template's pin and produce a
       // package.json with two conflicting versions of the same package.
-      ...(options.designTokens && !isLibraryTemplate
-        ? { '@helixui/tokens': '^0.3.0' }
-        : {}),
+      ...(options.designTokens && !isLibraryTemplate ? { '@helixui/tokens': '^0.3.0' } : {}),
       ...template.dependencies,
     },
     devDependencies: {
@@ -734,7 +739,7 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         //     top-level custom-elements.json, so consumers got no
         //     metadata even after the author ran cem:analyze.
         build:
-          'tsx scripts/build-tokens.ts && cem analyze --globs "src/**/*.ts" && vite build && tsc --project tsconfig.build.json && node -e "const fs=require(\'fs\');fs.copyFileSync(\'src/tokens/tokens.css\',\'dist/tokens.css\');fs.copyFileSync(\'custom-elements.json\',\'dist/custom-elements.json\')"',
+          "tsx scripts/build-tokens.ts && cem analyze --globs \"src/**/*.ts\" && vite build && tsc --project tsconfig.build.json && node -e \"const fs=require('fs');fs.copyFileSync('src/tokens/tokens.css','dist/tokens.css');fs.copyFileSync('custom-elements.json','dist/custom-elements.json')\"",
         test: 'vitest run',
         'test:ui': 'vitest --ui',
         'type-check': 'tsc --noEmit',
@@ -8645,8 +8650,8 @@ const preview: Preview = {
    * single-brand mode and OMIT the toolbar entirely — a Brand control
    * with only a "Default" entry is a dead UI affordance.
    */${
-    brandVerticalsList.length > 0
-      ? `
+     brandVerticalsList.length > 0
+       ? `
   globalTypes: {
     brand: {
       description: 'Active brand override (data-brand on :root)',
@@ -8670,8 +8675,8 @@ ${brandToolbarItemsLiteral},
       },
     },
   },`
-      : ''
-  }
+       : ''
+   }
 
   decorators: [
     // Global padding so stories do not render edge-to-edge. Padding is
@@ -9906,97 +9911,35 @@ export function ConsumerObligations({
   );
 
   // ── InlineAuditPanel.tsx ─────────────────────────────────────────────────
+  // Phase 1 of the shimmying-roaming-kernighan plan replaced the prior
+  // live-port InlineAuditPanel with a no-op opt-in stub. Upstream Helix's
+  // panel reads an AAA-AUDIT.md per-component via Vite's `?raw` import
+  // from `packages/hx-library/`, which is monorepo-internal and doesn't
+  // survive a fresh-scaffold install. The stub renders `null` unless the
+  // consumer passes their own `markdown` prop; existing MDX imports keep
+  // working unchanged. See src/scaffold/wc-storybook/audit-stub.ts.
 
   await safeWriteFile(
     path.join(componentsDocsDir, 'InlineAuditPanel.tsx'),
-    `/**
- * InlineAuditPanel — embed an AAA-AUDIT.md inline on a component docs
- * page, collapsed by default.
- *
- * Consumer pattern (in MDX):
- *
- *   import audit from './AAA-AUDIT.md?raw';
- *   <InlineAuditPanel tag="${ds}-button" markdown={audit} />
- *
- * Vite resolves \`?raw\` to the file's text contents at build time, so the
- * audit ships in the docs bundle and is always synchronized with the
- * source-of-truth markdown — no extra build step, no drift.
- *
- * Rendering: we intentionally do NOT pull a markdown renderer. The audit
- * file is a long evidence document; rendering it as preformatted text
- * inside a styled wrapper preserves table alignment, code blocks, and
- * the heading hierarchy without dragging a markdown parser into the
- * docs bundle. A "View on GitHub" link in the footer surfaces the
- * fully-rendered version for consumers who want richer formatting.
- *
- * Pass \`auditPath\` and \`githubBlobBase\` to point the link at YOUR
- * repository instead of upstream Helix.
- */
-import * as React from 'react';
-
-export interface InlineAuditPanelProps {
-  /** Component tag (display only). */
-  tag: string;
-  /** Raw AAA-AUDIT.md contents — pass via \`?raw\` import. */
-  markdown: string;
-  /**
-   * Repo path of the audit file (e.g. "src/components/${ds}-button/AAA-AUDIT.md").
-   * Used to construct the "View on GitHub" link. Defaults to the
-   * conventional \`src/components/<tag>/AAA-AUDIT.md\` path.
-   */
-  auditPath?: string;
-  /**
-   * Base URL for "View on GitHub" link construction. Defaults to the
-   * upstream Helix repo; override to point at your own.
-   */
-  githubBlobBase?: string;
-  /** Heading override. */
-  heading?: string;
-  /** When true, the panel renders open by default. */
-  defaultOpen?: boolean;
-}
-
-export function InlineAuditPanel({
-  tag,
-  markdown,
-  auditPath,
-  githubBlobBase = 'https://github.com/bookedsolidtech/helix/blob/main/packages/hx-library/',
-  heading = 'Full AAA audit (inline)',
-  defaultOpen = false,
-}: InlineAuditPanelProps): React.ReactElement {
-  const path = auditPath ?? \`src/components/\${tag}/AAA-AUDIT.md\`;
-  const githubUrl = \`\${githubBlobBase}\${path}\`;
-  return (
-    <section className="hx-docs hx-inline-audit" aria-label={\`Inline AAA audit for \${tag}\`}>
-      <details className="hx-inline-audit-details" open={defaultOpen}>
-        <summary className="hx-inline-audit-summary">
-          <span className="hx-inline-audit-icon" aria-hidden="true">
-            📄
-          </span>
-          <span className="hx-inline-audit-heading">{heading}</span>
-          <span className="hx-inline-audit-hint">click to expand</span>
-        </summary>
-        <div className="hx-inline-audit-body">
-          <pre className="hx-inline-audit-pre">
-            <code>{markdown}</code>
-          </pre>
-          <footer className="hx-inline-audit-footer">
-            <a
-              className="hx-inline-audit-github-link"
-              href={githubUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              View formatted on GitHub →
-            </a>
-          </footer>
-        </div>
-      </details>
-    </section>
+    inlineAuditPanelStubSrc(),
   );
-}
-`,
-  );
+
+  // ── Helper components ported from helix/apps/storybook/stories/_components/
+  // Phase 1 of the shimmying-roaming-kernighan plan. Both helix and
+  // create-helix-app are MIT under the same copyright holder (Clarity
+  // House LLC); the port is licence-clean. Each helper is small, pure,
+  // and CEM-free — drop-ins for the editorial-depth MDX pages that
+  // Phases 2-4 will emit. Sources live in
+  // `src/scaffold/wc-storybook/helpers.ts`.
+
+  await safeWriteFile(path.join(componentsDocsDir, 'contrast.ts'), contrastSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'useResolvedToken.ts'), useResolvedTokenSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'RatioCard.tsx'), ratioCardSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'TokenSwatchGrid.tsx'), tokenSwatchGridSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'TokenRef.tsx'), tokenRefSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'CodeBlock.tsx'), codeBlockSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'CodeTabs.tsx'), codeTabsSrc());
+  await safeWriteFile(path.join(componentsDocsDir, 'ContrastMatrix.tsx'), contrastMatrixSrc());
 
   // ── APGPatternCard.tsx (CEM-coupled, in src/stories/_components/) ────────
 
@@ -10802,9 +10745,7 @@ export default HelixDocsPage;
     heroForButton?.body ??
       `A primary action lifted into a real product moment — the same ${ds}-button you compose into forms, dashboards, and toolbars.`,
   );
-  const taglineLine = options.brandTagline
-    ? `> ${escapeMdxText(options.brandTagline)}\n\n`
-    : '';
+  const taglineLine = options.brandTagline ? `> ${escapeMdxText(options.brandTagline)}\n\n` : '';
 
   await safeWriteFile(
     path.join(referenceComponentsDir, `${ds}-button.mdx`),
@@ -11365,15 +11306,17 @@ main().catch((err) => {
 `;
   // Pre-existing references — keep the legacy variable names so the rest
   // of the Cover.mdx template + Brand.mdx interpolation don't churn.
-  const taglineLineMdx = options.brandTagline
-    ? `_${escapeMdxText(options.brandTagline)}_\n\n`
-    : '';
-  const verticalsRowMdx =
+  const taglineLineMdx = options.brandTagline ? `_${escapeMdxText(options.brandTagline)}_\n\n` : '';
+  // Pre-existing dead variable — kept for future Brand.mdx interpolation
+  // but currently unreferenced. Prefixed with `_` to satisfy
+  // @typescript-eslint/no-unused-vars without churning the legacy shape.
+  const _verticalsRowMdx =
     verticalsList.length > 0
       ? `<ul aria-label="Brand verticals" className="hx-narrative-chip-row">\n${verticalsList
           .map((v) => `  <li className="hx-narrative-chip">${v}</li>`)
           .join('\n')}\n</ul>\n\n`
       : '';
+  void _verticalsRowMdx;
 
   // ── src/stories/Cover.mdx ────────────────────────────────────────────────
 
