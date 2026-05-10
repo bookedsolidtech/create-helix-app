@@ -298,14 +298,19 @@ export function validate(options: Partial<ScaffoldOptions>): ValidationResult {
   // wc-storybook naming validation. dsName + tokenPrefix get interpolated
   // into directory paths and class names — programmatic callers must not
   // be able to pass values that traverse outside options.directory or
-  // emit cyclic bridge declarations.
-  if (options.dsName !== undefined) {
-    const err = validateDsName(options.dsName);
-    if (err) errors['dsName'] = err;
-  }
-  if (options.tokenPrefix !== undefined) {
-    const err = validateTokenPrefix(options.tokenPrefix);
-    if (err) errors['tokenPrefix'] = err;
+  // emit cyclic bridge declarations. Both fields are wc-storybook-only;
+  // for other frameworks they're documented as ignored, so validation
+  // is gated on the selected framework to avoid rejecting shared
+  // options objects like `{ framework: 'react-vite', tokenPrefix: '--hx' }`.
+  if (options.framework === 'wc-storybook') {
+    if (options.dsName !== undefined) {
+      const err = validateDsName(options.dsName);
+      if (err) errors['dsName'] = err;
+    }
+    if (options.tokenPrefix !== undefined) {
+      const err = validateTokenPrefix(options.tokenPrefix);
+      if (err) errors['tokenPrefix'] = err;
+    }
   }
 
   return {

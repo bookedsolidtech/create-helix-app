@@ -8541,7 +8541,18 @@ const preview: Preview = {
       typeof persisted?.theme === 'string' && persisted.theme.length > 0
         ? persisted.theme
         : 'light';
-    const brand = typeof persisted?.brand === 'string' ? persisted.brand : '';
+    // Validate the persisted brand against THIS scaffold's allowed
+    // verticals before applying. Storybook's localStorage key is
+    // namespaced only by origin, so two scaffolds running on the
+    // default localhost:6006 share state — and a removed/renamed
+    // vertical would otherwise re-apply data-brand="<stale>" on first
+    // load. Allowed list is derived from the brand toolbar items below.
+    const allowedBrandValues: readonly string[] = [
+      '',${brandVerticalsList.length > 0 ? '\n      ' + brandVerticalsList.map((v) => JSON.stringify(v.toLowerCase().replace(/[^a-z0-9-]+/g, '-'))).join(',\n      ') + ',' : ''}
+    ];
+    const persistedBrand =
+      typeof persisted?.brand === 'string' ? persisted.brand : '';
+    const brand = allowedBrandValues.includes(persistedBrand) ? persistedBrand : '';
     return {
       // Canvas background tracks data-theme cascade via helix-docs.css —
       // do NOT pin a backgrounds.value default or theme switching freezes.
@@ -8553,12 +8564,16 @@ const preview: Preview = {
   })(),
 
   /**
-   * Brand toolbar — items are populated from the \`brandVerticals\` prompt
-   * captured at scaffold time. Each vertical becomes a toolbar entry that
-   * sets \`data-brand\` on \`:root\`, allowing per-brand token overrides via
-   * \`[data-brand="<key>"] { --\${prefix}-*: ... }\` rules in the consumer's
-   * tokens.css. The Default entry remains as the unbranded baseline.
-   */
+   * Brand toolbar — populated from the \`brandVerticals\` prompt captured
+   * at scaffold time. Each vertical becomes a toolbar entry that sets
+   * \`data-brand\` on \`:root\`, allowing per-brand token overrides via
+   * \`[data-brand="<key>"] { --\${prefix}-*: ... }\` rules in the
+   * consumer's tokens.css. When no verticals were configured we ship
+   * single-brand mode and OMIT the toolbar entirely — a Brand control
+   * with only a "Default" entry is a dead UI affordance.
+   */${
+    brandVerticalsList.length > 0
+      ? `
   globalTypes: {
     brand: {
       description: 'Active brand override (data-brand on :root)',
@@ -8566,7 +8581,8 @@ const preview: Preview = {
         title: 'Brand',
         icon: 'paintbrush',
         items: [
-          { value: '', title: 'Default' },${brandToolbarItemsLiteral ? '\n' + brandToolbarItemsLiteral + ',' : ''}
+          { value: '', title: 'Default' },
+${brandToolbarItemsLiteral},
         ].filter((item) => {
           // Honor brand.include/exclude from helix.storybook.config.ts.
           // Default ('' value) is always retained — it's the unbranded baseline.
@@ -8580,7 +8596,9 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
-  },
+  },`
+      : ''
+  }
 
   decorators: [
     // Global padding so stories do not render edge-to-edge.
