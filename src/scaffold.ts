@@ -8112,6 +8112,21 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   await safeEnsureDir(storiesDir);
   await safeEnsureDir(designTokensStoriesDir);
 
+  // Brand verticals — captured at scaffold time, baked into preview.ts's
+  // brand toolbar so consumers can switch \`data-brand\` on \`:root\` from the
+  // Storybook UI without manual URL globals. Filtered to non-empty values
+  // and deduped against the implicit Default entry.
+  const brandVerticalsList = (options.brandVerticals ?? [])
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+  const brandToolbarItemsLiteral = brandVerticalsList
+    .map((v) => {
+      const value = v.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+      const title = v.charAt(0).toUpperCase() + v.slice(1);
+      return `          { value: ${JSON.stringify(value)}, title: ${JSON.stringify(title)} }`;
+    })
+    .join(',\n');
+
   // ── .storybook/main.ts ───────────────────────────────────────────────────
 
   await safeWriteFile(
@@ -8219,6 +8234,7 @@ import type { Preview } from '@storybook/web-components';
 import { setCustomElementsManifest } from '@storybook/web-components';
 import { withThemeByDataAttribute } from '@storybook/addon-themes';
 import { html } from 'lit';
+import helixConfig from '../helix.storybook.config';
 // CRITICAL: \`@helixui/tokens/tokens.css\` MUST load before any of the docs
 // CSS files below — it defines every \`--hx-color-*\`, \`--hx-space-*\`,
 // \`--hx-font-*\` token at \`:root\`. Without it, the helix-narrative.css /
@@ -8369,9 +8385,11 @@ const preview: Preview = {
   })(),
 
   /**
-   * Brand toolbar entry. Phase 4 will populate \`items\` from the
-   * \`brandVerticals\` prompt; v1 ships an empty array so the toolbar
-   * shows a single "Default" entry until the consumer adds verticals.
+   * Brand toolbar — items are populated from the \`brandVerticals\` prompt
+   * captured at scaffold time. Each vertical becomes a toolbar entry that
+   * sets \`data-brand\` on \`:root\`, allowing per-brand token overrides via
+   * \`[data-brand="<key>"] { --\${prefix}-*: ... }\` rules in the consumer's
+   * tokens.css. The Default entry remains as the unbranded baseline.
    */
   globalTypes: {
     brand: {
@@ -8379,7 +8397,18 @@ const preview: Preview = {
       toolbar: {
         title: 'Brand',
         icon: 'paintbrush',
-        items: [{ value: '', title: 'Default' }],
+        items: [
+          { value: '', title: 'Default' },${brandToolbarItemsLiteral ? '\n' + brandToolbarItemsLiteral + ',' : ''}
+        ].filter((item) => {
+          // Honor brand.include/exclude from helix.storybook.config.ts.
+          // Default ('' value) is always retained — it's the unbranded baseline.
+          if (item.value === '') return true;
+          const inc = helixConfig.brand?.include;
+          const exc = helixConfig.brand?.exclude ?? [];
+          if (exc.includes(item.value)) return false;
+          if (inc === 'all' || inc === undefined) return true;
+          return inc.includes(item.value);
+        }),
         dynamicTitle: true,
       },
     },
@@ -10194,6 +10223,7 @@ import {
 // Phase 5 fix: A11yStatusCard now lives in src/stories/_components/
 // because Vite cannot resolve imports into .storybook/ from src/ MDX.
 import { A11yStatusCard } from '../../src/stories/_components/A11yStatusCard';
+import helixConfig from '../../helix.storybook.config';
 
 function useResolvedTag(): string | null {
   try {
@@ -10214,11 +10244,12 @@ function useResolvedTag(): string | null {
 
 export function HelixDocsPage(): React.ReactElement {
   const tag = useResolvedTag();
+  const aaaEnabled = helixConfig.aaa?.enabled !== false;
   return (
     <>
       <Title />
       <Subtitle />
-      {tag ? <A11yStatusCard tag={tag} /> : null}
+      {tag && aaaEnabled ? <A11yStatusCard tag={tag} /> : null}
       <Description />
       <Primary />
       <Controls />
@@ -10536,38 +10567,31 @@ Use it for the dominant call-to-action on a screen.
     `/**
  * helix.storybook.config.ts
  *
- * Consumer-facing controls for the wc-storybook factory's generated
- * Storybook surface. Edit this file (do NOT edit \`scripts/generate-
- * catalog.ts\` or files under \`src/stories/catalog/\`) to:
+ * Consumer-facing runtime controls for the wc-storybook factory's
+ * generated Storybook surface. Edit this file (do NOT edit
+ * \`scripts/generate-catalog.ts\` or files under \`src/stories/catalog/\`)
+ * to:
  *
  *   - hide upstream Helix components from the generated catalog when
  *     you've extended them locally (e.g. omit hx-button after adding
- *     ${ds}-button)
- *   - opt out of one or more default docs pages
- *   - constrain the brand toolbar dropdown to a subset of verticals
- *   - disable the auto-injected AAA status card
- *   - hide narrative pages (Cover, Overview, Patterns) from the IA
+ *     ${ds}-button) — read by scripts/generate-catalog.ts
+ *   - constrain the brand toolbar dropdown to a subset of verticals —
+ *     read by .storybook/preview.ts at runtime
+ *   - disable the auto-injected AAA status card — read by
+ *     .storybook/docs/HelixDocsPage.tsx at runtime
  *
  * Each list accepts \`'all'\` (everything in scope), an explicit allow-list
  * array, or both forms with \`exclude\` overrides. Empty arrays are valid
  * and mean "nothing in scope" — distinct from omitting the field.
+ *
+ * Note: foundations docs pages (\`src/stories/foundations/*.mdx\`) and
+ * narrative shell pages (Cover, Overview, Patterns) are scaffold-time
+ * artifacts. To remove them, delete the corresponding .mdx files; they
+ * have no runtime gate.
  */
-
-/** Built-in foundations docs page identifiers (Phase 4 IA). */
-export type DocsPageId =
-  | 'tokens'
-  | 'color'
-  | 'typography'
-  | 'spacing'
-  | 'layout'
-  | 'brand'
-  | 'accessibility';
 
 /** Brand verticals supplied at scaffold time (\`brandVerticals\` prompt). */
 export type BrandKey = string;
-
-/** Narrative shell pages that frame the editorial flow (Phase 4 IA). */
-export type NarrativePageId = 'cover' | 'overview' | 'patterns';
 
 export interface HelixStorybookConfig {
   /** Catalog filter. Drives \`scripts/generate-catalog.ts\`. */
@@ -10575,24 +10599,14 @@ export interface HelixStorybookConfig {
     include: 'all' | readonly string[];
     exclude: readonly string[];
   };
-  /** Foundations docs filter. Drives \`src/stories/foundations/*.mdx\` emission. */
-  docs: {
-    include: 'all' | readonly DocsPageId[];
-    exclude: readonly DocsPageId[];
-  };
-  /** Brand toolbar filter. Empty include → single-brand mode (suppressed). */
+  /** Brand toolbar filter. \`'all'\` keeps every vertical from \`brandVerticals\`. */
   brand: {
     include: 'all' | readonly BrandKey[];
     exclude: readonly BrandKey[];
   };
-  /** AAA conformance scaffolding (Phase 3 — A11yStatusCard auto-inject). */
+  /** AAA conformance — when false, hides the auto-injected A11yStatusCard. */
   aaa: {
     enabled: boolean;
-  };
-  /** Editorial narrative shell. Drives Cover / Overview / Patterns. */
-  narrative: {
-    include: 'all' | readonly NarrativePageId[];
-    exclude: readonly NarrativePageId[];
   };
 }
 
@@ -10602,10 +10616,8 @@ export interface HelixStorybookConfig {
  */
 const config: HelixStorybookConfig = {
   components: { include: 'all', exclude: [] },
-  docs: { include: 'all', exclude: [] },
   brand: { include: 'all', exclude: [] },
   aaa: { enabled: true },
-  narrative: { include: 'all', exclude: [] },
 };
 
 export default config;
@@ -10705,15 +10717,26 @@ function renderStoryFile(decl: CemDeclaration): string {
   const className = pascal(tag);
   const argTypes = deriveArgTypes(decl);
   const args = { content: 'placeholder text', ...deriveArgs(decl) };
+  // Build an argName → HTML-attribute-name map straight from the CEM.
+  // \`deriveArgs / deriveArgTypes\` key off \`fieldName\` (the JS property,
+  // e.g. \`size\`) when present, but the actual DOM attribute can differ
+  // (e.g. hx-button's \`size\` property is exposed as the \`hx-size\`
+  // attribute). Without this map the rendered markup would emit
+  // \`size="md"\` and Storybook controls would have no effect.
+  const attrNameMap: Record<string, string> = {};
+  for (const a of decl.attributes ?? []) {
+    if (!a.name) continue;
+    const argKey = a.fieldName ?? a.name;
+    attrNameMap[argKey] = a.name;
+  }
   const importPath = componentImportPath(tag);
   // Reference a named export so Rollup keeps the import. Bare side-effect
   // imports (\`import '@helixui/library/components/hx-button'\`) get
   // tree-shaken in production builds because the components/*/index.js
   // only re-exports the class — Rollup cannot see that the upstream
   // shared chunk has @customElement decorator side effects. Importing
-  // and referencing the class anchors the import chain, which forces the
-  // shared module (where the registration runs) to evaluate.
-  const stripPrefix = (s: string) => s.replace(/^hx-/, '');
+  // and referencing the namespace anchors the import chain, which forces
+  // the shared module (where the registration runs) to evaluate.
   const importLine = importPath
     ? \`import * as _Reg_\${kebabSafe(tag)} from '@helixui/library/components/\${importPath}';
 // Reference the namespace so the import is not dropped by Rollup. The
@@ -10729,8 +10752,20 @@ import { html } from 'lit';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 \${importLine}
 
+// argName → DOM-attribute-name from the CEM. Property names and HTML
+// attribute names diverge when components rename or prefix attributes
+// (for example a 'size' property may be exposed as a 'hx-size'
+// attribute), so the map is the source of truth — never derive the
+// attribute from the arg key alone.
+const ATTR_NAMES: Record<string, string> = \${JSON.stringify(attrNameMap, null, 2)};
+
 const meta: Meta = {
   title: 'HELiX/\${tier}/\${tag}',
+  // The 'component' field anchors this story to the CEM declaration.
+  // Required for HelixDocsPage's useResolvedTag() to find the tag and
+  // render the A11yStatusCard, and for Storybook's web-components
+  // autodocs to bind controls/args to the right element.
+  component: '\${tag}',
   tags: ['autodocs'],
   argTypes: \${JSON.stringify(argTypes, null, 2)},
   args: \${JSON.stringify(args, null, 2)},
@@ -10742,7 +10777,11 @@ const meta: Meta = {
     const attrs = Object.entries(args)
       .filter(([k, v]) => k !== 'content' && v !== undefined && v !== null && v !== '')
       .map(([k, v]) => {
-        const attr = k.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+        // CEM-driven attribute name when available, fall back to a
+        // camelCase → kebab conversion for args without an attribute
+        // mapping (rare — usually slots or content props).
+        const attr =
+          ATTR_NAMES[k] ?? k.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
         return typeof v === 'boolean'
           ? v ? attr : ''
           : \\\`\\\${attr}="\\\${String(v).replace(/"/g, '&quot;')}"\\\`;

@@ -161,58 +161,32 @@ describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
     expect(await fs.pathExists(path.join(opts.directory, 'helix.storybook.config.ts'))).toBe(true);
   });
 
-  it('config exports HelixStorybookConfig type with all 5 knob keys', async () => {
+  it('config exports HelixStorybookConfig type with the 3 runtime knob keys', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-config-shape' });
     await scaffoldProject(opts);
     const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
     expect(cfg).toContain('export interface HelixStorybookConfig');
-    expect(cfg).toContain('export type DocsPageId');
     expect(cfg).toContain('export type BrandKey');
-    expect(cfg).toContain('export type NarrativePageId');
-    // The 5 top-level keys, in expected order
-    for (const key of ['components', 'docs', 'brand', 'aaa', 'narrative']) {
+    // The 3 top-level keys that have actual runtime consumers. `docs` and
+    // `narrative` were removed in the rea-review fix because they were
+    // scaffold-time-only knobs without a runtime path — leaving them in
+    // the config shipped a broken public API where consumer edits had no
+    // effect on the generated Storybook.
+    for (const key of ['components', 'brand', 'aaa']) {
       expect(cfg).toContain(`${key}:`);
     }
-  });
-
-  it('config DocsPageId union covers all 7 foundations pages', async () => {
-    const opts = makeWcStorybookOptions({ name: 'phase2-config-docs' });
-    await scaffoldProject(opts);
-    const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
-    for (const id of [
-      "'tokens'",
-      "'color'",
-      "'typography'",
-      "'spacing'",
-      "'layout'",
-      "'brand'",
-      "'accessibility'",
-    ]) {
-      expect(cfg).toContain(id);
-    }
-  });
-
-  it('config NarrativePageId union covers cover/overview/patterns', async () => {
-    const opts = makeWcStorybookOptions({ name: 'phase2-config-narrative' });
-    await scaffoldProject(opts);
-    const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
-    for (const id of ["'cover'", "'overview'", "'patterns'"]) {
-      expect(cfg).toContain(id);
-    }
+    // Removed knobs MUST NOT appear in the emitted config.
+    expect(cfg).not.toContain('export type DocsPageId');
+    expect(cfg).not.toContain('export type NarrativePageId');
   });
 
   it('default config is "everything visible" (include: all, exclude: [])', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-config-default' });
     await scaffoldProject(opts);
     const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
-    // The default config object has `include: 'all'` for every knob that
-    // takes an array, and `enabled: true` for AAA. Sanity check via raw
-    // string match — the config is generated, not parsed.
     expect(cfg).toMatch(/components:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
-    expect(cfg).toMatch(/docs:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
     expect(cfg).toMatch(/brand:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
     expect(cfg).toMatch(/aaa:\s*{\s*enabled:\s*true\s*}/);
-    expect(cfg).toMatch(/narrative:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
   });
 });
 
