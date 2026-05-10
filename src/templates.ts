@@ -254,9 +254,14 @@ export const TEMPLATES: TemplateConfig[] = [
     hint: 'beta — design system factory',
     color: pc.magenta,
     dependencies: {
+      // lit is the only runtime dep — Helix packages are externalised by
+      // vite.config.ts and live as peerDependencies. Keeping
+      // @helixui/library or @helixui/tokens here would let downstream
+      // installers pull a second copy of the Helix runtime alongside
+      // their own host install, tripping duplicate
+      // customElements.define() registrations and breaking element
+      // identity (e.g. `<hx-button>` already defined).
       lit: '^3.2.0',
-      '@helixui/library': HELIX_LIBRARY_VERSION,
-      '@helixui/tokens': HELIX_TOKENS_VERSION,
     },
     // peerDeps document the cascade-token contract version the consumer host
     // MUST satisfy. The wc-storybook factory ships components that bridge
@@ -271,6 +276,14 @@ export const TEMPLATES: TemplateConfig[] = [
       '@helixui/tokens': HELIX_TOKENS_VERSION,
     },
     devDependencies: {
+      // Helix packages also live as devDependencies so the scaffold's own
+      // dev/test/build pipeline (Storybook, vitest, smoke probe) resolves
+      // them without forcing the consumer's host to be installed yet.
+      // peerDependencies declares the version CONTRACT; devDependencies
+      // satisfies the LOCAL install. They share a version pin to keep
+      // the contract honest.
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
       storybook: '^10.2.8',
       '@storybook/web-components': '^10.2.8',
       '@storybook/web-components-vite': '^10.2.8',

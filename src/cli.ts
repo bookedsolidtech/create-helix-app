@@ -323,7 +323,13 @@ export async function runJsonScaffold(
     force: opts.isForce,
     verbose: opts.isVerbose,
     dsName: opts.dsNameFromArgs ?? name,
-    tokenPrefix: opts.tokenPrefixFromArgs ?? '--hx',
+    // For wc-storybook, default tokenPrefix to --{dsName} so the consumer's
+    // brand layer gets its own namespace; defaulting to --hx caused cyclic
+    // self-references in the bridge layer and dropped the override surface.
+    // Other frameworks keep --hx (they don't emit a brand bridge).
+    tokenPrefix:
+      opts.tokenPrefixFromArgs ??
+      (templateArg === 'wc-storybook' ? `--${opts.dsNameFromArgs ?? name}` : '--hx'),
     // Brand-storytelling fields — wc-storybook factory only. Optional with
     // cross-domain neutral defaults so JSON / --yes flows don't break and
     // sample copy honors the realistic-sample-data rule (no domain lock).
@@ -787,10 +793,17 @@ ${presetList}
           }
           return Promise.resolve(tokenPrefixFromArgs);
         }
+        // Derive the default from dsName so the consumer's brand layer
+        // gets its own --{ds}-* namespace by default. Defaulting to --hx
+        // produced cyclic self-references in the generated bridge layer
+        // (--hx-button-bg: var(--hx-button-bg, ...)) and silently
+        // dropped the entire override surface.
+        const dsResult = (ctx.results.dsName as string) ?? dsNameFromArgs ?? projectName ?? 'my-ds';
+        const defaultPrefix = `--${dsResult}`;
         return p.text({
           message: 'CSS token prefix',
-          placeholder: '--hx',
-          initialValue: '--hx',
+          placeholder: defaultPrefix,
+          initialValue: defaultPrefix,
           validate: (v) => validateTokenPrefix(v),
         });
       },

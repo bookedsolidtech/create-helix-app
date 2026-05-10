@@ -11891,6 +11891,20 @@ export default defineConfig({
     fileParallelism: false,
     testTimeout: 30000,
     teardownTimeout: 30000,
+    // Exclude the auto-generated catalog (90+ hx-* stories) from the
+    // default \`pnpm test\` run. The build-tokens + cem:catalog chain
+    // populates src/stories/catalog/ on every storybook boot, and
+    // running browser-mode vitest across 90+ tags hits the same
+    // chromium memory ceiling the build-output smoke runner has to
+    // batch-rotate around. Catalog coverage is exercised separately
+    // via \`pnpm test:build-smoke\`. Consumers who DO want unit-level
+    // catalog tests can drop this exclude pattern.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/storybook-static/**',
+      'src/stories/catalog/**',
+    ],
   },
 });
 `,

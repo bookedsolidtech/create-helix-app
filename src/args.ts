@@ -165,23 +165,30 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const profileArgIndex = argv.indexOf('--profile');
   const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
 
+  // Helper: read a value flag accepting either `--flag value` or `--flag=value`.
+  // The repo's own docs use both forms; the previous space-only parser
+  // silently dropped `--flag=value` and the scaffold fell back to defaults,
+  // breaking non-interactive automation.
+  const readValueFlag = (flag: string): string | null => {
+    const eqPrefix = `${flag}=`;
+    const eqEntry = argv.find((a) => a.startsWith(eqPrefix));
+    if (eqEntry !== undefined) return eqEntry.slice(eqPrefix.length);
+    const idx = argv.indexOf(flag);
+    if (idx === -1) return null;
+    return argv[idx + 1] ?? null;
+  };
+
   // --ds-name (design system codename, used by wc-storybook)
-  const dsNameArgIndex = argv.indexOf('--ds-name');
-  const dsName = dsNameArgIndex !== -1 ? (argv[dsNameArgIndex + 1] ?? null) : null;
+  const dsName = readValueFlag('--ds-name');
 
   // --token-prefix (CSS custom property prefix, used by wc-storybook)
-  const tokenPrefixArgIndex = argv.indexOf('--token-prefix');
-  const tokenPrefix = tokenPrefixArgIndex !== -1 ? (argv[tokenPrefixArgIndex + 1] ?? null) : null;
+  const tokenPrefix = readValueFlag('--token-prefix');
 
   // --brand-tagline (used by wc-storybook factory Cover + Brand MDX)
-  const brandTaglineArgIndex = argv.indexOf('--brand-tagline');
-  const brandTagline =
-    brandTaglineArgIndex !== -1 ? (argv[brandTaglineArgIndex + 1] ?? null) : null;
+  const brandTagline = readValueFlag('--brand-tagline');
 
   // --brand-verticals (comma-separated list, used by wc-storybook brand toolbar)
-  const brandVerticalsArgIndex = argv.indexOf('--brand-verticals');
-  const brandVerticalsRaw =
-    brandVerticalsArgIndex !== -1 ? (argv[brandVerticalsArgIndex + 1] ?? null) : null;
+  const brandVerticalsRaw = readValueFlag('--brand-verticals');
   const brandVerticals: string[] | null =
     brandVerticalsRaw === null
       ? null
