@@ -165,14 +165,48 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const profileArgIndex = argv.indexOf('--profile');
   const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
 
-  // Helper: read a value flag accepting either `--flag value` or `--flag=value`.
-  // The repo's own docs use both forms; the previous space-only parser
-  // silently dropped `--flag=value` and the scaffold fell back to defaults,
-  // breaking non-interactive automation. Also guards against the case
-  // `--flag --next-flag value` where the space-form parser would
-  // otherwise consume `--next-flag` as the value and produce a misleading
-  // validation error downstream — now returns null when the next argv
-  // token starts with `--` (i.e. it's another option, not a value).
+  // Helper: read a value flag accepting either `--flag value` or
+  // `--flag=value`. The repo's own docs use both forms.
+  //
+  // The next-token check is set-based, not prefix-based: token-prefix's
+  // valid values themselves start with `--` (e.g. `--token-prefix --bolt`),
+  // so a blanket "if next starts with --" reject would silently drop
+  // every space-form invocation of that flag. Instead, we consult a
+  // known set of CLI option names — if the next argv token matches a
+  // known option, treat it as the next flag (not a value). Anything
+  // else, including `--bolt`, is accepted as a value.
+  const KNOWN_OPTIONS = new Set([
+    '--ds-name',
+    '--token-prefix',
+    '--brand-tagline',
+    '--brand-verticals',
+    '--template',
+    '--name',
+    '--directory',
+    '--output-dir',
+    '-o',
+    '--profile',
+    '--config',
+    '--bundles',
+    '--preset',
+    '--yes',
+    '-y',
+    '--json',
+    '--dry-run',
+    '--force',
+    '--verbose',
+    '--no-install',
+    '--no-eslint',
+    '--no-tokens',
+    '--typescript',
+    '--eslint',
+    '--tokens',
+    '--dark-mode',
+    '--help',
+    '-h',
+    '--version',
+    '-v',
+  ]);
   const readValueFlag = (flag: string): string | null => {
     const eqPrefix = `${flag}=`;
     const eqEntry = argv.find((a) => a.startsWith(eqPrefix));
@@ -180,7 +214,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const idx = argv.indexOf(flag);
     if (idx === -1) return null;
     const next = argv[idx + 1];
-    if (next === undefined || next.startsWith('--')) return null;
+    if (next === undefined || KNOWN_OPTIONS.has(next)) return null;
     return next;
   };
 
