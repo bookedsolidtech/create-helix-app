@@ -1045,9 +1045,17 @@ describe('scaffoldProject — wc-storybook build-tokens watcher', () => {
     expect(content).toMatch(/setTimeout\([\s\S]+?,\s*REBUILD_DEBOUNCE_MS\)/);
   });
 
-  it('still uses fs.watch on INPUT (no chokidar dep added)', async () => {
+  it('uses fs.watch on the parent directory (atomic-save survival)', async () => {
+    // The watcher previously called fs.watch(INPUT, ...) directly. Editors
+    // that save by atomic rename (VS Code, JetBrains, prettier-on-save)
+    // sever that watcher's inode handle on the first save and tokens.css
+    // stops rebuilding. Watching the parent directory and filtering by
+    // basename survives atomic replaces. This test guards against
+    // regressing back to the file-level form.
     const content = await readBuildTokens('build-tokens-fs-watch');
-    expect(content).toContain('fs.watch(INPUT,');
+    expect(content).toContain('fs.watch(inputDir');
+    expect(content).not.toContain('fs.watch(INPUT,');
+    // No chokidar dep — the directory-watch fix is built on node:fs.
     expect(content).not.toMatch(/from\s+['"]chokidar['"]/);
   });
 });

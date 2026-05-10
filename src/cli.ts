@@ -876,9 +876,21 @@ ${presetList}
         : path.resolve(process.cwd(), project.name as string),
     framework: project.framework as Framework,
     componentBundles: project.componentBundles as ComponentBundle[],
-    typescript: (project.features as string[]).includes('typescript'),
+    // wc-storybook is a Lit + TypeScript + token-pipeline factory. The
+    // emitted scaffold ALWAYS uses TypeScript (strict mode for decorators)
+    // and ALWAYS emits the token build pipeline (build-tokens.ts ->
+    // tokens.css). Reading the generic features set here let users opt
+    // out of flags the template requires, producing inconsistent output
+    // (summary said "TypeScript: no" while the emitted tsconfig.json /
+    // .ts files were unchanged). Force them on for wc-storybook so the
+    // generated scaffold matches its own contract.
+    typescript:
+      project.framework === 'wc-storybook' ||
+      (project.features as string[]).includes('typescript'),
     eslint: (project.features as string[]).includes('eslint'),
-    designTokens: (project.features as string[]).includes('tokens'),
+    designTokens:
+      project.framework === 'wc-storybook' ||
+      (project.features as string[]).includes('tokens'),
     darkMode: (project.features as string[]).includes('dark-mode'),
     installDeps: project.installDeps as boolean,
     dryRun: isDryRun,
