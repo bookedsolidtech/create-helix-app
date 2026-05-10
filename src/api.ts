@@ -109,6 +109,15 @@ export interface TemplateDefinition {
   hint: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  /**
+   * Peer dependencies the consumer host must satisfy. Populated for
+   * library templates (wc-storybook today) where the published package
+   * documents a contract version of @helixui/library / @helixui/tokens.
+   * Omitted for app-style templates that declare no peers. Tooling that
+   * audits or pre-installs template requirements should read this when
+   * present.
+   */
+  peerDependencies?: Record<string, string>;
   features: string[];
 }
 
@@ -138,6 +147,13 @@ function toTemplateDefinition(t: TemplateConfig): TemplateDefinition {
     hint: t.hint,
     dependencies: t.dependencies,
     devDependencies: t.devDependencies,
+    // Forward peerDependencies when populated so api.ts consumers can
+    // discover the consumer-host contract surface (wc-storybook's
+    // @helixui/library + @helixui/tokens 3.3.1 pin). App-style templates
+    // declare no peers — omit the field rather than emit an empty object.
+    ...(t.peerDependencies && Object.keys(t.peerDependencies).length > 0
+      ? { peerDependencies: t.peerDependencies }
+      : {}),
     features: t.features,
   };
 }

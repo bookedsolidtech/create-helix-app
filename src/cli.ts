@@ -292,21 +292,29 @@ export async function runJsonScaffold(
         process.exit(1);
       }
     }
-    // When --ds-name is omitted in JSON mode the project name is used as
-    // the fallback, but validateProjectName accepts shapes that
-    // validateDsName rejects (leading digits, underscores). Validate the
-    // resolved value the scaffolder will actually use, so wc-storybook
-    // never silently produces invalid hx-* tag / class names downstream.
-    const resolvedDsName = opts.dsNameFromArgs ?? name;
-    const dsErr = validateDsName(resolvedDsName);
-    if (dsErr) {
-      const result: ScaffoldJsonResult = {
-        success: false,
-        error: `Invalid ds-name fallback "${resolvedDsName}" (derived from project name): ${dsErr}. Pass --ds-name explicitly.`,
-      };
-      console.log(JSON.stringify(result, null, 2));
-      process.exit(1);
+    // When --ds-name is omitted in JSON mode, fall back to the project
+    // name only IF it passes validateDsName. Project names like '123-ui'
+    // or 'foo_bar' are valid npm names but invalid dsNames (leading
+    // digit / underscore). The interactive + API paths gracefully
+    // degrade to 'my-ds' — JSON mode now does the same so the supported
+    // project-name surface is consistent across entry points. Explicit
+    // --ds-name still validates strictly: when the caller supplies a
+    // value, they get a real error, not a silent default.
+    if (opts.dsNameFromArgs !== null && opts.dsNameFromArgs !== undefined) {
+      const dsErr = validateDsName(opts.dsNameFromArgs);
+      if (dsErr) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --ds-name "${opts.dsNameFromArgs}": ${dsErr}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
     }
+    // Note: the scaffolder itself falls back to 'my-ds' when name is not
+    // a valid dsName (see scaffoldWcStorybook entry), so JSON mode no
+    // longer rejects those project names — automation gets the same
+    // forgiveness as interactive/API.
   }
 
   const options: import('./types.js').ProjectOptions = {
@@ -322,14 +330,27 @@ export async function runJsonScaffold(
     dryRun: opts.isDryRun,
     force: opts.isForce,
     verbose: opts.isVerbose,
-    dsName: opts.dsNameFromArgs ?? name,
-    // For wc-storybook, default tokenPrefix to --{dsName} so the consumer's
-    // brand layer gets its own namespace; defaulting to --hx caused cyclic
-    // self-references in the bridge layer and dropped the override surface.
-    // Other frameworks keep --hx (they don't emit a brand bridge).
+    // dsName: pass through explicit --ds-name when valid; otherwise pass
+    // the name only when it's a valid dsName, else undefined so the
+    // scaffolder falls back to 'my-ds'. Same forgiveness as interactive +
+    // API paths.
+    dsName:
+      opts.dsNameFromArgs ??
+      (validateDsName(name) === undefined ? name : undefined),
+    // For wc-storybook, default tokenPrefix to --{validDsName} so the
+    // consumer's brand layer gets its own namespace; defaulting to --hx
+    // caused cyclic self-references in the bridge layer and dropped the
+    // override surface. Other frameworks keep --hx (they don't emit a
+    // brand bridge). Falls back to undefined when neither --token-prefix
+    // nor a valid name is available — scaffolder then derives from its
+    // resolved dsName ('my-ds' worst case).
     tokenPrefix:
       opts.tokenPrefixFromArgs ??
-      (templateArg === 'wc-storybook' ? `--${opts.dsNameFromArgs ?? name}` : '--hx'),
+      (templateArg === 'wc-storybook'
+        ? validateDsName(opts.dsNameFromArgs ?? name) === undefined
+          ? `--${opts.dsNameFromArgs ?? name}`
+          : undefined
+        : '--hx'),
     // Brand-storytelling fields — wc-storybook factory only. Optional with
     // cross-domain neutral defaults so JSON / --yes flows don't break and
     // sample copy honors the realistic-sample-data rule (no domain lock).

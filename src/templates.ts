@@ -309,6 +309,14 @@ export const TEMPLATES: TemplateConfig[] = [
       // the script fails immediately on a fresh scaffold with vitest's
       // missing-package error. Pinned at the same major as vitest.
       '@vitest/ui': '^3.0.0',
+      // ESLint stack — the scaffold emits eslint.config.js by default
+      // (gated only on --no-eslint), but the consumer's editor/CI would
+      // fail loading the config without these packages. Pinned at the
+      // same majors used in create-helix-app's own dev pipeline so
+      // editor extensions resolve consistently.
+      eslint: '^9.0.0',
+      '@eslint/js': '^9.0.0',
+      'typescript-eslint': '^8.0.0',
       // playwright is required by @vitest/browser when browser.provider is
       // 'playwright' (vitest.config.ts ships with that setting). Pinning here
       // avoids a fail-on-first-run when consumers boot vitest right after
