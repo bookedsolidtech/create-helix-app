@@ -3243,8 +3243,15 @@ export default defineConfig({
 type HxElement = React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> &
   Record<string, unknown>;
 
-declare global {
-  namespace React.JSX {
+// Augment the react module (NOT the global React namespace) so the
+// new JSX transform (jsx: 'react-jsx') picks up these IntrinsicElements
+// declarations through the react-jsx-runtime module types. The global
+// React.JSX shape only resolves under the legacy global-React JSX
+// transform, which isn't used by Vite's react plugin — under react-jsx
+// every <hx-button> would surface as
+// 'Property "hx-button" does not exist on type JSX.IntrinsicElements'.
+declare module 'react' {
+  namespace JSX {
     interface IntrinsicElements {
       'hx-accordion': HxElement;
       'hx-accordion-item': HxElement;
@@ -3657,13 +3664,15 @@ export default function App() {
 `,
   );
 
-  // index.css — Full design system styles. Token import is gated on the
-  // --no-tokens / designTokens: false option so opting out of HELiX
-  // tokens actually keeps them out of runtime (previous unconditional
-  // import made the flag a no-op for this template).
+  // index.css — Full design system styles. NO token import here:
+  // helix-setup.ts (emitted by writeHelixSetup) already imports
+  // helix-tokens.css, which itself imports @helixui/tokens/tokens.css.
+  // Re-importing the base layer here would silently reset any consumer
+  // overrides in helix-tokens.css/helix-responsive.css that helix-setup
+  // pulled first.
   await safeWriteFile(
     path.join(srcDir, 'index.css'),
-    `${options.designTokens ? "@import '@helixui/tokens/tokens.css';\n" : ''}
+    `
 
 /* ── Reset ───────────────────────────────────────────────────────────── */
 *,
