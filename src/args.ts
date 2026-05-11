@@ -36,6 +36,24 @@ export interface ParsedArgs {
    * checks (Node version, package managers, network, etc.) still run.
    */
   doctorQuick: boolean;
+  /**
+   * v0.7.0 Phase B — when true, the interactive prompt skips the
+   * "Include @{scope}/design-system?" follow-up question and forces
+   * monorepoMode:true (DS + app via pnpm workspaces + turbo). Only
+   * meaningful for the react-next / react-vite paths — the wc-storybook
+   * primary framework coerces this to false because a DS-only scaffold
+   * isn't a monorepo.
+   */
+  monorepo: boolean;
+  /**
+   * v0.7.0 Phase B — when true, the interactive prompt skips the
+   * "Include @{scope}/design-system?" follow-up question and forces
+   * includeDesignSystem:false (single-app shape, no monorepo wrapping).
+   * `--design-system` is the default and doesn't need a flag; passing
+   * `--no-design-system` is the only explicit form. Ignored when the
+   * primary framework is wc-storybook (the scaffold IS the DS).
+   */
+  noDesignSystem: boolean;
 
   // Template options
   template: Framework | null;
@@ -116,6 +134,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const offline = argv.includes('--offline');
   const showExperimental = argv.includes('--show-experimental');
   const doctorQuick = argv.includes('--quick');
+  // v0.7.0 Phase B — `--monorepo` forces monorepoMode:true (skips Q2).
+  // `--no-design-system` forces includeDesignSystem:false → monorepoMode
+  // effectively false for app frameworks. `--design-system` is implicit
+  // (the default) and not parsed as its own flag. wc-storybook ignores
+  // both — DS-only scaffold isn't a monorepo, and the scaffold itself
+  // IS the DS.
+  const monorepo = argv.includes('--monorepo');
+  const noDesignSystem = argv.includes('--no-design-system');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -175,6 +201,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     '--drupal',
     '--show-experimental',
     '--quick',
+    '--monorepo',
+    '--no-design-system',
     '--help',
     '-h',
     '--version',
@@ -317,5 +345,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     showHelp,
     showExperimental,
     doctorQuick,
+    monorepo,
+    noDesignSystem,
   };
 }

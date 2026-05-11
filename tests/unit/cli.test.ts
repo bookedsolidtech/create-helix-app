@@ -152,6 +152,8 @@ function makeParsedArgs(overrides: Partial<ParsedArgs> = {}): ParsedArgs {
     projectName: 'test-app',
     profile: null,
     showExperimental: false,
+    monorepo: false,
+    noDesignSystem: false,
     ...overrides,
   };
 }

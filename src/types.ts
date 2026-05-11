@@ -143,6 +143,16 @@ export interface ProjectOptions {
    * "not yet implemented" — Phase A only establishes the fork shape.
    */
   monorepoMode?: boolean;
+  /**
+   * v0.7.0 Phase B: whether the monorepo includes the wc-storybook
+   * `packages/design-system` package alongside `apps/web`. Reserved for
+   * future combos (monorepoMode:true + includeDesignSystem:false would
+   * mean "monorepo with just apps/web, no DS package") — Phase B does
+   * NOT ship that combo. Today the value tracks monorepoMode for the
+   * react-next / react-vite paths and is forced to false for
+   * wc-storybook (DS-only scaffold isn't a monorepo).
+   */
+  includeDesignSystem?: boolean;
 }
 
 export interface ComponentBundleConfig {
