@@ -51,6 +51,7 @@ import {
   writeAppsWebWrappersOverride,
 } from './_shared.js';
 import { scaffoldReactNextFlat } from './flat.js';
+import { scaffoldWcStorybookMonorepo } from '../wc-storybook/monorepo.js';
 
 export async function scaffoldReactNextMonorepo(options: ProjectOptions): Promise<void> {
   // 1. Emit the monorepo root scaffold (pnpm-workspace.yaml, turbo.json,
@@ -93,5 +94,16 @@ export async function scaffoldReactNextMonorepo(options: ProjectOptions): Promis
       rootDir: options.directory,
       scope,
     });
+
+    // v0.7.0 Phase F — emit the packages/design-system workspace package
+    // alongside apps/web. The wc-storybook factory runs unchanged via the
+    // cloneOptionsForDesignSystem redirect; the post-flat overrides
+    // (writeDesignSystemPackageJson / Index / TsConfig) rewrite the
+    // identity + barrel surface for workspace consumption.
+    //
+    // emitRootScaffold:false because scaffoldMonorepoRoot already ran
+    // above — invoking it a second time would be idempotent but
+    // wasteful.
+    await scaffoldWcStorybookMonorepo(options, { emitRootScaffold: false });
   }
 }

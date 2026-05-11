@@ -11,12 +11,13 @@
  * v0.7.0 Phase D update — react-next monorepo now emits a complete
  * apps/web tree (no throw).
  * v0.7.0 Phase E update — react-vite monorepo also emits the full
- * apps/web tree (no throw). The only remaining stub is wc-storybook
- * (Phase F), so the runOrchestrator helper now drives through
- * wc-storybook to exercise the same root-emit code path without
- * colliding with the now-resolving react-next + react-vite emitters.
- * Once Phase F lands, drop the runOrchestrator helper entirely and
- * assert on a successful resolve.
+ * apps/web tree (no throw).
+ * v0.7.0 Phase F update — wc-storybook monorepo also resolves
+ * successfully now, emitting the full packages/design-system tree. The
+ * runOrchestrator helper no longer expects a throw — every framework's
+ * monorepo path emits the root + its package-specific content. Phase C's
+ * root-emit assertions still hold; we just stopped relying on the
+ * downstream stub to abort after.
  *
  * The public scaffold() API silently coerces monorepoMode → false for
  * wc-storybook, so this helper goes through scaffoldProject() to
@@ -41,17 +42,17 @@ afterEach(async () => {
 /**
  * Helper — runs the orchestrator via scaffoldProject() (not the public
  * scaffold() API, which would coerce monorepoMode → false for
- * wc-storybook) and swallows the expected "app emit pending" throw. The
- * orchestrator runs before the throw, so root files DO land.
+ * wc-storybook) and asserts a clean resolve. Post-Phase F every monorepo
+ * framework path completes successfully.
  *
- * Pre-creates the target dir so scaffoldProject's rollback-on-throw
- * doesn't remove the emitted root artifacts.
+ * Pre-creates the target dir so scaffoldProject's directory check is
+ * happy on second-run idempotency tests.
  *
- * The framework parameter defaults to wc-storybook — its monorepo
- * emitter is still the Phase A "not yet implemented" stub (Phase F
- * pending), so it gives us a controlled throw after the orchestrator
- * has done its work. react-next (Phase D) and react-vite (Phase E) now
- * resolve successfully and can't be used for this purpose.
+ * The framework parameter defaults to wc-storybook so this helper
+ * exercises the full Phase F emit (root orchestrator + DS package +
+ * React-wrappers index barrel) in a single call. The Phase C assertions
+ * still only inspect root-level files, so the additional Phase F
+ * packages/design-system/ output is incidental.
  */
 async function runOrchestrator(args: {
   dir: string;
@@ -60,22 +61,20 @@ async function runOrchestrator(args: {
   includeDesignSystem?: boolean;
 }): Promise<void> {
   await fs.ensureDir(args.dir);
-  await expect(
-    scaffoldProject({
-      name: args.name,
-      directory: args.dir,
-      framework: args.framework ?? 'wc-storybook',
-      componentBundles: ['all'],
-      typescript: true,
-      eslint: true,
-      designTokens: true,
-      darkMode: false,
-      installDeps: false,
-      force: true,
-      monorepoMode: true,
-      includeDesignSystem: args.includeDesignSystem ?? true,
-    }),
-  ).rejects.toThrow(/not yet implemented/i);
+  await scaffoldProject({
+    name: args.name,
+    directory: args.dir,
+    framework: args.framework ?? 'wc-storybook',
+    componentBundles: ['all'],
+    typescript: true,
+    eslint: true,
+    designTokens: true,
+    darkMode: false,
+    installDeps: false,
+    force: true,
+    monorepoMode: true,
+    includeDesignSystem: args.includeDesignSystem ?? true,
+  });
 }
 
 describe('v0.7.0 Phase C — scaffoldMonorepoRoot emits the 7 root artifacts', () => {
@@ -244,32 +243,38 @@ describe('v0.7.0 Phase C — orchestrator runs across all three monorepo entry p
     expect(await fs.pathExists(path.join(dir, 'apps', 'web', 'package.json'))).toBe(true);
   });
 
-  it('wc-storybook + monorepo still emits the root structure even though api.ts coerces monorepoMode→false on the public surface', async () => {
+  it('wc-storybook + monorepo emits the root structure and the packages/design-system tree (Phase F)', async () => {
     // The public scaffold() API silently coerces monorepoMode → false for
     // wc-storybook (the DS scaffold isn't itself a monorepo). To exercise
     // the wc-storybook monorepo entry point directly we go through
     // scaffoldProject, which honors the dispatch as-passed.
     const dir = path.join(TEST_ROOT, 'wcs');
     await fs.ensureDir(dir);
-    await expect(
-      scaffoldProject({
-        name: 'phase-c-wcs',
-        directory: dir,
-        framework: 'wc-storybook',
-        componentBundles: ['all'],
-        typescript: true,
-        eslint: true,
-        designTokens: true,
-        darkMode: false,
-        installDeps: false,
-        force: true,
-        monorepoMode: true,
-        includeDesignSystem: true,
-      }),
-    ).rejects.toThrow(/wc-storybook monorepo scaffolder not yet implemented/i);
+    await scaffoldProject({
+      name: 'phase-c-wcs',
+      directory: dir,
+      framework: 'wc-storybook',
+      componentBundles: ['all'],
+      typescript: true,
+      eslint: true,
+      designTokens: true,
+      darkMode: false,
+      installDeps: false,
+      force: true,
+      monorepoMode: true,
+      includeDesignSystem: true,
+    });
     expect(await fs.pathExists(path.join(dir, 'pnpm-workspace.yaml'))).toBe(true);
     expect(await fs.pathExists(path.join(dir, 'turbo.json'))).toBe(true);
     expect(await fs.pathExists(path.join(dir, 'packages', 'design-system'))).toBe(true);
+    // Phase F asserts: the DS package is populated by the wc-storybook
+    // factory's redirected emit + the post-flat workspace overrides.
+    expect(await fs.pathExists(path.join(dir, 'packages', 'design-system', 'package.json'))).toBe(
+      true,
+    );
+    expect(
+      await fs.pathExists(path.join(dir, 'packages', 'design-system', 'src', 'index.ts')),
+    ).toBe(true);
   });
 });
 
@@ -319,22 +324,20 @@ describe('v0.7.0 Phase C — scoped project name derives scope correctly', () =>
     const { scaffoldProject } = await import('../scaffold.js');
     const dir = path.join(TEST_ROOT, 'scoped');
     await fs.ensureDir(dir);
-    await expect(
-      scaffoldProject({
-        name: '@acme/design-system',
-        directory: dir,
-        framework: 'wc-storybook',
-        componentBundles: ['all'],
-        typescript: true,
-        eslint: true,
-        designTokens: true,
-        darkMode: false,
-        installDeps: false,
-        force: true,
-        monorepoMode: true,
-        includeDesignSystem: true,
-      }),
-    ).rejects.toThrow(/not yet implemented/i);
+    await scaffoldProject({
+      name: '@acme/design-system',
+      directory: dir,
+      framework: 'wc-storybook',
+      componentBundles: ['all'],
+      typescript: true,
+      eslint: true,
+      designTokens: true,
+      darkMode: false,
+      installDeps: false,
+      force: true,
+      monorepoMode: true,
+      includeDesignSystem: true,
+    });
 
     const pkg = await fs.readJson(path.join(dir, 'package.json'));
     expect(pkg.scripts.storybook).toContain('--filter=@acme/design-system');
