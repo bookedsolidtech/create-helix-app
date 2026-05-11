@@ -115,6 +115,8 @@ describe('wc-storybook factory — golden snapshot', () => {
       'src/stories/foundations/Layout.mdx',
       'src/stories/foundations/Brand.mdx',
       'src/stories/foundations/Accessibility.mdx',
+      // v0.6.0 Phase B — Iconography port (helix apps/storybook parity)
+      'src/stories/foundations/Iconography.mdx',
       'src/stories/patterns/Index.mdx',
       // helix-lift Phase 2 — 7 component conformance MDXes (dsName-parameterized)
       'src/stories/components/golden-card.mdx',

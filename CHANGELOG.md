@@ -1,5 +1,84 @@
 # create-helix
 
+## 0.6.0
+
+### Minor Changes
+
+- **Iconography port (Phase B)** — `wc-storybook` factory now emits
+  `src/stories/foundations/Iconography.mdx` mirroring the helix
+  `apps/storybook` icon catalog. `.storybook/preview.ts` calls
+  `setBasePath('/icons')` against the `@helixui/icons` runtime and
+  `.storybook/main.ts` adds `@helixui/icons/dist` to `staticDirs` so
+  the page resolves icons against the consumer's installed icon
+  bundle. Foundations IA grows from 7 → 8 pages.
+
+- **Slim CLI (Phase C)** — the interactive framework prompt now shows
+  only the three production-tier templates (`wc-storybook`,
+  `react-next`, `react-vite`). The remaining 13 framework templates
+  (`remix`, `vue-nuxt`, `vue-vite`, `sveltekit`, `angular`, `astro`,
+  `lit-vite`, `solid-vite`, `qwik-vite`, `preact-vite`, `stencil`,
+  `ember`, `vanilla`) are hidden behind `--show-experimental` (or
+  `HELIX_SHOW_EXPERIMENTAL=1`). The flag also gates them in the `list`
+  subcommand and as valid `--template <name>` values, so the surface
+  is triple-consistent across prompt / list / direct selection.
+
+  **Visible UX change.** BEFORE: 16 frameworks visible in the prompt;
+  experimental ones could be selected by accident. AFTER: 3 curated
+  templates visible; the 13 experimentals are still scaffold-able
+  via the documented escape valve, but no longer pollute the default
+  experience.
+
+- **Default framework swap (Phase E)** — `wc-storybook` is now the
+  default selection in the interactive framework prompt.
+
+  **Visible UX change.** BEFORE: hitting Enter through every default
+  produced a `react-next` project. AFTER: hitting Enter through every
+  default produces a HELiX design system factory scaffold (the
+  flagship). Consumers who want `react-next` now pick it explicitly.
+  Both `--template react-next` and `HELIX_TEMPLATE=react-next`
+  continue to work for non-interactive flows.
+
+- **TUI banner polish (Phase D)** — banner extraction to
+  `src/cli/banner.ts` with `helixBanner()` API. Banner suppression
+  via `--no-banner` / `HELIX_NO_BANNER=1` / `isQuiet` / `--json`,
+  ANSI 256-color gradient on the wordmark when the terminal advertises
+  truecolor support (graceful fallback to default cyan otherwise),
+  and a version-check footer that surfaces a one-line "newer version
+  available" hint without blocking the prompt.
+
+- **Doctor extension (Phase F)** — `helix doctor` gains six new
+  surface checks: icons bundle presence, staticDirs wiring, catalog
+  populated (warn if `src/stories/catalog/` is empty), preview
+  setBasePath wiring, banner suppression flag detection, and an
+  experimental-template indicator. New `--quick` flag skips
+  filesystem-probe checks for CI use.
+
+- **Catalog UX surfacing (Phase G)** — when scaffolding with
+  `--install-deps` (default), the CLI now auto-runs `pnpm cem:catalog`
+  (or `npm run cem:catalog` on the npm fallback path) immediately
+  after the dependency install completes, so the ~99 hx-\* catalog
+  stories are populated BEFORE the consumer boots Storybook the
+  first time. When `--no-install` is used, the Next-steps banner
+  explicitly pins `pnpm install && pnpm cem:catalog` so the catalog
+  populates before first boot. Fixes the "where are the other
+  components?" first-boot confusion where only the 8 hand-authored
+  conformance pages were visible.
+
+- **Brand-verticals regression suite (Phase H)** — adds three
+  targeted tests pinning the empty-array default for `brandVerticals`
+  across the prompt path, CLI flag path, and `--yes` path. Catches
+  any future regression where a `[]` value gets coerced to a
+  non-empty placeholder array.
+
+- **React-Vite production landing page (pre-Phase B merge)** —
+  `dev` was rebased onto `main` ahead of v0.6.0, bringing the
+  `react-vite` production landing page redesign (commit `2c5ac42`)
+  into the release.
+
+### Patch Changes
+
+_(none — all v0.6.0 work was bundled with the minor changes above.)_
+
 ## 0.5.0
 
 ### Minor Changes

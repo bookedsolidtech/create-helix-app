@@ -244,9 +244,12 @@ describe('parseArgs', () => {
       }
     });
 
-    it('accepts all valid framework names without throwing', () => {
+    it('accepts all valid framework names without throwing (with --show-experimental for hidden templates)', () => {
+      // v0.6.0 Phase C — experimental templates throw a friendly redirect
+      // when --show-experimental is absent. Pair the flag so the existing
+      // exhaustive sweep still exercises every framework id.
       validFrameworks.forEach((fw) => {
-        expect(() => parseArgs(['my-app', '--template', fw])).not.toThrow();
+        expect(() => parseArgs(['my-app', '--show-experimental', '--template', fw])).not.toThrow();
       });
     });
   });
@@ -359,9 +362,12 @@ describe('parseArgs', () => {
     });
 
     it('json mode with template and bundles', () => {
+      // v0.6.0 Phase C — vue-vite is experimental; pair --show-experimental
+      // so the json-mode combined-flag check still exercises a hidden template.
       const parsed = parseArgs([
         'my-app',
         '--json',
+        '--show-experimental',
         '--template',
         'vue-vite',
         '--bundles',

@@ -56,6 +56,7 @@ vi.mock('../../src/security/dep-audit.js', () => ({
 
 vi.mock('../../src/version-check.js', () => ({
   checkForUpdate: vi.fn(),
+  getCachedLatestVersion: vi.fn(() => null),
 }));
 
 vi.mock('../../src/args.js', () => ({
@@ -150,6 +151,7 @@ function makeParsedArgs(overrides: Partial<ParsedArgs> = {}): ParsedArgs {
     explicitFlags: { typescript: false, eslint: false, darkMode: false, tokens: false },
     projectName: 'test-app',
     profile: null,
+    showExperimental: false,
     ...overrides,
   };
 }
@@ -461,13 +463,15 @@ describe('runCLI — list subcommand', () => {
     const err = await runCLI().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ExitError);
     expect((err as ExitError).code).toBe(0);
-    expect(listAll).toHaveBeenCalledWith(false);
+    // v0.6.0 Phase C — listAll now receives a second arg for showExperimental.
+    // Default makeParsedArgs sets it to false; the call mirrors `runCLI`.
+    expect(listAll).toHaveBeenCalledWith(false, false);
   });
 
   it('calls listAll with isJson=true when --json flag set', async () => {
     vi.mocked(parseArgs).mockReturnValue(makeParsedArgs({ subcommand: 'list', json: true }));
     await runCLI().catch(() => {});
-    expect(listAll).toHaveBeenCalledWith(true);
+    expect(listAll).toHaveBeenCalledWith(true, false);
   });
 });
 

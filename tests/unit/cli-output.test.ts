@@ -29,14 +29,32 @@ describe('--version flag', () => {
 
 describe('--help flag', () => {
   let helpOutput: string;
+  let helpOutputWithExperimental: string;
 
   // Run once and reuse for all assertions
   helpOutput = runCLI('--help');
+  // v0.6.0 Phase C — default --help lists only the 3 production templates;
+  // the experimental section is gated behind --show-experimental (DXA Q3
+  // triple-discoverability point #3). Run a second capture so the
+  // every-framework assertion has a target.
+  helpOutputWithExperimental = runCLI('--help --show-experimental');
 
-  it('includes all framework names', () => {
+  it('includes the 3 production framework names by default', () => {
+    expect(helpOutput).toContain('react-next');
+    expect(helpOutput).toContain('react-vite');
+    expect(helpOutput).toContain('wc-storybook');
+  });
+
+  it('default --help mentions --show-experimental for the hidden frameworks', () => {
+    expect(helpOutput).toContain('--show-experimental');
+    expect(helpOutput).toMatch(/experimental/i);
+  });
+
+  it('includes all framework names when --show-experimental is passed', () => {
     const frameworks = [
       'react-next',
       'react-vite',
+      'wc-storybook',
       'remix',
       'vue-nuxt',
       'vue-vite',
@@ -52,7 +70,7 @@ describe('--help flag', () => {
       'ember',
     ];
     for (const fw of frameworks) {
-      expect(helpOutput).toContain(fw);
+      expect(helpOutputWithExperimental).toContain(fw);
     }
   });
 

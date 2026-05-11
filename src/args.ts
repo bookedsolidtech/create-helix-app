@@ -20,6 +20,22 @@ export interface ParsedArgs {
   isDrupal: boolean;
   noConfig: boolean;
   verbose: boolean;
+  /**
+   * v0.6.0 Phase C — when true, the interactive framework prompt and the
+   * `list` command both include templates marked `experimental: true`.
+   * Default is false; the 13 stub-quality scaffolders are hidden behind
+   * this flag. API callers (scaffold({framework: ...})) bypass the prompt
+   * filter entirely and don't need this flag.
+   */
+  showExperimental: boolean;
+  /**
+   * v0.6.0 Phase F — when true, `doctor` skips checks that may be slow or
+   * require a filesystem walk into the consumer's `node_modules` (currently
+   * just the icons-base-path reachability probe). CI runs that don't have
+   * Storybook on disk yet stay green; the production-environment health
+   * checks (Node version, package managers, network, etc.) still run.
+   */
+  doctorQuick: boolean;
 
   // Template options
   template: Framework | null;
@@ -98,6 +114,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const verbose = argv.includes('--verbose');
   const skipAudit = argv.includes('--skip-audit');
   const offline = argv.includes('--offline');
+  const showExperimental = argv.includes('--show-experimental');
+  const doctorQuick = argv.includes('--quick');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -155,6 +173,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     '--offline',
     '--no-config',
     '--drupal',
+    '--show-experimental',
+    '--quick',
     '--help',
     '-h',
     '--version',
@@ -179,12 +199,34 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // --template (accepts both `--template wc-storybook` and `--template=wc-storybook`)
   const templateStr = readValueFlag('--template');
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
+  // Production vs experimental split — v0.6.0 Phase C. Errors lean on this
+  // list both to gate the "Re-run with --show-experimental" hint AND to
+  // build the abbreviated valid-options string when the requested template
+  // doesn't exist at all. API/json callers still get the full list via the
+  // separate JSON-mode validation path.
+  const productionFrameworks = TEMPLATES.filter((t) => !t.experimental).map(
+    (t) => t.id as Framework,
+  );
 
   if (templateStr !== null && !validFrameworks.includes(templateStr as Framework)) {
     throw new HelixError(
       ErrorCode.INVALID_TEMPLATE,
       `Invalid template: "${templateStr}". Valid options: ${validFrameworks.join(', ')}`,
     );
+  }
+  // Friendly redirect for hidden experimental templates: the value IS a real
+  // template id, but it's been moved behind --show-experimental in v0.6.0.
+  // Error names the flag inline (DXA Q3 — triple-discoverability point #2)
+  // unless the caller already passed --show-experimental, in which case the
+  // gate is open and we fall through.
+  if (templateStr !== null && !showExperimental) {
+    const requested = TEMPLATES.find((t) => t.id === templateStr);
+    if (requested?.experimental === true) {
+      throw new HelixError(
+        ErrorCode.INVALID_TEMPLATE,
+        `Template '${templateStr}' is experimental. Re-run with --show-experimental to enable, or pick from: ${productionFrameworks.join(', ')}.`,
+      );
+    }
   }
   const template = templateStr as Framework | null;
 
@@ -273,5 +315,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     brandVerticals,
     showVersion,
     showHelp,
+    showExperimental,
+    doctorQuick,
   };
 }

@@ -22,48 +22,35 @@ import {
 import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
 import { auditDependencies } from './security/dep-audit.js';
-import { checkForUpdate } from './version-check.js';
+import { checkForUpdate, getCachedLatestVersion } from './version-check.js';
 import { logger } from './logger.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
+import { helixBanner } from './cli/banner.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
 const HELIX_VERSION = pkg.version;
 
-function banner(): void {
-  console.log();
-  console.log(pc.bold(pc.cyan('  ╭─────────────────────────────────────╮')));
-  console.log(pc.bold(pc.cyan('  │                                     │')));
-  console.log(
-    pc.bold(
-      pc.cyan('  │') +
-        '   ' +
-        pc.white('H E L i X') +
-        '  ' +
-        pc.dim('create') +
-        '              ' +
-        pc.cyan('│'),
-    ),
-  );
-  console.log(
-    pc.bold(pc.cyan('  │') + pc.dim('   Enterprise Web Components           ') + pc.cyan('│')),
-  );
-  console.log(
-    pc.bold(
-      pc.cyan('  │') +
-        pc.dim(`   v${HELIX_VERSION}`) +
-        '                              ' +
-        pc.cyan('│'),
-    ),
-  );
-  console.log(pc.bold(pc.cyan('  │                                     │')));
-  console.log(pc.bold(pc.cyan('  ╰─────────────────────────────────────╯')));
-  console.log();
+/**
+ * Render the create-helix banner via the extracted helixBanner() helper
+ * (v0.6.0 Phase D). Suppression contract is enforced inside the helper:
+ * returns [] under --quiet, --json, or non-TTY pipes.
+ */
+function banner(
+  opts: {
+    asJson?: boolean;
+    suppressed?: boolean;
+    latestNpmVersion?: string;
+  } = {},
+): void {
+  helixBanner(opts).forEach((line) => {
+    console.log(line);
+  });
 }
 
 async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise<void> {
-  if (!isQuiet) banner();
+  banner({ suppressed: isQuiet, latestNpmVersion: getCachedLatestVersion() ?? undefined });
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix — Drupal theme ')));
 
@@ -164,16 +151,32 @@ export function runInfoCommand(templateId: string | null, isJson: boolean): void
   showTemplateInfo(templateId, isJson);
 }
 
-export function runListCommand(isJson: boolean, configFile?: string | null): void {
+export function runListCommand(
+  isJson: boolean,
+  configFile?: string | null,
+  showExperimental = false,
+): void {
+  const productionTemplates = TEMPLATES.filter((t) => !t.experimental);
+  const experimentalTemplates = TEMPLATES.filter((t) => t.experimental);
   if (isJson) {
+    const visibleTemplates = showExperimental ? TEMPLATES : productionTemplates;
     const output: {
-      templates: { id: string; name: string; hint: string }[];
+      templates: { id: string; name: string; hint: string; experimental?: boolean }[];
       presets: { id: string; name: string; description: string }[];
+      experimentalHidden?: number;
       configFile?: string | null;
     } = {
-      templates: TEMPLATES.map((t) => ({ id: t.id, name: t.name, hint: t.hint })),
+      templates: visibleTemplates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        hint: t.hint,
+        ...(t.experimental ? { experimental: true as const } : {}),
+      })),
       presets: PRESETS.map((pr) => ({ id: pr.id, name: pr.name, description: pr.description })),
     };
+    if (!showExperimental && experimentalTemplates.length > 0) {
+      output.experimentalHidden = experimentalTemplates.length;
+    }
     if (configFile !== undefined) {
       output.configFile = configFile;
     }
@@ -182,10 +185,27 @@ export function runListCommand(isJson: boolean, configFile?: string | null): voi
   }
 
   console.log('');
-  console.log(pc.bold('  Framework Templates'));
-  console.log('');
-  for (const t of TEMPLATES) {
-    console.log(`  ${pc.cyan(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`);
+  if (showExperimental) {
+    console.log(pc.bold('  Framework Templates — Production'));
+    console.log('');
+    for (const t of productionTemplates) {
+      console.log(`  ${pc.cyan(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`);
+    }
+    console.log('');
+    console.log(pc.bold('  Framework Templates — Experimental'));
+    console.log(pc.dim('  (stub-quality scaffolders; surfaced via --show-experimental)'));
+    console.log('');
+    for (const t of experimentalTemplates) {
+      console.log(
+        `  ${pc.yellow(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`,
+      );
+    }
+  } else {
+    console.log(pc.bold('  Framework Templates'));
+    console.log('');
+    for (const t of productionTemplates) {
+      console.log(`  ${pc.cyan(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`);
+    }
   }
   console.log('');
   console.log(pc.bold('  Drupal Presets'));
@@ -196,6 +216,16 @@ export function runListCommand(isJson: boolean, configFile?: string | null): voi
     );
   }
   console.log('');
+  if (!showExperimental && experimentalTemplates.length > 0) {
+    // DXA Q3 triple-discoverability point #1 — footer hint at the bottom
+    // of the default list output. Pinned by cli-list-experimental tests.
+    console.log(
+      pc.dim(
+        `  ${String(experimentalTemplates.length)} experimental templates hidden. Use --show-experimental to see them.`,
+      ),
+    );
+    console.log('');
+  }
 }
 
 interface ScaffoldJsonResult {
@@ -523,6 +553,8 @@ export async function runCLI(): Promise<void> {
     tokenPrefix: tokenPrefixFromArgs,
     brandTagline: brandTaglineFromArgs,
     brandVerticals: brandVerticalsFromArgs,
+    showExperimental,
+    doctorQuick,
   } = parsed;
 
   // Load config file and environment variables
@@ -571,7 +603,7 @@ export async function runCLI(): Promise<void> {
 
   if (subcommand === 'list') {
     const { listAll } = await import('./commands/list.js');
-    listAll(isJson);
+    listAll(isJson, showExperimental);
     process.exit(0);
   }
 
@@ -581,7 +613,7 @@ export async function runCLI(): Promise<void> {
   }
 
   if (subcommand === 'doctor') {
-    const result = await runDoctor(HELIX_VERSION);
+    const result = await runDoctor(HELIX_VERSION, { quick: doctorQuick });
     if (isJson) {
       console.log(JSON.stringify(result, null, 2));
     } else {
@@ -619,7 +651,17 @@ export async function runCLI(): Promise<void> {
   }
 
   if (showHelp) {
-    const frameworkList = TEMPLATES.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
+    // v0.6.0 Phase C — help lists production frameworks by default; an
+    // experimental section is appended when --show-experimental is passed
+    // so consumers can discover the full registry without the prompt.
+    const productionList = TEMPLATES.filter((t) => !t.experimental);
+    const experimentalList = TEMPLATES.filter((t) => t.experimental);
+    const frameworkList = productionList.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
+    const experimentalSection = showExperimental
+      ? `\n  Experimental frameworks (stub-quality; surfaced via --show-experimental):\n` +
+        experimentalList.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n') +
+        '\n'
+      : `\n  ${String(experimentalList.length)} experimental templates hidden. Use --show-experimental to see them.\n`;
     const presetList = PRESETS.map((pr) => `    ${pr.id.padEnd(16)} ${pr.description}`).join('\n');
     console.log(`
   create-helix v${HELIX_VERSION}
@@ -639,9 +681,13 @@ export async function runCLI(): Promise<void> {
 
   Framework Selection:
     --template <name>       Select a framework directly (skips prompt)
+    --show-experimental     Surface 13 stub-quality framework templates in
+                            the interactive prompt, the 'list' subcommand,
+                            and as valid --template values. Off by default.
 
   Available frameworks:
 ${frameworkList}
+${experimentalSection}
 
   Drupal Options:
     --drupal                Scaffold a Drupal theme instead of a web app
@@ -686,6 +732,7 @@ ${presetList}
     create-helix upgrade                         # Upgrade HELiX deps
     create-helix upgrade --dry-run               # Preview upgrade without writing
     create-helix doctor                          # Run environment health checks
+    create-helix doctor --quick                  # Skip slow/filesystem-probe checks (CI)
     HELIX_TEMPLATE=react-vite create-helix app   # Use env var for template
 `);
     process.exit(0);
@@ -751,7 +798,11 @@ ${presetList}
     return;
   }
 
-  if (!isQuiet) banner();
+  banner({
+    asJson: isJson,
+    suppressed: isQuiet,
+    latestNpmVersion: getCachedLatestVersion() ?? undefined,
+  });
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix ')));
 
@@ -767,16 +818,27 @@ ${presetList}
 
       framework: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
         const resolveFramework = async (): Promise<Framework> => {
+          // v0.6.0 Phase C — interactive prompt filters out experimental
+          // templates by default. --show-experimental re-includes them.
+          // templateArg (--template=<id>) bypasses this entirely; args.ts
+          // already rejects hidden ids at parse time with a friendly hint.
+          const promptTemplates = showExperimental
+            ? TEMPLATES
+            : TEMPLATES.filter((t) => !t.experimental);
           const fw =
             templateArg !== null
               ? (templateArg as Framework)
               : ((await p.select({
                   message: 'Which framework?',
-                  options: TEMPLATES.map((t) => ({
+                  options: promptTemplates.map((t) => ({
                     value: t.id as Framework,
                     label: t.color(t.name),
-                    hint: t.hint,
+                    hint:
+                      t.id === 'wc-storybook'
+                        ? 'Design system + Storybook (recommended for new projects)'
+                        : t.hint,
                   })),
+                  initialValue: 'wc-storybook' as Framework,
                 })) as Framework);
           // Reject scoped names paired with non-library frameworks. By
           // the time the framework prompt resolves we know both pieces;
@@ -1077,6 +1139,21 @@ ${presetList}
         stdio: 'pipe',
       });
       if (!isQuiet) s.stop(pc.green('Dependencies installed'));
+      // wc-storybook ships scripts/generate-catalog.ts; run it now so the
+      // ~120 hx-* catalog stories are populated BEFORE the consumer boots
+      // Storybook for the first time. Without this, the sidebar shows
+      // only the 8 Phase 2 component pages on first boot, which is a
+      // confusing "where are the other components" UX (v0.6.0 Phase G).
+      if (options.framework === 'wc-storybook') {
+        if (!isQuiet) s.start('Generating component catalog (pnpm cem:catalog)...');
+        try {
+          execSync('pnpm cem:catalog', { cwd: options.directory, stdio: 'pipe' });
+          if (!isQuiet) s.stop(pc.green('Component catalog generated'));
+        } catch {
+          if (!isQuiet)
+            s.stop(pc.yellow('Catalog generation failed — run `pnpm cem:catalog` manually'));
+        }
+      }
     } catch {
       try {
         execSync('npm install', {
@@ -1084,6 +1161,16 @@ ${presetList}
           stdio: 'pipe',
         });
         if (!isQuiet) s.stop(pc.green('Dependencies installed (npm)'));
+        if (options.framework === 'wc-storybook') {
+          if (!isQuiet) s.start('Generating component catalog (npm run cem:catalog)...');
+          try {
+            execSync('npm run cem:catalog', { cwd: options.directory, stdio: 'pipe' });
+            if (!isQuiet) s.stop(pc.green('Component catalog generated'));
+          } catch {
+            if (!isQuiet)
+              s.stop(pc.yellow('Catalog generation failed — run `npm run cem:catalog` manually'));
+          }
+        }
       } catch {
         if (!isQuiet) s.stop(pc.yellow('Could not install dependencies — run manually'));
       }
@@ -1095,8 +1182,16 @@ ${presetList}
   // directory so the suggested `cd` command works as typed.
   const cdTarget =
     path.relative(process.cwd(), options.directory) || unscopeName(project.name as string);
+  // wc-storybook scaffolds emit scripts/generate-catalog.ts. When the
+  // consumer skipped --install-deps, surface an explicit cem:catalog
+  // step in the next-steps banner so the HELiX/* sidebar populates on
+  // first boot. When --install-deps ran, the catalog generation
+  // already happened in the post-install block above (Phase G).
+  const isWcStorybook = options.framework === 'wc-storybook';
+  const needsManualCatalog = isWcStorybook && !options.installDeps;
   const nextSteps = [
     `cd ${cdTarget}`,
+    ...(needsManualCatalog ? ['pnpm install', 'pnpm cem:catalog'] : []),
     options.framework === 'vanilla' ? 'open index.html' : 'npm run dev',
   ];
 

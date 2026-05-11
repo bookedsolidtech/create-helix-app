@@ -34,6 +34,7 @@ import { inlineAuditPanelStubSrc } from './scaffold/wc-storybook/audit-stub.js';
 import { getComponentMdxEmissions } from './scaffold/wc-storybook/mdx-components.js';
 import { getAccessibilityMdxEmissions } from './scaffold/wc-storybook/mdx-accessibility.js';
 import { getTokenMdxEmissions } from './scaffold/wc-storybook/mdx-tokens.js';
+import { getIconographyMdxEmission } from './scaffold/wc-storybook/mdx-iconography.js';
 import { getSceneEmissions } from './scaffold/wc-storybook/scenes.js';
 
 // ---------------------------------------------------------------------------
@@ -7863,6 +7864,12 @@ const config: StorybookConfig = {
     '../src/**/*.stories.@(ts|tsx)',
     '../src/**/*.mdx',
   ],
+  // v0.6.0 Phase B — expose \`@helixui/icons/dist/*.svg\` sprites at the
+  // \`/icons/\` URL prefix so the registry (configured via \`setBasePath\`
+  // in preview.ts) can resolve \`<hx-icon library="helix" name="…">\`
+  // against the bundled sprite assets without copying them into a
+  // separate public dir.
+  staticDirs: ['../node_modules/@helixui/icons/dist'],
   addons: [
     getAbsolutePath('@storybook/addon-a11y'),
     getAbsolutePath('@storybook/addon-docs'),
@@ -7979,6 +7986,14 @@ import helixConfig from '../helix.storybook.config';
 // FIRST, then library (registers components which read tokens), then
 // the consumer's \`{prefix}-*\` overrides on top.
 import '@helixui/tokens/tokens.css';
+// v0.6.0 Phase B — wire \`@helixui/icons\` registry base path before any
+// <hx-icon> on the docs surface resolves a sprite href. Sprite assets
+// (\`helix.svg\`, \`fa-free-solid.svg\`) ship inside @helixui/icons/dist
+// and are exposed at \`/icons/*\` via .storybook/main.ts \`staticDirs\` —
+// keep this string in sync with that entry. Importing the package also
+// auto-registers the bundled \`helix\` + \`fa-free\` libraries.
+import { setBasePath } from '@helixui/icons';
+setBasePath('/icons');
 // Register the hx-* tags every generated MDX page references. The bare
 // \`import '@helixui/library'\` form gets tree-shaken during
 // \`storybook build\` because Rollup chases through dist/components/*/index.js
@@ -11196,6 +11211,22 @@ ${dsTitle} adds a fourth tier on top: \`${prefix}-*\`. Use it for design-system-
 The \`${prefix}-*\` rebinding flows through the cascade automatically — every HELiX semantic that resolved to \`primary-600\` now resolves to your brand's primary.
 `,
   );
+
+  // ── src/stories/foundations/Iconography.mdx ──────────────────────────────
+  // v0.6.0 Phase B — port helix/apps/storybook/stories/foundations/
+  // Iconography.mdx into the wc-storybook factory. Documents the
+  // `@helixui/icons` registry pattern (helix glyphs + fa-free bundled,
+  // bring-your-own via `registerIconLibrary`) plus 5-size showcase,
+  // accessibility audit, and anti-pattern callouts. Sits alongside Color
+  // / Typography / Spacing / Tokens under the `Foundations/*` namespace.
+  // Refs: shimmying-roaming-kernighan plan, v0.6.0 Phase B.
+  {
+    const iconographyEmission = getIconographyMdxEmission({ dsName: ds, dsClass: ClassName });
+    await safeWriteFile(
+      path.join(options.directory, iconographyEmission.relativePath),
+      iconographyEmission.content,
+    );
+  }
 
   // ── src/stories/foundations/Color.mdx ────────────────────────────────────
 

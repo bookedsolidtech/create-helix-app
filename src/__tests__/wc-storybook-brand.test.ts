@@ -797,6 +797,61 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
     expect(src).not.toContain("borderRadius: '999px'");
   });
 
+  // ─── v0.6.0 Phase H regression: empty / undefined verticals ─────────────
+  //
+  // User reported seeing "Fintech / Wellness" chips on a scaffold where
+  // they didn't enter any verticals. The scaffold defaults are CORRECT
+  // (empty array / undefined → no chips), so the report was either
+  // user-entered values or stale Aurora-demo state. Pin the contract so
+  // any future regression is caught at test time.
+
+  it('v0.6.0 Phase H — brandVerticals:[] emits ZERO hx-narrative-chip elements', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase6h-verticals-empty-array',
+      brandVerticals: [],
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    const chipMatches = src.match(/className="hx-narrative-chip"/g) ?? [];
+    expect(chipMatches).toHaveLength(0);
+    expect(src).not.toContain('className="hx-narrative-chip-row"');
+  });
+
+  it('v0.6.0 Phase H — brandVerticals:undefined produces the same chip-free Cover', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase6h-verticals-undefined',
+    });
+    delete (opts as { brandVerticals?: string[] }).brandVerticals;
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    const chipMatches = src.match(/className="hx-narrative-chip"/g) ?? [];
+    expect(chipMatches).toHaveLength(0);
+    expect(src).not.toContain('className="hx-narrative-chip-row"');
+  });
+
+  it('v0.6.0 Phase H — no hardcoded fintech/wellness leaks into Cover.mdx when verticals is empty', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase6h-no-default-verticals',
+      brandVerticals: [],
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    // Allow lowercase tokens in code blocks / comments; check chip-shaped
+    // emissions only (>fintech< or >wellness< would indicate a literal
+    // chip text node leak per the user-reported issue).
+    expect(src).not.toMatch(/>fintech</i);
+    expect(src).not.toMatch(/>wellness</i);
+  });
+
   it('emits Overview.mdx explaining the three-tier cascade', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase4-overview' });
     await scaffoldProject(opts);
@@ -1788,5 +1843,136 @@ describe('wc-storybook Phase 4 — substitution + neutrality guarantees', () => 
     expect(
       await fs.pathExists(path.join(opts.directory, 'src', 'stories', 'foundations', 'Tokens.mdx')),
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v0.6.0 Phase B — Iconography port + @helixui/icons wire-up
+//
+// Ports helix/apps/storybook/stories/foundations/Iconography.mdx (603 LOC)
+// into a new emitter at src/scaffold/wc-storybook/mdx-iconography.ts,
+// and wires the @helixui/icons registry into the emitted Storybook:
+//   - preview.ts: `import { setBasePath } from '@helixui/icons'; setBasePath('/icons');`
+//   - main.ts: `staticDirs: ['../node_modules/@helixui/icons/dist']`
+// ---------------------------------------------------------------------------
+
+describe('wc-storybook v0.6.0 Phase B — Iconography MDX', () => {
+  it('emits Iconography.mdx at src/stories/foundations/Iconography.mdx with the Foundations title', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phaseB-iconography' });
+    await scaffoldProject(opts);
+
+    const iconographyPath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'foundations',
+      'Iconography.mdx',
+    );
+    expect(await fs.pathExists(iconographyPath)).toBe(true);
+
+    const src = await fs.readFile(iconographyPath, 'utf8');
+    expect(src).toContain('title="Foundations/Iconography"');
+    // Section head text drawn from the upstream foundation page.
+    expect(src).toContain('Iconography');
+  });
+
+  it('contains the helix-glyph grid markers (representative names: check, close, plus, error, success)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phaseB-helix-glyphs' });
+    await scaffoldProject(opts);
+
+    const iconographyPath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'foundations',
+      'Iconography.mdx',
+    );
+    const src = await fs.readFile(iconographyPath, 'utf8');
+
+    // The helix grid is the 32-name HELIX_GLYPHS array; assert ≥5
+    // representative names so a future copy-edit can shuffle order
+    // without re-snapshotting.
+    expect(src).toContain('HELIX_GLYPHS');
+    for (const glyph of ['check', 'close', 'plus', 'error', 'success']) {
+      expect(src, `helix glyph "${glyph}" must appear in Iconography.mdx`).toContain(`'${glyph}'`);
+    }
+  });
+
+  it('contains the fa-free sample markers (representative names: house, user, gear)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phaseB-fa-free' });
+    await scaffoldProject(opts);
+
+    const iconographyPath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'foundations',
+      'Iconography.mdx',
+    );
+    const src = await fs.readFile(iconographyPath, 'utf8');
+
+    expect(src).toContain('FA_FREE_SAMPLE');
+    for (const name of ['house', 'user', 'gear']) {
+      expect(src, `fa-free sample "${name}" must appear in Iconography.mdx`).toContain(`'${name}'`);
+    }
+  });
+
+  it('contains live <hx-icon library="helix"> registry usage', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phaseB-live-icon' });
+    await scaffoldProject(opts);
+
+    const iconographyPath = path.join(
+      opts.directory,
+      'src',
+      'stories',
+      'foundations',
+      'Iconography.mdx',
+    );
+    const src = await fs.readFile(iconographyPath, 'utf8');
+
+    // The two live grids (helix + fa-free) both render through
+    // <hx-icon library="…" name={name}>. Assert the helix variant is
+    // present — it's the page's signature live example.
+    expect(src).toContain('<hx-icon library="helix"');
+  });
+
+  it('wires setBasePath into emitted .storybook/preview.ts', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phaseB-preview-setbasepath' });
+    await scaffoldProject(opts);
+
+    const previewPath = path.join(opts.directory, '.storybook', 'preview.ts');
+    const src = await fs.readFile(previewPath, 'utf8');
+
+    // Both the import and the runtime call must land — the import
+    // alone wouldn't configure the registry; the call alone wouldn't
+    // type-check.
+    expect(src).toMatch(/import\s+\{\s*setBasePath\s*\}\s+from\s+['"]@helixui\/icons['"]/);
+    expect(src).toContain("setBasePath('/icons')");
+  });
+
+  it('wires @helixui/icons/dist into .storybook/main.ts staticDirs', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phaseB-main-staticdirs' });
+    await scaffoldProject(opts);
+
+    const mainPath = path.join(opts.directory, '.storybook', 'main.ts');
+    const src = await fs.readFile(mainPath, 'utf8');
+
+    // staticDirs must list the @helixui/icons sprite-asset directory so
+    // /icons/helix.svg + /icons/fa-free-solid.svg resolve from
+    // node_modules at runtime.
+    expect(src).toContain('staticDirs');
+    expect(src).toContain('@helixui/icons/dist');
+  });
+
+  it('declares @helixui/icons in package.json peerDependencies and devDependencies', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phaseB-package-json' });
+    await scaffoldProject(opts);
+
+    const pkg = await fs.readJson(path.join(opts.directory, 'package.json'));
+    // The package is the dep that backs both wires (setBasePath in
+    // preview.ts + staticDirs in main.ts). Missing the dep would
+    // surface as a runtime resolution error, not a build failure.
+    expect(pkg.peerDependencies?.['@helixui/icons']).toBeTruthy();
+    expect(pkg.devDependencies?.['@helixui/icons']).toBeTruthy();
   });
 });

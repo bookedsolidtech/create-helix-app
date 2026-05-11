@@ -13,9 +13,9 @@
 
 </div>
 
-Scaffold a new project with [HELiX](https://github.com/bookedsolidtech/helix) enterprise web components. TUI-powered CLI with support for 9 framework targets and 4 Drupal presets.
+Scaffold a HELiX design system project in seconds. TUI-powered CLI with one production-tier template — `wc-storybook` — plus a slim curated set of app-framework starters. 13 additional experimental frameworks are available behind `--show-experimental`.
 
-The flagship `wc-storybook` template ships a brand-storytelling Storybook experience by default — Cover narrative, foundations IA, per-component AAA conformance pages with auto-injected accessibility status cards, and a token-driven manager chrome that follows your brand. See [WC-Storybook brand-storytelling experience](#wc-storybook-brand-storytelling-experience) below.
+The flagship `wc-storybook` template is now the **default** interactive selection and ships a brand-storytelling Storybook experience out of the box — Cover narrative, foundations IA (including a v0.6.0 Iconography page wired to `@helixui/icons`), per-component AAA conformance pages with auto-injected accessibility status cards, and a token-driven manager chrome that follows your brand. See [WC-Storybook brand-storytelling experience](#wc-storybook-brand-storytelling-experience) below.
 
 ## Quick Start
 
@@ -41,18 +41,21 @@ npx create-helix --drupal --preset healthcare
 
 ## Supported Frameworks
 
-| Framework                  | Command Hint                     | Features                                                |
-| -------------------------- | -------------------------------- | ------------------------------------------------------- |
-| **React + Next.js 16**     | recommended for new projects     | SSR, App Router, React wrappers                         |
-| **React + Vite**           | best DX for SPAs                 | Hot reload, React wrappers                              |
-| **Remix**                  | full-stack React, SSR            | SSR, nested routes, React wrappers                      |
-| **Vue + Nuxt 4**           | Vue ecosystem, SSR built-in      | SSR, native WC support, auto-imports                    |
-| **Vue + Vite**             | minimal, fast                    | Hot reload, native WC support                           |
-| **SvelteKit**              | best native WC support           | SSR, native WC support, Runes                           |
-| **Angular 18**             | enterprise teams                 | Signals, standalone components, CUSTOM_ELEMENTS_SCHEMA  |
-| **Astro**                  | docs sites, marketing            | Islands architecture, zero JS by default                |
-| **Vanilla (HTML + CDN)**   | prototyping, Drupal, CMS         | Zero config, CDN, no build step                         |
-| **WC Storybook (factory)** | flagship — design system factory | Lit 3, Storybook 10, brand-storytelling docs, AAA cards |
+The interactive prompt shows a curated slim list by default — the flagship `wc-storybook` factory plus the two production-tier app starters that have shipped beyond stub quality. The remaining 13 framework templates exist but are gated behind `--show-experimental` until they reach the same bar.
+
+| Framework                  | Command Hint                     | Features                                                                                                  |
+| -------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **WC Storybook (factory)** | default — design system factory  | Lit 3, Storybook 10, brand-storytelling docs, AAA cards, Iconography page, auto-catalog ~99 hx-\* entries |
+| **React + Next.js 16**     | recommended for new app projects | SSR, App Router, React wrappers                                                                           |
+| **React + Vite**           | best DX for SPAs                 | Hot reload, React wrappers, production landing page                                                       |
+
+### Experimental templates
+
+Run `npx create-helix --show-experimental` (or set `HELIX_SHOW_EXPERIMENTAL=1`) to surface these in the prompt, the `list` subcommand, and as valid `--template <name>` values:
+
+`remix`, `vue-nuxt`, `vue-vite`, `sveltekit`, `angular`, `astro`, `lit-vite`, `solid-vite`, `qwik-vite`, `preact-vite`, `stencil`, `ember`, `vanilla`
+
+These templates compile and emit a project skeleton, but their docs / examples / DX polish lag behind the curated three. They'll graduate out of `--show-experimental` as they reach the same bar.
 
 ## WC-Storybook brand-storytelling experience
 
@@ -66,7 +69,7 @@ The scaffolded Storybook ships:
 
 - **Cover.mdx** with brand tagline + vertical chips + quick-start commands.
 - **Overview.mdx** explaining the three-tier token cascade (primitive → semantic → component).
-- **Foundations** — 7 MDX pages: Tokens, Color, Typography, Spacing, Layout, Brand, Accessibility. All live-bound to the consumer's `var({prefix}-*)` tokens.
+- **Foundations** — 8 MDX pages: Tokens, Color, Typography, Spacing, Layout, Brand, Accessibility, **Iconography** (new in v0.6.0 — renders the full `@helixui/icons` catalog plus a curated showcase, wired to `setBasePath('/icons')` and the `@helixui/icons/dist` static dir). All live-bound to the consumer's `var({prefix}-*)` tokens.
 - **Token deep-dives** — dedicated `Foundations/Tokens/Borders` and `Foundations/Tokens/Shadows` pages with live swatches, plus a `Foundations/Tokens/Playground` story for interactive token inspection.
 - **Per-component AAA conformance pages** — 8 hand-authored MDXes (button, card, checkbox, dialog, form, select, tabs, text-input) parameterized by `{dsName}` so `<aurora-card>`, `<aurora-form>` etc. render the consumer's tags. Each ships hero scenarios + auto-injected `A11yStatusCard` reading from CEM `helixMeta.aaa.*` + APG pattern card + consumer obligations.
 - **Accessibility narrative** — top-level `Accessibility/*` namespace with 8 pages: Dashboard, AAA Story Template, Keyboard Contracts, Success Criteria, Consumer Obligations, Focus Management, Contrast Deep-Dive, Forced Colors. Editorial content modeled on HELiX's own Storybook depth.
@@ -77,6 +80,7 @@ The scaffolded Storybook ships:
 - **Brand toolbar** + persistence via `localStorage["helix:storybook:globals"]`.
 - **8 Storybook addons** — a11y, docs, themes, vitest, designs, links, pseudo-states, chromatic-com.
 - **`helix.storybook.config.ts`** at the consumer root — opt out of components / docs pages / brand verticals / AAA / narrative pages without diving into `.storybook/`.
+- **Auto-catalog on install** (v0.6.0) — when scaffolding with `--install-deps` (default), `pnpm cem:catalog` runs immediately after `pnpm install` so the ~99-entry hx-\* catalog sidebar (atoms / molecules / organisms) is populated on first `pnpm storybook` boot. If you used `--no-install`, the Next-steps banner explicitly lists `pnpm install && pnpm cem:catalog` so the catalog populates before first boot.
 
 ## Drupal Presets
 
