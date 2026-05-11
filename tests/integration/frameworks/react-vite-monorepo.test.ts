@@ -127,4 +127,68 @@ describe('react-vite monorepo integration (Phase E)', () => {
       expect(exists, `expected ${rel} exists=${String(shouldExist)}`).toBe(shouldExist);
     }
   });
+
+  // v0.7.0 Phase H — DS opt-out coverage.
+  //
+  // Mirror of Phase D's DS opt-out variant for the Vite path. When DS is
+  // opted out:
+  //   - apps/web/package.json drops @{scope}/design-system from deps.
+  //   - apps/web/vite.config.ts drops it from optimizeDeps.exclude.
+  //   - packages/design-system/ directory is NOT created.
+  //   - packages/types + packages/utils STILL scaffold (Phase G stubs are
+  //     unconditional).
+  describe('Phase H — DS opt-out variant', () => {
+    it('drops @{scope}/design-system from apps/web/package.json deps + vite.config.ts optimizeDeps.exclude', async () => {
+      const o = opts('rvm-no-ds', { includeDesignSystem: false });
+      await scaffoldProject(o);
+
+      const pkg = await readJson<{ dependencies: Record<string, string> }>(
+        o.directory,
+        'apps/web/package.json',
+      );
+      expect(pkg.dependencies['@rvm-no-ds/design-system']).toBeUndefined();
+      expect(pkg.dependencies['@rvm-no-ds/types']).toBe('workspace:*');
+      expect(pkg.dependencies['@rvm-no-ds/utils']).toBe('workspace:*');
+
+      const viteConfig = await readText(o.directory, 'apps/web/vite.config.ts');
+      expect(viteConfig).not.toContain("'@rvm-no-ds/design-system'");
+      expect(viteConfig).toContain("'@rvm-no-ds/types'");
+      expect(viteConfig).toContain("'@rvm-no-ds/utils'");
+    });
+
+    it('does NOT create packages/design-system/ when DS opted out', async () => {
+      const o = opts('rvm-no-ds-dir', { includeDesignSystem: false });
+      await scaffoldProject(o);
+      const fs = await import('fs-extra');
+      const dsExists = await fs.default.pathExists(
+        path.join(o.directory, 'packages/design-system'),
+      );
+      expect(dsExists).toBe(false);
+    });
+
+    it('packages/types + packages/utils ALWAYS scaffold regardless of DS opt-in', async () => {
+      const variants: Array<[boolean, string]> = [
+        [true, 'rvm-ds-yes'],
+        [false, 'rvm-ds-no'],
+      ];
+      for (const [includeDesignSystem, name] of variants) {
+        const o = opts(name, { includeDesignSystem });
+        await scaffoldProject(o);
+        await assertFilesExist(o.directory, [
+          'packages/types/package.json',
+          'packages/types/tsconfig.json',
+          'packages/types/src/index.ts',
+          'packages/utils/package.json',
+          'packages/utils/tsconfig.json',
+          'packages/utils/src/index.ts',
+        ]);
+        const utilsPkg = await readJson<{ name: string; private: boolean }>(
+          o.directory,
+          'packages/utils/package.json',
+        );
+        expect(utilsPkg.name).toBe(`@${name}/utils`);
+        expect(utilsPkg.private).toBe(true);
+      }
+    });
+  });
 });

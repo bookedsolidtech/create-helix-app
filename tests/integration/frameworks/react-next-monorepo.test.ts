@@ -125,4 +125,72 @@ describe('react-next monorepo integration (Phase D)', () => {
       expect(exists, `expected ${rel} exists=${String(shouldExist)}`).toBe(shouldExist);
     }
   });
+
+  // v0.7.0 Phase H — DS opt-out coverage.
+  //
+  // The interactive prompt + scaffold() API support a monorepo without the
+  // workspace design-system. When DS is opted out, three things must change
+  // simultaneously and ONE thing must NOT change:
+  //   - apps/web/package.json drops @{scope}/design-system from deps.
+  //   - apps/web/next.config.ts drops it from transpilePackages.
+  //   - packages/design-system/ directory is NOT created.
+  //   - packages/types + packages/utils STILL scaffold (Phase G stubs are
+  //     unconditional — they're useful without a DS package).
+  describe('Phase H — DS opt-out variant', () => {
+    it('drops @{scope}/design-system from apps/web/package.json deps + next.config.ts transpilePackages', async () => {
+      const o = opts('rnm-no-ds', { includeDesignSystem: false });
+      await scaffoldProject(o);
+
+      const pkg = await readJson<{ dependencies: Record<string, string> }>(
+        o.directory,
+        'apps/web/package.json',
+      );
+      expect(pkg.dependencies['@rnm-no-ds/design-system']).toBeUndefined();
+      expect(pkg.dependencies['@rnm-no-ds/types']).toBe('workspace:*');
+      expect(pkg.dependencies['@rnm-no-ds/utils']).toBe('workspace:*');
+
+      const nextConfig = await readText(o.directory, 'apps/web/next.config.ts');
+      expect(nextConfig).not.toContain("'@rnm-no-ds/design-system'");
+      expect(nextConfig).toContain("'@rnm-no-ds/types'");
+      expect(nextConfig).toContain("'@rnm-no-ds/utils'");
+    });
+
+    it('does NOT create packages/design-system/ when DS opted out', async () => {
+      const o = opts('rnm-no-ds-dir', { includeDesignSystem: false });
+      await scaffoldProject(o);
+      const fs = await import('fs-extra');
+      const dsExists = await fs.default.pathExists(
+        path.join(o.directory, 'packages/design-system'),
+      );
+      expect(dsExists).toBe(false);
+    });
+
+    it('packages/types + packages/utils ALWAYS scaffold regardless of DS opt-in', async () => {
+      // Run BOTH variants (DS opted in / out) and confirm types + utils
+      // always emit their full stub-package shape: package.json,
+      // tsconfig.json, src/index.ts.
+      const variants: Array<[boolean, string]> = [
+        [true, 'rnm-ds-yes'],
+        [false, 'rnm-ds-no'],
+      ];
+      for (const [includeDesignSystem, name] of variants) {
+        const o = opts(name, { includeDesignSystem });
+        await scaffoldProject(o);
+        await assertFilesExist(o.directory, [
+          'packages/types/package.json',
+          'packages/types/tsconfig.json',
+          'packages/types/src/index.ts',
+          'packages/utils/package.json',
+          'packages/utils/tsconfig.json',
+          'packages/utils/src/index.ts',
+        ]);
+        const typesPkg = await readJson<{ name: string; private: boolean }>(
+          o.directory,
+          'packages/types/package.json',
+        );
+        expect(typesPkg.name).toBe(`@${name}/types`);
+        expect(typesPkg.private).toBe(true);
+      }
+    });
+  });
 });

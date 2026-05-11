@@ -176,4 +176,62 @@ describe('wc-storybook monorepo integration (Phase F)', () => {
     const indexTs = await readText(o.directory, 'packages/design-system/src/index.ts');
     expect(indexTs).toContain('export const Button = createComponent');
   });
+
+  // v0.7.0 Phase H — wc-storybook direct + DS opt-out short-circuit.
+  //
+  // scaffoldWcStorybookMonorepo has a built-in short-circuit: when
+  // options.includeDesignSystem === false there's nothing to emit
+  // because the whole point of the wc-storybook monorepo entry is the
+  // DS package itself. The root scaffold (Phase C) still runs and
+  // packages/types + packages/utils STILL emit per Phase G's
+  // unconditional contract.
+  describe('Phase H — wc-storybook DS opt-out short-circuit', () => {
+    it('emits root + types + utils but skips packages/design-system when DS opted out', async () => {
+      const o = opts('wcs-no-ds', { includeDesignSystem: false });
+      await scaffoldProject(o);
+
+      // Root scaffold STILL emits.
+      await assertFilesExist(o.directory, [
+        'pnpm-workspace.yaml',
+        'turbo.json',
+        'package.json',
+        'tsconfig.json',
+        'tsconfig.base.json',
+        'README.md',
+        '.gitignore',
+        // Phase G stubs are unconditional.
+        'packages/types/package.json',
+        'packages/types/src/index.ts',
+        'packages/utils/package.json',
+        'packages/utils/src/index.ts',
+      ]);
+
+      // packages/design-system/ MUST be absent — the orchestrator's
+      // Phase C contract: includeDesignSystem:false → no DS dir, no
+      // tsconfig reference, no storybook scripts.
+      const fs = await import('fs-extra');
+      const dsExists = await fs.default.pathExists(
+        path.join(o.directory, 'packages/design-system'),
+      );
+      expect(dsExists).toBe(false);
+
+      // Root tsconfig.json drops the DS project reference too.
+      const rootTsconfig = await readJson<{ references: Array<{ path: string }> }>(
+        o.directory,
+        'tsconfig.json',
+      );
+      const refs = rootTsconfig.references.map((r) => r.path);
+      expect(refs).not.toContain('./packages/design-system');
+      expect(refs).toContain('./packages/types');
+      expect(refs).toContain('./packages/utils');
+
+      // Root package.json drops the storybook + build-storybook scripts.
+      const rootPkg = await readJson<{ scripts: Record<string, string> }>(
+        o.directory,
+        'package.json',
+      );
+      expect(rootPkg.scripts['storybook']).toBeUndefined();
+      expect(rootPkg.scripts['build-storybook']).toBeUndefined();
+    });
+  });
 });
