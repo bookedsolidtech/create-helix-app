@@ -284,7 +284,7 @@ Thumbs.db
 `;
   await safeWriteFile(path.join(options.directory, '.gitignore'), gitignore);
 
-  // 7. Empty placeholder dirs for the packages that Phases D/E/F/G fill.
+  // 7. Empty placeholder dirs for the packages that Phases D/E/F fill.
   //    safeEnsureDir is dry-run aware (records nothing for empty dirs, which
   //    is the documented behavior — `--dry-run` reports files, not dirs).
   await safeEnsureDir(path.join(options.directory, 'apps'));
@@ -295,4 +295,153 @@ Thumbs.db
   if (includeDesignSystem) {
     await safeEnsureDir(path.join(options.directory, 'packages', 'design-system'));
   }
+
+  // 8. Fill packages/types and packages/utils with stub package content
+  //    (v0.7.0 Phase G). Both are workspace-internal (private: true),
+  //    publishable later if the consumer decides. Each ships a single
+  //    src/index.ts with two clearly-demonstrative exports so the package
+  //    is obviously useful AND obviously editable. tsconfig is composite +
+  //    declaration so the root project-references graph builds cleanly.
+  await emitStubPackage({
+    rootDir: options.directory,
+    scope,
+    packageDir: 'types',
+    packageName: `@${scope}/types`,
+    description: `Shared TypeScript types for the ${options.name} workspace.`,
+    indexSource: TYPES_INDEX_TS,
+  });
+  await emitStubPackage({
+    rootDir: options.directory,
+    scope,
+    packageDir: 'utils',
+    packageName: `@${scope}/utils`,
+    description: `Shared utility functions for the ${options.name} workspace.`,
+    indexSource: UTILS_INDEX_TS,
+  });
 }
+
+// ─── Phase G — stub-package writers ────────────────────────────────────────
+// packages/types + packages/utils ship the same SHAPE (package.json +
+// tsconfig.json + src/index.ts), only the content of src/index.ts differs.
+// emitStubPackage encapsulates the shape so adding packages/{logger,config,
+// ...} later is a 5-line addition above.
+
+interface StubPackageInput {
+  /** Workspace root (options.directory). */
+  rootDir: string;
+  /** Workspace scope derived from project name. */
+  scope: string;
+  /** Directory under packages/ (e.g. 'types', 'utils'). */
+  packageDir: string;
+  /** Full package name including the @scope prefix. */
+  packageName: string;
+  /** Used in package.json description + the index.ts header comment. */
+  description: string;
+  /** Source code for src/index.ts. */
+  indexSource: string;
+}
+
+async function emitStubPackage(input: StubPackageInput): Promise<void> {
+  const { rootDir, packageDir, packageName, description, indexSource } = input;
+  const pkgRoot = path.join(rootDir, 'packages', packageDir);
+  await safeEnsureDir(pkgRoot);
+  await safeEnsureDir(path.join(pkgRoot, 'src'));
+
+  const packageJson = {
+    name: packageName,
+    version: '0.0.0',
+    description,
+    private: true,
+    type: 'module',
+    main: './src/index.ts',
+    types: './src/index.ts',
+    exports: {
+      '.': {
+        types: './src/index.ts',
+        default: './src/index.ts',
+      },
+    },
+    scripts: {
+      'type-check': 'tsc --noEmit',
+    },
+    devDependencies: {
+      typescript: '^5.0.0',
+    },
+  };
+  await safeWriteJson(path.join(pkgRoot, 'package.json'), packageJson, { spaces: 2 });
+
+  // composite: true is REQUIRED because the root tsconfig.json uses project
+  // references (Phase C). declaration + declarationMap so dependent packages
+  // resolve types when consuming via workspace:* (apps/web + packages/* all
+  // import these stubs).
+  const tsconfig = {
+    extends: '../../tsconfig.base.json',
+    compilerOptions: {
+      composite: true,
+      declaration: true,
+      declarationMap: true,
+      outDir: './dist',
+      rootDir: './src',
+    },
+    include: ['src/**/*.ts'],
+    exclude: ['node_modules', 'dist'],
+  };
+  await safeWriteJson(path.join(pkgRoot, 'tsconfig.json'), tsconfig, { spaces: 2 });
+
+  await safeWriteFile(path.join(pkgRoot, 'src', 'index.ts'), indexSource);
+}
+
+const TYPES_INDEX_TS = `/**
+ * Shared TypeScript types for the workspace.
+ *
+ * Add types here that are consumed across apps/* and packages/*.
+ * Apps import via:  import type { AppEnv } from '@<scope>/types';
+ *
+ * The two examples below are demonstrative — delete or replace.
+ */
+
+/** Runtime environment identifier. */
+export type AppEnv = 'development' | 'preview' | 'production';
+
+/** Branded identifier — opaque string that's not assignment-compatible with
+ *  bare strings. Pair with a discriminator brand for tag safety:
+ *
+ *    type UserId = Id<'user'>;
+ *    type OrderId = Id<'order'>;
+ *
+ *  Then \`function getUser(id: UserId)\` won't accept an OrderId by accident.
+ */
+export type Id<TBrand extends string = 'id'> = string & { readonly __brand: TBrand };
+`;
+
+const UTILS_INDEX_TS = `/**
+ * Shared utility functions for the workspace.
+ *
+ * Add helpers here that are consumed across apps/* and packages/*.
+ * Apps import via:  import { cn } from '@<scope>/utils';
+ *
+ * The two examples below are demonstrative — delete or replace.
+ */
+
+/**
+ * Compose CSS class names from a sparse list. Falsy values are dropped.
+ *
+ * Drop-in replacement for the common \`clsx\`/\`classnames\` pattern without
+ * the dependency. Use in React JSX:
+ *
+ *    <div className={cn('card', isOpen && 'card--open', extraClass)} />
+ */
+export function cn(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(' ');
+}
+
+/**
+ * Type-narrow check for non-nullish values. Use in \`.filter()\` chains to
+ * teach TypeScript that the resulting array can't contain null/undefined.
+ *
+ *    const ids = users.map((u) => u.id).filter(isPresent);  // string[]
+ */
+export function isPresent<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
+}
+`;

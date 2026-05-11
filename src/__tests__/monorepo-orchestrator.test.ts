@@ -316,6 +316,144 @@ describe('v0.7.0 Phase C — idempotency', () => {
   });
 });
 
+describe('v0.7.0 Phase G — packages/types stub package', () => {
+  beforeEach(async () => {
+    await fs.remove(TEST_ROOT);
+    await fs.ensureDir(TEST_ROOT);
+  });
+
+  it('emits packages/types/{package.json,tsconfig.json,src/index.ts}', async () => {
+    const dir = path.join(TEST_ROOT, 'types-package');
+    await runOrchestrator({
+      dir,
+      framework: 'wc-storybook',
+      name: 'aurora-types',
+      includeDesignSystem: true,
+    });
+
+    expect(await fs.pathExists(path.join(dir, 'packages/types/package.json'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'packages/types/tsconfig.json'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'packages/types/src/index.ts'))).toBe(true);
+  });
+
+  it('package.json has scoped name, private:true, declarative exports', async () => {
+    const dir = path.join(TEST_ROOT, 'types-package-json');
+    await runOrchestrator({
+      dir,
+      framework: 'wc-storybook',
+      name: 'aurora-types-pkg',
+      includeDesignSystem: true,
+    });
+    const pkg = await fs.readJson(path.join(dir, 'packages/types/package.json'));
+    // scope derivation: project name 'aurora-types-pkg' → scope 'aurora-types-pkg'
+    expect(pkg.name).toBe('@aurora-types-pkg/types');
+    expect(pkg.private).toBe(true);
+    expect(pkg.type).toBe('module');
+    expect(pkg.exports['.']).toBeDefined();
+    expect(pkg.devDependencies?.typescript).toBeDefined();
+  });
+
+  it('tsconfig.json extends ../../tsconfig.base.json with composite + declaration', async () => {
+    const dir = path.join(TEST_ROOT, 'types-tsconfig');
+    await runOrchestrator({
+      dir,
+      framework: 'wc-storybook',
+      name: 'aurora-types-tsc',
+      includeDesignSystem: true,
+    });
+    const tsconfig = await fs.readJson(path.join(dir, 'packages/types/tsconfig.json'));
+    expect(tsconfig.extends).toBe('../../tsconfig.base.json');
+    expect(tsconfig.compilerOptions.composite).toBe(true);
+    expect(tsconfig.compilerOptions.declaration).toBe(true);
+  });
+
+  it('src/index.ts ships AppEnv + Id<TBrand> demonstrative exports', async () => {
+    const dir = path.join(TEST_ROOT, 'types-source');
+    await runOrchestrator({
+      dir,
+      framework: 'wc-storybook',
+      name: 'aurora-types-src',
+      includeDesignSystem: true,
+    });
+    const src = await fs.readFile(path.join(dir, 'packages/types/src/index.ts'), 'utf8');
+    expect(src).toContain('export type AppEnv');
+    expect(src).toContain('export type Id');
+    // Brand pattern (opaque-string type) should be present.
+    expect(src).toMatch(/__brand/);
+  });
+});
+
+describe('v0.7.0 Phase G — packages/utils stub package', () => {
+  beforeEach(async () => {
+    await fs.remove(TEST_ROOT);
+    await fs.ensureDir(TEST_ROOT);
+  });
+
+  it('emits packages/utils/{package.json,tsconfig.json,src/index.ts}', async () => {
+    const dir = path.join(TEST_ROOT, 'utils-package');
+    await runOrchestrator({
+      dir,
+      framework: 'wc-storybook',
+      name: 'aurora-utils',
+      includeDesignSystem: true,
+    });
+    expect(await fs.pathExists(path.join(dir, 'packages/utils/package.json'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'packages/utils/tsconfig.json'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'packages/utils/src/index.ts'))).toBe(true);
+  });
+
+  it('package.json has scoped name + private:true', async () => {
+    const dir = path.join(TEST_ROOT, 'utils-pkg-json');
+    await runOrchestrator({
+      dir,
+      framework: 'wc-storybook',
+      name: 'aurora-utils-pkg',
+      includeDesignSystem: true,
+    });
+    const pkg = await fs.readJson(path.join(dir, 'packages/utils/package.json'));
+    expect(pkg.name).toBe('@aurora-utils-pkg/utils');
+    expect(pkg.private).toBe(true);
+  });
+
+  it('src/index.ts ships cn + isPresent demonstrative exports (no clsx dep)', async () => {
+    const dir = path.join(TEST_ROOT, 'utils-source');
+    await runOrchestrator({
+      dir,
+      framework: 'wc-storybook',
+      name: 'aurora-utils-src',
+      includeDesignSystem: true,
+    });
+    const src = await fs.readFile(path.join(dir, 'packages/utils/src/index.ts'), 'utf8');
+    expect(src).toContain('export function cn');
+    expect(src).toContain('export function isPresent');
+    // No external dep on clsx/classnames.
+    const pkg = await fs.readJson(path.join(dir, 'packages/utils/package.json'));
+    expect(pkg.dependencies?.clsx).toBeUndefined();
+    expect(pkg.dependencies?.classnames).toBeUndefined();
+  });
+});
+
+describe('v0.7.0 Phase G — stub packages emit identical regardless of includeDesignSystem', () => {
+  beforeEach(async () => {
+    await fs.remove(TEST_ROOT);
+    await fs.ensureDir(TEST_ROOT);
+  });
+
+  it("packages/types + packages/utils ALWAYS scaffold (DS opt-out doesn't affect them)", async () => {
+    const dir = path.join(TEST_ROOT, 'no-ds');
+    await runOrchestrator({
+      dir,
+      framework: 'react-next',
+      name: 'no-ds-app',
+      includeDesignSystem: false,
+    });
+    expect(await fs.pathExists(path.join(dir, 'packages/types/package.json'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'packages/utils/package.json'))).toBe(true);
+    // packages/design-system should NOT exist with DS opted out.
+    expect(await fs.pathExists(path.join(dir, 'packages/design-system'))).toBe(false);
+  });
+});
+
 describe('v0.7.0 Phase C — scoped project name derives scope correctly', () => {
   it('@acme/foo → scope "acme" → @acme/design-system in storybook script', async () => {
     // wc-storybook is the only framework that accepts scoped names (per
