@@ -31,26 +31,12 @@
  * without the workspace DS package.
  */
 import path from 'node:path';
-import type { ProjectOptions } from '../../types.js';
 import { safeWriteFile, safeWriteJson } from '../../scaffold.js';
-
-/**
- * The apps/web subdirectory inside a monorepo scaffold. Centralized so a
- * future "apps/<custom-name>" override would only need to change here.
- */
-export const APPS_WEB_REL = path.join('apps', 'web');
-
-/**
- * Clone ProjectOptions with options.directory redirected at
- * <root>/apps/web. Used to drive the existing flat scaffoldReactNext
- * body against the apps/web root without touching its internals.
- */
-export function cloneOptionsForAppsWeb(options: ProjectOptions): ProjectOptions {
-  return {
-    ...options,
-    directory: path.join(options.directory, APPS_WEB_REL),
-  };
-}
+// v0.7.0 Phase E: APPS_WEB_REL + cloneOptionsForAppsWeb live in the
+// cross-framework shared module now. Re-exported here so existing
+// react-next imports continue to resolve without churn.
+import { APPS_WEB_REL, cloneOptionsForAppsWeb } from '../_shared/monorepo-redirect.js';
+export { APPS_WEB_REL, cloneOptionsForAppsWeb };
 
 /**
  * apps/web/package.json — the workspace app's manifest.

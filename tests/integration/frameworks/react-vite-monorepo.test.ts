@@ -1,0 +1,130 @@
+/**
+ * react-vite monorepo end-to-end emit (v0.7.0 Phase E).
+ *
+ * Drives scaffoldProject with monorepoMode + includeDesignSystem and
+ * asserts the FULL tree of files landed where Phase E specifies — both
+ * the monorepo root (pnpm-workspace.yaml, turbo.json, tsconfig.base.json)
+ * and apps/web (package.json with workspace:* deps, vite.config.ts with
+ * optimizeDeps.exclude + server.fs.allow, the Vite SPA structure
+ * inherited from the flat scaffolder).
+ *
+ * Sister to the unit-style tests in
+ * src/__tests__/react-vite-monorepo.test.ts — this file runs the public
+ * scaffoldProject() API rather than the scaffold() wrapper to give us a
+ * second angle on the dispatch, and uses the integration test helpers
+ * (makeTmpRoot, assertFilesExist) for consistency with the rest of the
+ * tests/integration/frameworks/ suite.
+ */
+import { describe, it, expect, afterAll } from 'vitest';
+import path from 'node:path';
+import { scaffoldProject } from '../../../src/scaffold.js';
+import type { ProjectOptions } from '../../../src/types.js';
+import { makeTmpRoot, removeTempDir, assertFilesExist, readJson, readText } from '../setup.js';
+
+const ROOT = makeTmpRoot('react-vite-monorepo');
+
+function opts(name: string, overrides: Partial<ProjectOptions> = {}): ProjectOptions {
+  return {
+    name,
+    directory: path.join(ROOT, name),
+    framework: 'react-vite',
+    componentBundles: ['core'],
+    typescript: true,
+    eslint: true,
+    designTokens: true,
+    darkMode: false,
+    installDeps: false,
+    force: true,
+    monorepoMode: true,
+    includeDesignSystem: true,
+    ...overrides,
+  };
+}
+
+afterAll(async () => {
+  await removeTempDir(ROOT);
+});
+
+describe('react-vite monorepo integration (Phase E)', () => {
+  it('generates the full apps/web tree + monorepo root files', async () => {
+    const o = opts('rvm-tree');
+    await scaffoldProject(o);
+    await assertFilesExist(o.directory, [
+      // Monorepo root.
+      'pnpm-workspace.yaml',
+      'turbo.json',
+      'package.json',
+      'tsconfig.json',
+      'tsconfig.base.json',
+      'README.md',
+      '.gitignore',
+      // Workspace packages (stubs at this phase; E doesn't fill them).
+      'packages/design-system',
+      'packages/types',
+      'packages/utils',
+      // apps/web — the Vite SPA.
+      'apps/web/package.json',
+      'apps/web/vite.config.ts',
+      'apps/web/tsconfig.json',
+      'apps/web/index.html',
+      'apps/web/helix-tokens.css',
+      'apps/web/helix-responsive.css',
+      'apps/web/src/main.tsx',
+      'apps/web/src/App.tsx',
+      'apps/web/src/index.css',
+      'apps/web/src/components/Navbar.tsx',
+      'apps/web/src/components/helix/wrappers.tsx',
+      'apps/web/src/helix.d.ts',
+      'apps/web/src/helix-setup.ts',
+    ]);
+  });
+
+  it('apps/web/package.json has the expected workspace:* deps', async () => {
+    const o = opts('rvm-deps');
+    await scaffoldProject(o);
+    const pkg = await readJson<{
+      name: string;
+      private: boolean;
+      dependencies: Record<string, string>;
+    }>(o.directory, 'apps/web/package.json');
+    expect(pkg.name).toBe('@rvm-deps/web');
+    expect(pkg.private).toBe(true);
+    expect(pkg.dependencies['@rvm-deps/design-system']).toBe('workspace:*');
+    expect(pkg.dependencies['@rvm-deps/types']).toBe('workspace:*');
+    expect(pkg.dependencies['@rvm-deps/utils']).toBe('workspace:*');
+  });
+
+  it('apps/web/vite.config.ts wires up optimizeDeps.exclude + server.fs.allow', async () => {
+    const o = opts('rvm-cfg');
+    await scaffoldProject(o);
+    const config = await readText(o.directory, 'apps/web/vite.config.ts');
+    expect(config).toContain('optimizeDeps');
+    expect(config).toContain('exclude');
+    expect(config).toContain("'@rvm-cfg/design-system'");
+    // server.fs.allow lets dev-server resolve the workspace tree above
+    // apps/web/.
+    expect(config).toContain("'..'");
+    expect(config).toContain("'../..'");
+  });
+
+  it('monorepo root files are not duplicated under apps/web/', async () => {
+    const o = opts('rvm-leak');
+    await scaffoldProject(o);
+    // apps/web should NOT shadow the monorepo root layout files.
+    const checks: Array<[string, boolean]> = [
+      ['apps/web/pnpm-workspace.yaml', false],
+      ['apps/web/turbo.json', false],
+      ['apps/web/tsconfig.base.json', false],
+      // The reverse — monorepo root should NOT have a stray src/ or
+      // index.html.
+      ['src/helix-setup.ts', false],
+      ['vite.config.ts', false],
+      ['index.html', false],
+    ];
+    const fs = await import('fs-extra');
+    for (const [rel, shouldExist] of checks) {
+      const exists = await fs.default.pathExists(path.join(o.directory, rel));
+      expect(exists, `expected ${rel} exists=${String(shouldExist)}`).toBe(shouldExist);
+    }
+  });
+});

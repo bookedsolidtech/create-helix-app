@@ -68,10 +68,11 @@ describe('v0.7.0 Phase A — monorepoMode dispatch routes to stubs', () => {
     };
   }
 
-  // Phase D update: react-next monorepo no longer throws. The dispatch
-  // pins are now exercised by the api-monorepo-options + Phase D's
-  // dedicated react-next-monorepo emit tests; this suite stays focused on
-  // the still-stubbed react-vite + wc-storybook frameworks.
+  // Phase D update: react-next monorepo no longer throws.
+  // Phase E update: react-vite monorepo no longer throws either. The
+  // dispatch pins for both are now exercised by api-monorepo-options +
+  // each phase's dedicated monorepo emit tests; this suite stays focused
+  // on the still-stubbed wc-storybook framework.
   it('react-next + monorepoMode resolves successfully (Phase D landed)', async () => {
     // Drive through scaffoldProject directly so we exercise the same
     // dispatch surface as the original stub assertion. force:true
@@ -79,10 +80,8 @@ describe('v0.7.0 Phase A — monorepoMode dispatch routes to stubs', () => {
     await expect(scaffoldProject(makeOptions('react-next'))).resolves.toBeUndefined();
   });
 
-  it('react-vite + monorepoMode throws "not yet implemented"', async () => {
-    await expect(scaffoldProject(makeOptions('react-vite'))).rejects.toThrow(
-      /react-vite monorepo scaffolder not yet implemented/i,
-    );
+  it('react-vite + monorepoMode resolves successfully (Phase E landed)', async () => {
+    await expect(scaffoldProject(makeOptions('react-vite'))).resolves.toBeUndefined();
   });
 
   it('wc-storybook + monorepoMode throws "not yet implemented"', async () => {

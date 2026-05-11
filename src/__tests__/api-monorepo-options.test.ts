@@ -66,17 +66,23 @@ describe('v0.7.0 Phase B — scaffold() monorepoMode dispatch', () => {
     expect(await fs.pathExists(path.join(dir, 'pnpm-workspace.yaml'))).toBe(false);
   });
 
-  it('react-vite + monorepoMode:true routes to the monorepo stub (throws)', async () => {
-    await expect(
-      scaffold({
-        name: 'phase-b-rv-monorepo',
-        directory: path.join(TEST_ROOT, 'rv-monorepo'),
-        framework: 'react-vite',
-        monorepoMode: true,
-        force: true,
-        installDeps: false,
-      }),
-    ).rejects.toThrow(/react-vite monorepo scaffolder not yet implemented/i);
+  // Phase E update: react-vite monorepo no longer throws. The dispatch
+  // pins land successfully and emit the workspace shape (pnpm-workspace.yaml
+  // + apps/web/package.json). The exhaustive content assertions live in
+  // the dedicated Phase E tests (react-vite-monorepo.test.ts).
+  it('react-vite + monorepoMode:true routes to the monorepo emitter (no throw)', async () => {
+    const dir = path.join(TEST_ROOT, 'rv-monorepo');
+    const result = await scaffold({
+      name: 'phase-b-rv-monorepo',
+      directory: dir,
+      framework: 'react-vite',
+      monorepoMode: true,
+      force: true,
+      installDeps: false,
+    });
+    expect(result.success).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'pnpm-workspace.yaml'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'apps', 'web', 'package.json'))).toBe(true);
   });
 
   it('react-vite + monorepoMode:false routes to the flat scaffolder (no throw)', async () => {
@@ -112,16 +118,21 @@ describe('v0.7.0 Phase B — scaffold() monorepoMode defaults', () => {
     expect(await fs.pathExists(path.join(dir, 'apps', 'web', 'package.json'))).toBe(true);
   });
 
-  it('omitting monorepoMode for react-vite defaults to true (routes to stub)', async () => {
-    await expect(
-      scaffold({
-        name: 'phase-b-rv-default',
-        directory: path.join(TEST_ROOT, 'rv-default'),
-        framework: 'react-vite',
-        force: true,
-        installDeps: false,
-      }),
-    ).rejects.toThrow(/react-vite monorepo scaffolder not yet implemented/i);
+  it('omitting monorepoMode for react-vite defaults to true (routes to monorepo emitter)', async () => {
+    // Phase E update: default routes to the now-implemented emitter
+    // rather than the Phase A stub. Confirm the workspace shape
+    // (pnpm-workspace.yaml + apps/web) lands.
+    const dir = path.join(TEST_ROOT, 'rv-default');
+    const result = await scaffold({
+      name: 'phase-b-rv-default',
+      directory: dir,
+      framework: 'react-vite',
+      force: true,
+      installDeps: false,
+    });
+    expect(result.success).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'pnpm-workspace.yaml'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'apps', 'web', 'package.json'))).toBe(true);
   });
 });
 
