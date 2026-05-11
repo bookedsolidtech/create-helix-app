@@ -554,6 +554,7 @@ export async function runCLI(): Promise<void> {
     brandTagline: brandTaglineFromArgs,
     brandVerticals: brandVerticalsFromArgs,
     showExperimental,
+    doctorQuick,
   } = parsed;
 
   // Load config file and environment variables
@@ -612,7 +613,7 @@ export async function runCLI(): Promise<void> {
   }
 
   if (subcommand === 'doctor') {
-    const result = await runDoctor(HELIX_VERSION);
+    const result = await runDoctor(HELIX_VERSION, { quick: doctorQuick });
     if (isJson) {
       console.log(JSON.stringify(result, null, 2));
     } else {
@@ -731,6 +732,7 @@ ${presetList}
     create-helix upgrade                         # Upgrade HELiX deps
     create-helix upgrade --dry-run               # Preview upgrade without writing
     create-helix doctor                          # Run environment health checks
+    create-helix doctor --quick                  # Skip slow/filesystem-probe checks (CI)
     HELIX_TEMPLATE=react-vite create-helix app   # Use env var for template
 `);
     process.exit(0);

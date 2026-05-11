@@ -28,6 +28,14 @@ export interface ParsedArgs {
    * filter entirely and don't need this flag.
    */
   showExperimental: boolean;
+  /**
+   * v0.6.0 Phase F — when true, `doctor` skips checks that may be slow or
+   * require a filesystem walk into the consumer's `node_modules` (currently
+   * just the icons-base-path reachability probe). CI runs that don't have
+   * Storybook on disk yet stay green; the production-environment health
+   * checks (Node version, package managers, network, etc.) still run.
+   */
+  doctorQuick: boolean;
 
   // Template options
   template: Framework | null;
@@ -107,6 +115,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const skipAudit = argv.includes('--skip-audit');
   const offline = argv.includes('--offline');
   const showExperimental = argv.includes('--show-experimental');
+  const doctorQuick = argv.includes('--quick');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -165,6 +174,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     '--no-config',
     '--drupal',
     '--show-experimental',
+    '--quick',
     '--help',
     '-h',
     '--version',
@@ -306,5 +316,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     showVersion,
     showHelp,
     showExperimental,
+    doctorQuick,
   };
 }

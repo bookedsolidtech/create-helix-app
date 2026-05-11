@@ -466,9 +466,13 @@ describe('doctor checks', () => {
       const result = await runDoctor('1.0.0');
 
       // All checks should be ok since execSync returns valid versions
-      // and accessSync does not throw
+      // and accessSync does not throw. v0.6.0 Phase F added scaffold-surface
+      // checks that return `skip` when not run inside a scaffolded project;
+      // skip is non-failing so allPassed stays true.
       expect(result.allPassed).toBe(true);
-      expect(result.checks.every((c: CheckResult) => c.status === 'ok')).toBe(true);
+      expect(
+        result.checks.every((c: CheckResult) => c.status === 'ok' || c.status === 'skip'),
+      ).toBe(true);
     });
 
     it('includes Node.js, npm, git, Disk space, Write permissions, Network checks', async () => {
@@ -665,7 +669,7 @@ describe('doctor checks', () => {
       expect(typeof parsed.allPassed).toBe('boolean');
       for (const check of parsed.checks) {
         expect(check.name).toBeDefined();
-        expect(check.status).toMatch(/^(ok|warn|fail)$/);
+        expect(check.status).toMatch(/^(ok|warn|fail|skip)$/);
         expect(check.message).toBeDefined();
       }
     });
