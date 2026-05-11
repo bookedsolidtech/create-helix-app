@@ -13024,8 +13024,10 @@ FIGMA_FILE_KEY=
       const { createRequire } = await import('node:module');
       const require = createRequire(import.meta.url);
       const tokensJsonPath = require.resolve('@helixui/tokens/tokens.json');
-      const srcTokens = await import('fs-extra');
-      await srcTokens.copy(tokensJsonPath, path.join(tokensDir, 'tokens.json'));
+      // Route through safeCopyFile so --dry-run records the entry but never
+      // touches disk. Bare fs.copy() bypassed the dry-run contract and was
+      // silently creating src/tokens/tokens.json during preview commands.
+      await safeCopyFile(tokensJsonPath, path.join(tokensDir, 'tokens.json'));
     } catch {
       // If @helixui/tokens is not installed in the scaffolder's context, write
       // a minimal stub so the project still type-checks. Includes button.* so
