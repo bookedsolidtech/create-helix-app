@@ -107,7 +107,19 @@ export function getLastScaffoldTiming(): ScaffoldTiming | null {
   return _lastTiming;
 }
 
-async function safeWriteFile(filePath: string, content: string): Promise<void> {
+/**
+ * Internal-but-exported writers used by the monorepo orchestrator
+ * (src/scaffold/monorepo.ts) and the per-framework monorepo emitters
+ * (Phases D/E/F). They wrap dry-run state so callers don't have to know
+ * about the module-local `_dryRunActive` flag — pass them a path + bytes
+ * and they either land on disk or are recorded as a dry-run entry.
+ *
+ * Not part of the public package surface; consumed only by sibling
+ * scaffold modules under src/scaffold/. Kept un-prefixed (no underscore)
+ * because they ARE the canonical scaffold writers — the prefix would
+ * imply "private to scaffold.ts" which is no longer true.
+ */
+export async function safeWriteFile(filePath: string, content: string): Promise<void> {
   if (_dryRunActive) {
     _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(content, 'utf8') });
     return;
@@ -136,7 +148,7 @@ function escapeMdxText(s: string): string {
     .replace(/`/g, '&#96;');
 }
 
-async function safeWriteJson(
+export async function safeWriteJson(
   filePath: string,
   data: unknown,
   opts?: { spaces: number },
@@ -149,7 +161,7 @@ async function safeWriteJson(
   await fs.writeJson(filePath, data, opts ?? { spaces: 2 });
 }
 
-async function safeEnsureDir(dirPath: string): Promise<void> {
+export async function safeEnsureDir(dirPath: string): Promise<void> {
   if (_dryRunActive) return;
   await fs.ensureDir(dirPath);
 }
