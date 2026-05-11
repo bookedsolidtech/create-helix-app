@@ -180,13 +180,38 @@ describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
     expect(cfg).not.toContain('export type NarrativePageId');
   });
 
-  it('default config is "everything visible" (include: all, exclude: [])', async () => {
-    const opts = makeWcStorybookOptions({ name: 'phase2-config-default' });
+  it('default config is "everything visible" (bundles=all → include: all)', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase2-config-default',
+      componentBundles: ['all'],
+    });
     await scaffoldProject(opts);
     const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
     expect(cfg).toMatch(/components:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
     expect(cfg).toMatch(/brand:\s*{\s*include:\s*'all',\s*exclude:\s*\[\]\s*}/);
     expect(cfg).toMatch(/aaa:\s*{\s*enabled:\s*true\s*}/);
+  });
+
+  it('narrowed bundles seed components.include as an explicit array', async () => {
+    // When the consumer picked anything narrower than `--bundles all`,
+    // the catalog generator must filter to that subset — otherwise the
+    // bundle prompt is a no-op for wc-storybook and the consumer sees
+    // every hx-* tag even when they explicitly opted out of most of
+    // them. (Codex round-10 P2.)
+    const opts = makeWcStorybookOptions({
+      name: 'phase2-config-bundles',
+      componentBundles: ['core', 'forms'],
+    });
+    await scaffoldProject(opts);
+    const cfg = await fs.readFile(path.join(opts.directory, 'helix.storybook.config.ts'), 'utf-8');
+    // Anchor on the config declaration so this assertion is robust to
+    // docstring examples elsewhere in the emitted file (which mention
+    // `include: 'all'` as the override syntax).
+    expect(cfg).toMatch(
+      /const config: HelixStorybookConfig = {\s*components:\s*{\s*include:\s*\[/,
+    );
+    // JSON.stringify emits double-quoted strings inside the array literal.
+    expect(cfg).toMatch(/"hx-button"/);
   });
 });
 

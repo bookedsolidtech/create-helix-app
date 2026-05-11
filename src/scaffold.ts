@@ -11039,6 +11039,17 @@ Use it for the dominant call-to-action on a screen.
   // config shape; Phase 3 (AAA scenes) and Phase 4 (narrative IA) consume
   // it. Lives at consumer's project root so designers can edit it without
   // diving into .storybook/.
+  //
+  // Seed `components.include` from the scaffold-time bundle selection.
+  // When the user picked `--bundles core` (or any subset), the catalog
+  // generator must filter to that subset — otherwise the bundle prompt
+  // is a no-op for wc-storybook and the consumer sees every hx-* tag
+  // even when they explicitly opted out of most of them.
+  const wcBundleComponents = getComponentsForBundles(options.componentBundles);
+  const wcComponentsInclude = wcBundleComponents.includes('*')
+    ? `'all'`
+    : `[${wcBundleComponents.map((c) => JSON.stringify(c)).join(', ')}]`;
+
   await safeWriteFile(
     path.join(options.directory, 'helix.storybook.config.ts'),
     `/**
@@ -11092,7 +11103,7 @@ export interface HelixStorybookConfig {
  * design system grows beyond Helix's defaults.
  */
 const config: HelixStorybookConfig = {
-  components: { include: 'all', exclude: [] },
+  components: { include: ${wcComponentsInclude}, exclude: [] },
   brand: { include: 'all', exclude: [] },
   aaa: { enabled: true },
 };
