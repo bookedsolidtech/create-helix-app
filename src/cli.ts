@@ -831,8 +831,12 @@ ${presetList}
                   options: promptTemplates.map((t) => ({
                     value: t.id as Framework,
                     label: t.color(t.name),
-                    hint: t.hint,
+                    hint:
+                      t.id === 'wc-storybook'
+                        ? 'Design system + Storybook (recommended for new projects)'
+                        : t.hint,
                   })),
+                  initialValue: 'wc-storybook' as Framework,
                 })) as Framework);
           // Reject scoped names paired with non-library frameworks. By
           // the time the framework prompt resolves we know both pieces;

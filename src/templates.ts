@@ -22,6 +22,132 @@ const HELIX_ICONS_VERSION = '^1.0.0';
 
 export const TEMPLATES: TemplateConfig[] = [
   {
+    id: 'wc-storybook',
+    name: 'Design System + Storybook 10',
+    description:
+      'Lit 3 component library factory — custom token prefix, HelixElement base class, full Storybook 10 dev environment with Playwright story tests',
+    hint: 'beta — design system factory',
+    color: pc.magenta,
+    dependencies: {
+      // lit is the only runtime dep — Helix packages are externalised by
+      // vite.config.ts and live as peerDependencies. Keeping
+      // @helixui/library or @helixui/tokens here would let downstream
+      // installers pull a second copy of the Helix runtime alongside
+      // their own host install, tripping duplicate
+      // customElements.define() registrations and breaking element
+      // identity (e.g. `<hx-button>` already defined).
+      lit: '^3.2.0',
+    },
+    // peerDeps document the cascade-token contract version the consumer host
+    // MUST satisfy. The wc-storybook factory ships components that bridge
+    // --{prefix}-* tokens into Helix's --hx-* names — that bridge ASSUMES
+    // the action.* semantic tier, on-{role}-strong text tokens, and the
+    // on-dark-* border family that Helix 3.3.1 introduced. Pinning these as
+    // peerDeps surfaces the version contract in `npm ls` output and trips
+    // pnpm's strict-peer-deps check if a downstream installs an
+    // older Helix that doesn't export the cascade.
+    peerDependencies: {
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
+    },
+    devDependencies: {
+      // Helix packages also live as devDependencies so the scaffold's own
+      // dev/test/build pipeline (Storybook, vitest, smoke probe) resolves
+      // them without forcing the consumer's host to be installed yet.
+      // peerDependencies declares the version CONTRACT; devDependencies
+      // satisfies the LOCAL install. They share a version pin to keep
+      // the contract honest.
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      // v0.6.0 Phase B — @helixui/icons provides the <hx-icon> registry
+      // (setBasePath, registerIconLibrary) and bundles the helix + fa-free
+      // sprite assets at `dist/{helix,fa-free-solid}.svg`. preview.ts
+      // imports setBasePath; main.ts adds `dist/` to staticDirs.
+      '@helixui/icons': HELIX_ICONS_VERSION,
+      storybook: '^10.2.8',
+      '@storybook/web-components': '^10.2.8',
+      '@storybook/web-components-vite': '^10.2.8',
+      '@storybook/addon-a11y': '^10.2.8',
+      '@storybook/addon-docs': '^10.2.8',
+      '@storybook/addon-themes': '^10.2.8',
+      '@storybook/addon-vitest': '^10.2.8',
+      // 2026-05-09 Phase 2 — addon parity with upstream Helix storybook.
+      // Versions sourced from helix/apps/storybook/package.json. Chromatic
+      // addon version intentionally tracks the @chromatic-com major (not
+      // Storybook's), per their release cadence.
+      '@chromatic-com/storybook': '^5.1.2',
+      '@storybook/addon-designs': '^11.1.3',
+      '@storybook/addon-links': '^10.2.8',
+      'storybook-addon-pseudo-states': '^10.2.8',
+      '@custom-elements-manifest/analyzer': '^0.10.0',
+      concurrently: '^9.1.0',
+      dotenv: '^16.4.5',
+      tsx: '^4.19.0',
+      vitest: '^3.0.0',
+      '@vitest/browser': '^3.0.0',
+      // @vitest/ui is required by `pnpm test:ui` (vitest --ui). Without it
+      // the script fails immediately on a fresh scaffold with vitest's
+      // missing-package error. Pinned at the same major as vitest.
+      '@vitest/ui': '^3.0.0',
+      // ESLint stack — the scaffold emits eslint.config.js by default
+      // (gated only on --no-eslint), but the consumer's editor/CI would
+      // fail loading the config without these packages. Pinned at the
+      // same majors used in create-helix-app's own dev pipeline so
+      // editor extensions resolve consistently.
+      eslint: '^9.0.0',
+      '@eslint/js': '^9.0.0',
+      'typescript-eslint': '^8.0.0',
+      // playwright is required by @vitest/browser when browser.provider is
+      // 'playwright' (vitest.config.ts ships with that setting). Pinning here
+      // avoids a fail-on-first-run when consumers boot vitest right after
+      // scaffold + install.
+      playwright: '^1.50.0',
+      vite: '^6.4.0',
+      typescript: '^5.7.0',
+      // .storybook/main.ts imports node:path / node:url and the generated
+      // tsconfig includes the .storybook directory in the type-check
+      // graph. Without @types/node declared, a fresh wc-storybook scaffold
+      // can fail `pnpm type-check` on the first run when the typings are
+      // not transitively hoisted by the package manager.
+      '@types/node': '^22.0.0',
+      // React is required because the scaffold emits .tsx docs helpers
+      // (HelixDocsPage, A11yStatusCard, ConsumerObligations, etc.) that
+      // import from 'react' and '@storybook/addon-docs/blocks'. Storybook
+      // 10's web-components-vite renderer ships with React under the hood
+      // for autodocs — declaring it explicitly here so `pnpm install`
+      // resolves the import without relying on hoisting.
+      react: '^19.0.0',
+      'react-dom': '^19.0.0',
+      '@types/react': '^19.0.0',
+      '@types/react-dom': '^19.0.0',
+      // Shiki — syntax highlighter consumed by the CodeBlock / CodeTabs
+      // helpers under src/stories/_components/. Pinned to the same major
+      // as helix/apps/storybook so grammar/theme exports stay aligned.
+      // @shikijs/themes and @shikijs/langs are sub-package imports the
+      // CodeBlock helper references directly (e.g.
+      // `import('@shikijs/themes/github-dark-dimmed')`); under pnpm's
+      // strict-hoisting these MUST be declared explicitly so TS module
+      // resolution and runtime imports both succeed in fresh installs.
+      shiki: '^4.0.2',
+      '@shikijs/themes': '^4.0.2',
+      '@shikijs/langs': '^4.0.2',
+    },
+    features: [
+      'web-components',
+      'storybook',
+      'autodocs',
+      'cem',
+      'shadow-dom',
+      'helix-tokens',
+      'theme-switching',
+      'a11y',
+      'playwright-story-tests',
+      'token-generator',
+      'figma-token-sync',
+    ],
+  },
+  {
     id: 'react-next',
     name: 'React + Next.js 16',
     description: 'App Router, SSR-ready, full HELiX integration',
@@ -259,132 +385,6 @@ export const TEMPLATES: TemplateConfig[] = [
     },
     features: ['web-components', 'reactive-properties', 'decorators', 'shadow-dom'],
     experimental: true,
-  },
-  {
-    id: 'wc-storybook',
-    name: 'Design System + Storybook 10',
-    description:
-      'Lit 3 component library factory — custom token prefix, HelixElement base class, full Storybook 10 dev environment with Playwright story tests',
-    hint: 'beta — design system factory',
-    color: pc.magenta,
-    dependencies: {
-      // lit is the only runtime dep — Helix packages are externalised by
-      // vite.config.ts and live as peerDependencies. Keeping
-      // @helixui/library or @helixui/tokens here would let downstream
-      // installers pull a second copy of the Helix runtime alongside
-      // their own host install, tripping duplicate
-      // customElements.define() registrations and breaking element
-      // identity (e.g. `<hx-button>` already defined).
-      lit: '^3.2.0',
-    },
-    // peerDeps document the cascade-token contract version the consumer host
-    // MUST satisfy. The wc-storybook factory ships components that bridge
-    // --{prefix}-* tokens into Helix's --hx-* names — that bridge ASSUMES
-    // the action.* semantic tier, on-{role}-strong text tokens, and the
-    // on-dark-* border family that Helix 3.3.1 introduced. Pinning these as
-    // peerDeps surfaces the version contract in `npm ls` output and trips
-    // pnpm's strict-peer-deps check if a downstream installs an
-    // older Helix that doesn't export the cascade.
-    peerDependencies: {
-      '@helixui/library': HELIX_LIBRARY_VERSION,
-      '@helixui/tokens': HELIX_TOKENS_VERSION,
-      '@helixui/icons': HELIX_ICONS_VERSION,
-    },
-    devDependencies: {
-      // Helix packages also live as devDependencies so the scaffold's own
-      // dev/test/build pipeline (Storybook, vitest, smoke probe) resolves
-      // them without forcing the consumer's host to be installed yet.
-      // peerDependencies declares the version CONTRACT; devDependencies
-      // satisfies the LOCAL install. They share a version pin to keep
-      // the contract honest.
-      '@helixui/library': HELIX_LIBRARY_VERSION,
-      '@helixui/tokens': HELIX_TOKENS_VERSION,
-      // v0.6.0 Phase B — @helixui/icons provides the <hx-icon> registry
-      // (setBasePath, registerIconLibrary) and bundles the helix + fa-free
-      // sprite assets at `dist/{helix,fa-free-solid}.svg`. preview.ts
-      // imports setBasePath; main.ts adds `dist/` to staticDirs.
-      '@helixui/icons': HELIX_ICONS_VERSION,
-      storybook: '^10.2.8',
-      '@storybook/web-components': '^10.2.8',
-      '@storybook/web-components-vite': '^10.2.8',
-      '@storybook/addon-a11y': '^10.2.8',
-      '@storybook/addon-docs': '^10.2.8',
-      '@storybook/addon-themes': '^10.2.8',
-      '@storybook/addon-vitest': '^10.2.8',
-      // 2026-05-09 Phase 2 — addon parity with upstream Helix storybook.
-      // Versions sourced from helix/apps/storybook/package.json. Chromatic
-      // addon version intentionally tracks the @chromatic-com major (not
-      // Storybook's), per their release cadence.
-      '@chromatic-com/storybook': '^5.1.2',
-      '@storybook/addon-designs': '^11.1.3',
-      '@storybook/addon-links': '^10.2.8',
-      'storybook-addon-pseudo-states': '^10.2.8',
-      '@custom-elements-manifest/analyzer': '^0.10.0',
-      concurrently: '^9.1.0',
-      dotenv: '^16.4.5',
-      tsx: '^4.19.0',
-      vitest: '^3.0.0',
-      '@vitest/browser': '^3.0.0',
-      // @vitest/ui is required by `pnpm test:ui` (vitest --ui). Without it
-      // the script fails immediately on a fresh scaffold with vitest's
-      // missing-package error. Pinned at the same major as vitest.
-      '@vitest/ui': '^3.0.0',
-      // ESLint stack — the scaffold emits eslint.config.js by default
-      // (gated only on --no-eslint), but the consumer's editor/CI would
-      // fail loading the config without these packages. Pinned at the
-      // same majors used in create-helix-app's own dev pipeline so
-      // editor extensions resolve consistently.
-      eslint: '^9.0.0',
-      '@eslint/js': '^9.0.0',
-      'typescript-eslint': '^8.0.0',
-      // playwright is required by @vitest/browser when browser.provider is
-      // 'playwright' (vitest.config.ts ships with that setting). Pinning here
-      // avoids a fail-on-first-run when consumers boot vitest right after
-      // scaffold + install.
-      playwright: '^1.50.0',
-      vite: '^6.4.0',
-      typescript: '^5.7.0',
-      // .storybook/main.ts imports node:path / node:url and the generated
-      // tsconfig includes the .storybook directory in the type-check
-      // graph. Without @types/node declared, a fresh wc-storybook scaffold
-      // can fail `pnpm type-check` on the first run when the typings are
-      // not transitively hoisted by the package manager.
-      '@types/node': '^22.0.0',
-      // React is required because the scaffold emits .tsx docs helpers
-      // (HelixDocsPage, A11yStatusCard, ConsumerObligations, etc.) that
-      // import from 'react' and '@storybook/addon-docs/blocks'. Storybook
-      // 10's web-components-vite renderer ships with React under the hood
-      // for autodocs — declaring it explicitly here so `pnpm install`
-      // resolves the import without relying on hoisting.
-      react: '^19.0.0',
-      'react-dom': '^19.0.0',
-      '@types/react': '^19.0.0',
-      '@types/react-dom': '^19.0.0',
-      // Shiki — syntax highlighter consumed by the CodeBlock / CodeTabs
-      // helpers under src/stories/_components/. Pinned to the same major
-      // as helix/apps/storybook so grammar/theme exports stay aligned.
-      // @shikijs/themes and @shikijs/langs are sub-package imports the
-      // CodeBlock helper references directly (e.g.
-      // `import('@shikijs/themes/github-dark-dimmed')`); under pnpm's
-      // strict-hoisting these MUST be declared explicitly so TS module
-      // resolution and runtime imports both succeed in fresh installs.
-      shiki: '^4.0.2',
-      '@shikijs/themes': '^4.0.2',
-      '@shikijs/langs': '^4.0.2',
-    },
-    features: [
-      'web-components',
-      'storybook',
-      'autodocs',
-      'cem',
-      'shadow-dom',
-      'helix-tokens',
-      'theme-switching',
-      'a11y',
-      'playwright-story-tests',
-      'token-generator',
-      'figma-token-sync',
-    ],
   },
   {
     id: 'preact-vite',

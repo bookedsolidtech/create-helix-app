@@ -17,7 +17,10 @@ import type { Framework } from '../types.js';
 describe('CLI framework prompt — experimental filter', () => {
   it('production templates are the 3 non-experimental entries (wc-storybook, react-next, react-vite)', () => {
     const production = TEMPLATES.filter((t) => !t.experimental).map((t) => t.id);
-    expect(production).toEqual(['react-next', 'react-vite', 'wc-storybook']);
+    // Order matters — wc-storybook is intentionally first per the v0.6.0
+    // default-swap (Phase E). Hitting Enter through the prompt lands on
+    // wc-storybook, not react-next.
+    expect(production).toEqual(['wc-storybook', 'react-next', 'react-vite']);
   });
 
   it('exactly 13 templates are flagged experimental', () => {
@@ -60,9 +63,9 @@ describe('CLI framework prompt — experimental filter', () => {
     }));
     expect(defaultOptions).toHaveLength(3);
     expect(defaultOptions.map((o) => o.value)).toEqual([
+      'wc-storybook',
       'react-next',
       'react-vite',
-      'wc-storybook',
     ]);
   });
 
