@@ -12688,10 +12688,31 @@ const OUTPUT = path.join(ROOT, 'src/tokens/tokens.css');
 
 const PREFIX = '${prefix}';
 
-// Top-level keys that are theme variants — skipped; handled separately if ever.
+// Top-level keys that are theme variants — handled separately below
+// (walkScoped emits each branch under :root[data-theme="..."]).
 // 'pluginVersion' is reserved by the Custom Helix Exporter envelope (S2.4)
 // — never a token path, so always skip at the root.
-const SKIP_ROOT: ReadonlySet<string> = new Set(['dark', 'high-contrast', 'pluginVersion']);
+const SKIP_ROOT: ReadonlySet<string> = new Set(['pluginVersion']);
+const THEME_BRANCHES: readonly string[] = ['dark', 'high-contrast'];
+
+// Token-name patterns that resolve to unitless / duration values when
+// the leaf has no DTCG \\\`$type\\\`. Mirrored from sync-tokens.ts so both
+// scripts agree on which paths skip the px coercion. Keep these two
+// lists in sync if either script's coverage widens.
+const UNITLESS_PATTERNS: readonly RegExp[] = [
+  /(?:^|[/-])font[-/]weight(?:$|[/-])/i,
+  /(?:^|[/-])opacity(?:$|[/-])/i,
+  /(?:^|[/-])line[-/]height(?:$|[/-])/i,
+  /(?:^|[/-])z[-/]index(?:$|[/-])/i,
+  /(?:^|[/-])density(?:$|[/-])/i,
+  /(?:^|[/-])font[-/]size[-/]scale(?:$|[/-])/i,
+  /(?:^|[/-])scale(?:$|[/-])/i,
+];
+const DURATION_PATTERNS: readonly RegExp[] = [
+  /(?:^|[/-])duration(?:$|[/-])/i,
+  /(?:^|[/-])transition[-/]duration(?:$|[/-])/i,
+  /(?:^|[/-])animation[-/]duration(?:$|[/-])/i,
+];
 
 // Sprint 1.5b — read BOTH the DTCG shape (\`{$value, $type}\`, default
 // from Custom Helix Exporter 0.6.0+) AND the legacy shape (\`{value}\`,
@@ -12833,6 +12854,28 @@ function build(): { vars: number; output: string } {
 
   lines.push('}');
   lines.push('');
+
+  // Theme branches (dark, high-contrast). Each tokens.json top-level
+  // theme key gets a scoped :root[data-theme="..."] override block so
+  // mode-specific brand tokens land in the generated CSS — manager-theme
+  // toggles \\\`data-theme\\\` to apply them. Without this, the scaffold
+  // advertises three modes but only ships the light values, so dark
+  // and high-contrast keep falling back to light tokens.
+  for (const branch of THEME_BRANCHES) {
+    const branchNode = tokens[branch];
+    if (!branchNode || typeof branchNode !== 'object') continue;
+    const branchVars: CssVar[] = [];
+    for (const [key, node] of Object.entries(branchNode as Record<string, TokenNode>)) {
+      walk(node, [key], branchVars);
+    }
+    if (branchVars.length === 0) continue;
+    lines.push(\`:root[data-theme="\${branch}"] {\`);
+    for (const v of branchVars) {
+      lines.push(\`  \${v.name}: \${v.value};\`);
+    }
+    lines.push('}');
+    lines.push('');
+  }
 
   // ── Paint-style utility classes ─────────────────────────────────────────
   //

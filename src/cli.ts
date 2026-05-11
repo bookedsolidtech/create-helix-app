@@ -280,8 +280,18 @@ export async function runJsonScaffold(
       ? path.resolve(process.cwd(), opts.outputDirArg)
       : path.resolve(process.cwd(), unscopeName(name));
 
-  const bundles: ComponentBundle[] =
-    opts.bundlesFromFlag ?? (['core', 'forms'] as ComponentBundle[]);
+  // wc-storybook now seeds helix.storybook.config.ts.components.include
+  // from these bundles, so a no-flag scaffold with the old ['core', 'forms']
+  // default would hide every non-core/non-forms tag (navigation, layout,
+  // feedback, etc.) until the consumer manually edited the config file.
+  // Default to 'all' for wc-storybook so the catalog matches the
+  // "full catalog out of the box" advertised behavior; other framework
+  // templates keep the smaller default since they don't surface a catalog.
+  const bundleDefault: ComponentBundle[] =
+    templateArg === 'wc-storybook'
+      ? (['all'] as ComponentBundle[])
+      : (['core', 'forms'] as ComponentBundle[]);
+  const bundles: ComponentBundle[] = opts.bundlesFromFlag ?? bundleDefault;
 
   // JSON-mode bypasses the interactive prompt entirely — apply the same
   // dsName / tokenPrefix regex here so wc-storybook scaffolds can't get a

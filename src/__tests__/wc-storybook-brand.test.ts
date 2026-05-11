@@ -207,9 +207,7 @@ describe('wc-storybook Phase 2 — helix.storybook.config.ts knob', () => {
     // Anchor on the config declaration so this assertion is robust to
     // docstring examples elsewhere in the emitted file (which mention
     // `include: 'all'` as the override syntax).
-    expect(cfg).toMatch(
-      /const config: HelixStorybookConfig = {\s*components:\s*{\s*include:\s*\[/,
-    );
+    expect(cfg).toMatch(/const config: HelixStorybookConfig = {\s*components:\s*{\s*include:\s*\[/);
     // JSON.stringify emits double-quoted strings inside the array literal.
     expect(cfg).toMatch(/"hx-button"/);
   });
