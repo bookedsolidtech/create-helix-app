@@ -3316,34 +3316,14 @@ export {};
 `,
   );
 
-  // src/helix-setup.ts — HELiX singleton initializer
-  await safeWriteFile(
-    path.join(srcDir, 'helix-setup.ts'),
-    `/**
- * HELiX initializer for React + Vite.
- *
- * Import this file once in your app entry (main.tsx) to register all HELiX
- * custom elements. The singleton pattern prevents double-registration.
- *
- * Unlike SSR frameworks, Vite SPAs always run in the browser, so this import
- * is safe at module level — no window checks needed.
- */
-// Static side-effect import: registers every hx-* custom element BEFORE
-// the first React paint. The previous async dynamic-import path let
-// React render the app before the registry was populated, so the
-// landing page briefly showed unresolved <hx-button>, <hx-theme>, etc.
-// as plain unknown tags and then "upgraded" them after the chunk
-// resolved — a visible flash on first load.
-import '@helixui/library';
-
-// initHelix remains for callers that previously awaited it; now a no-op
-// because the static import above already registered everything. Kept
-// to preserve the API contract.
-export async function initHelix(): Promise<void> {
-  return;
-}
-`,
-  );
+  // helix-setup.ts is written by the generic writeHelixSetup() post-pass
+  // (called from scaffoldProject after each framework scaffolder). The
+  // previous inline write here was always overwritten by that generic
+  // pass, so the promised initHelix() export never reached consumers.
+  // The generic path produces a correct static-import bootstrap for
+  // wc-storybook framework targeting; if a future caller needs the
+  // initHelix() compatibility shim, extend writeHelixSetup() to emit it
+  // rather than racing two writes to the same path.
 
   // src/components/helix/wrappers.tsx — @lit/react component wrappers
   await safeWriteFile(
@@ -3677,10 +3657,13 @@ export default function App() {
 `,
   );
 
-  // index.css — Full design system styles
+  // index.css — Full design system styles. Token import is gated on the
+  // --no-tokens / designTokens: false option so opting out of HELiX
+  // tokens actually keeps them out of runtime (previous unconditional
+  // import made the flag a no-op for this template).
   await safeWriteFile(
     path.join(srcDir, 'index.css'),
-    `@import '@helixui/tokens/tokens.css';
+    `${options.designTokens ? "@import '@helixui/tokens/tokens.css';\n" : ''}
 
 /* ── Reset ───────────────────────────────────────────────────────────── */
 *,
