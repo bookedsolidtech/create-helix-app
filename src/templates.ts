@@ -15,6 +15,10 @@ import type {
 // upgraded.
 const HELIX_LIBRARY_VERSION = '^3.3.1';
 const HELIX_TOKENS_VERSION = '^3.3.1';
+// @helixui/icons is the registry layer for `<hx-icon>` — version-pinned
+// independently from @helixui/library because the icons package follows
+// its own release cadence. v0.6.0 Phase B introduces this dep.
+const HELIX_ICONS_VERSION = '^1.0.0';
 
 export const TEMPLATES: TemplateConfig[] = [
   {
@@ -274,6 +278,7 @@ export const TEMPLATES: TemplateConfig[] = [
     peerDependencies: {
       '@helixui/library': HELIX_LIBRARY_VERSION,
       '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       // Helix packages also live as devDependencies so the scaffold's own
@@ -284,6 +289,11 @@ export const TEMPLATES: TemplateConfig[] = [
       // the contract honest.
       '@helixui/library': HELIX_LIBRARY_VERSION,
       '@helixui/tokens': HELIX_TOKENS_VERSION,
+      // v0.6.0 Phase B — @helixui/icons provides the <hx-icon> registry
+      // (setBasePath, registerIconLibrary) and bundles the helix + fa-free
+      // sprite assets at `dist/{helix,fa-free-solid}.svg`. preview.ts
+      // imports setBasePath; main.ts adds `dist/` to staticDirs.
+      '@helixui/icons': HELIX_ICONS_VERSION,
       storybook: '^10.2.8',
       '@storybook/web-components': '^10.2.8',
       '@storybook/web-components-vite': '^10.2.8',
