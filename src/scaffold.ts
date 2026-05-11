@@ -8399,6 +8399,12 @@ function getAbsolutePath(value: string): string {
 `,
   );
 
+  // Shared theme-mode literal — used by BOTH preview.ts (to coerce
+  // persisted theme against the enabled set) and manager-theme.ts (to
+  // narrow HELIX_THEME_MODES + downstream Record entries). Computed
+  // once, interpolated into both emitter template literals.
+  const themeModesLiteral = options.darkMode ? `['light', 'dark', 'high-contrast']` : `['light']`;
+
   // ── .storybook/preview.ts ────────────────────────────────────────────────
   //
   // Phase 3c — full preview rewrite:
@@ -8640,10 +8646,19 @@ const preview: Preview = {
         /* fall through to defaults */
       }
     }
-    const theme =
+    // Coerce the persisted theme against the modes THIS scaffold enabled.
+    // Storybook's localStorage key is namespaced only by origin, so a stale
+    // "dark"/"high-contrast" from a sibling scaffold would otherwise boot
+    // the preview iframe out of sync with the manager (which already
+    // coerces via coerceThemeMode in manager-theme.ts).
+    const enabledThemeModes: readonly string[] = ${themeModesLiteral};
+    const persistedThemeRaw =
       typeof persisted?.theme === 'string' && persisted.theme.length > 0
         ? persisted.theme
         : 'light';
+    const theme = enabledThemeModes.includes(persistedThemeRaw)
+      ? persistedThemeRaw
+      : 'light';
     // Validate the persisted brand against THIS scaffold's allowed
     // verticals AND the runtime helixConfig.brand filter before applying.
     // Storybook's localStorage key is namespaced only by origin, so two
@@ -8777,7 +8792,22 @@ export default preview;
   // emitted, the brand toolbar collapses to single-mode, and the brand-
   // overrides CSS section drops the dark + high-contrast media queries.
   // When darkMode is true (the default), all three modes ship.
-  const themeModesLiteral = options.darkMode ? `['light', 'dark', 'high-contrast']` : `['light']`;
+  //
+  // Everything downstream of HELIX_THEME_MODES (tokenMaps Record entries,
+  // chrome-theme exports, helixChromeThemes Record entries) must stay in
+  // lockstep with the modes array or the emitted manager-theme.ts fails
+  // `pnpm type-check` on a fresh scaffold — narrowed HelixThemeMode
+  // rejects a `'dark'` literal that the rest of the file references.
+  // (themeModesLiteral is defined earlier and shared with preview.ts.)
+  const tokenMapsEntries = options.darkMode
+    ? `  light: tokenMapForMode('light'),\n  dark: tokenMapForMode('dark'),\n  'high-contrast': tokenMapForMode('high-contrast'),`
+    : `  light: tokenMapForMode('light'),`;
+  const chromeThemeExports = options.darkMode
+    ? `export const helixLightTheme = buildHelixChromeTheme('light');\nexport const helixDarkTheme = buildHelixChromeTheme('dark');\nexport const helixHighContrastTheme = buildHelixChromeTheme('high-contrast');`
+    : `export const helixLightTheme = buildHelixChromeTheme('light');`;
+  const chromeThemesMapEntries = options.darkMode
+    ? `  light: helixLightTheme,\n  dark: helixDarkTheme,\n  'high-contrast': helixHighContrastTheme,`
+    : `  light: helixLightTheme,`;
 
   await safeWriteFile(
     path.join(storybookDir, 'manager-theme.ts'),
@@ -8828,9 +8858,7 @@ function tokenMapForMode(mode: HelixThemeMode): Record<string, string> {
 }
 
 const tokenMaps: Record<HelixThemeMode, Record<string, string>> = {
-  light: tokenMapForMode('light'),
-  dark: tokenMapForMode('dark'),
-  'high-contrast': tokenMapForMode('high-contrast'),
+${tokenMapsEntries}
 };
 
 function token(mode: HelixThemeMode, name: string, fallback: string): string {
@@ -8911,14 +8939,10 @@ function buildHelixChromeTheme(mode: HelixThemeMode): ThemeVars {
   });
 }
 
-export const helixLightTheme = buildHelixChromeTheme('light');
-export const helixDarkTheme = buildHelixChromeTheme('dark');
-export const helixHighContrastTheme = buildHelixChromeTheme('high-contrast');
+${chromeThemeExports}
 
 export const helixChromeThemes: Record<HelixThemeMode, ThemeVars> = {
-  light: helixLightTheme,
-  dark: helixDarkTheme,
-  'high-contrast': helixHighContrastTheme,
+${chromeThemesMapEntries}
 };
 
 export function coerceThemeMode(value: unknown): HelixThemeMode {
