@@ -27,17 +27,25 @@ afterEach(async () => {
 });
 
 describe('v0.7.0 Phase B — scaffold() monorepoMode dispatch', () => {
-  it('react-next + monorepoMode:true routes to the monorepo stub (throws)', async () => {
-    await expect(
-      scaffold({
-        name: 'phase-b-rn-monorepo',
-        directory: path.join(TEST_ROOT, 'rn-monorepo'),
-        framework: 'react-next',
-        monorepoMode: true,
-        force: true,
-        installDeps: false,
-      }),
-    ).rejects.toThrow(/react-next monorepo scaffolder not yet implemented/i);
+  // Phase D update: react-next monorepo now emits a full apps/web tree
+  // rather than throwing. Confirm the dispatch lands successfully and
+  // produces the workspace shape (root pnpm-workspace.yaml + apps/web
+  // dir). The exhaustive content assertions live in the dedicated Phase D
+  // tests (react-next-monorepo.test.ts); this case just pins the dispatch
+  // wiring at the api.ts boundary.
+  it('react-next + monorepoMode:true routes to the monorepo emitter (no throw)', async () => {
+    const dir = path.join(TEST_ROOT, 'rn-monorepo');
+    const result = await scaffold({
+      name: 'phase-b-rn-monorepo',
+      directory: dir,
+      framework: 'react-next',
+      monorepoMode: true,
+      force: true,
+      installDeps: false,
+    });
+    expect(result.success).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'pnpm-workspace.yaml'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'apps', 'web', 'package.json'))).toBe(true);
   });
 
   it('react-next + monorepoMode:false routes to the flat scaffolder (no throw)', async () => {
@@ -87,16 +95,21 @@ describe('v0.7.0 Phase B — scaffold() monorepoMode dispatch', () => {
 });
 
 describe('v0.7.0 Phase B — scaffold() monorepoMode defaults', () => {
-  it('omitting monorepoMode for react-next defaults to true (routes to stub)', async () => {
-    await expect(
-      scaffold({
-        name: 'phase-b-rn-default',
-        directory: path.join(TEST_ROOT, 'rn-default'),
-        framework: 'react-next',
-        force: true,
-        installDeps: false,
-      }),
-    ).rejects.toThrow(/react-next monorepo scaffolder not yet implemented/i);
+  it('omitting monorepoMode for react-next defaults to true (routes to monorepo emitter)', async () => {
+    // Phase D update: default routes to the now-implemented emitter
+    // rather than the Phase A stub. Confirm the workspace shape
+    // (pnpm-workspace.yaml + apps/web) lands.
+    const dir = path.join(TEST_ROOT, 'rn-default');
+    const result = await scaffold({
+      name: 'phase-b-rn-default',
+      directory: dir,
+      framework: 'react-next',
+      force: true,
+      installDeps: false,
+    });
+    expect(result.success).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'pnpm-workspace.yaml'))).toBe(true);
+    expect(await fs.pathExists(path.join(dir, 'apps', 'web', 'package.json'))).toBe(true);
   });
 
   it('omitting monorepoMode for react-vite defaults to true (routes to stub)', async () => {
@@ -154,18 +167,21 @@ describe('v0.7.0 Phase B — includeDesignSystem default tracks monorepoMode', (
   // false. This test pins the documented coupling so a future change
   // that decouples them surfaces here first.
   it('omitting includeDesignSystem on a monorepo react-next defaults to true', async () => {
-    // Routes to the stub regardless — but the stub throw confirms the
-    // dispatch went the monorepo direction, which is what we care about.
-    await expect(
-      scaffold({
-        name: 'phase-b-rn-ids-default',
-        directory: path.join(TEST_ROOT, 'rn-ids-default'),
-        framework: 'react-next',
-        monorepoMode: true,
-        // includeDesignSystem omitted — should default true.
-        force: true,
-        installDeps: false,
-      }),
-    ).rejects.toThrow(/react-next monorepo scaffolder not yet implemented/i);
+    // Phase D update: confirm the apps/web/package.json depends on
+    // @{scope}/design-system at workspace:* (the proof that
+    // includeDesignSystem resolved true under the hood).
+    const dir = path.join(TEST_ROOT, 'rn-ids-default');
+    const result = await scaffold({
+      name: 'phase-b-rn-ids-default',
+      directory: dir,
+      framework: 'react-next',
+      monorepoMode: true,
+      // includeDesignSystem omitted — should default true.
+      force: true,
+      installDeps: false,
+    });
+    expect(result.success).toBe(true);
+    const appPkg = await fs.readJson(path.join(dir, 'apps', 'web', 'package.json'));
+    expect(appPkg.dependencies['@phase-b-rn-ids-default/design-system']).toBe('workspace:*');
   });
 });

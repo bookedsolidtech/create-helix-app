@@ -41,7 +41,14 @@ export interface ScaffoldMonorepoRootInput {
  * `@aurora-kit/design-system` and the consumer renames if they ever
  * publish under a real scope.
  */
-function deriveScope(projectName: string): string {
+/**
+ * Exported so per-framework monorepo emitters (apps/web, packages/design-system,
+ * etc.) name their workspace packages with the same scope the orchestrator
+ * used in the root `package.json` scripts. Diverging derivations here would
+ * produce a `--filter=@aurora/design-system` script that points at a
+ * package named `@aurora-kit/design-system` — silently broken.
+ */
+export function deriveScope(projectName: string): string {
   if (projectName.startsWith('@')) {
     const slash = projectName.indexOf('/');
     if (slash > 1) return projectName.slice(1, slash);
@@ -158,6 +165,33 @@ export async function scaffoldMonorepoRoot(input: ScaffoldMonorepoRootInput): Pr
     references: tsReferences,
   };
   await safeWriteJson(path.join(options.directory, 'tsconfig.json'), rootTsconfig, { spaces: 2 });
+
+  // 4b. tsconfig.base.json — shared compilerOptions for every per-package
+  //     tsconfig. The root tsconfig.json is a project-references file
+  //     (`{ files: [], references: [...] }`) and CANNOT also host
+  //     compilerOptions for per-package `extends` — TypeScript treats the
+  //     two shapes as mutually exclusive. Splitting them at the root is
+  //     the canonical pnpm + Turborepo pattern (see the turbo-with-tailwind
+  //     examples). apps/web/tsconfig.json and packages/*/tsconfig.json
+  //     each `extends: "../../tsconfig.base.json"`.
+  const tsconfigBase = {
+    compilerOptions: {
+      target: 'ES2022',
+      lib: ['dom', 'dom.iterable', 'esnext'],
+      module: 'esnext',
+      moduleResolution: 'bundler',
+      esModuleInterop: true,
+      allowSyntheticDefaultImports: true,
+      strict: true,
+      skipLibCheck: true,
+      resolveJsonModule: true,
+      isolatedModules: true,
+      forceConsistentCasingInFileNames: true,
+    },
+  };
+  await safeWriteJson(path.join(options.directory, 'tsconfig.base.json'), tsconfigBase, {
+    spaces: 2,
+  });
 
   // 5. Root README.md — consumer-facing intro. Keep it intentionally short;
   //    consumers usually navigate straight to apps/web or packages/design-system.

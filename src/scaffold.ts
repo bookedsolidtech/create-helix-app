@@ -411,6 +411,25 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     // Fire pre-write before generating files
     await hookManager.execute('pre-write', hookCtx);
 
+    // v0.7.0 Phase D: when monorepoMode is true, the per-app auxiliary
+    // writers (helix.tokens.json, helix-tokens.css, helix-responsive.css,
+    // src/helix-setup.ts) need to land under apps/web/ rather than at the
+    // monorepo root; otherwise the workspace ends up with stray src/ +
+    // helix-*.css files at the root that no package actually imports, and
+    // apps/web/src/app/layout.tsx's `import '../../helix-tokens.css'`
+    // resolves to the WRONG file (the unbundled root one rather than the
+    // apps/web sibling). Redirecting the writer's options.directory at
+    // apps/web/ is the minimum-surface fix — it keeps the
+    // framework-agnostic writers entirely unchanged.
+    //
+    // package.json / README.md / tsconfig.json / .gitignore stay at the
+    // root in monorepo mode; scaffoldMonorepoRoot overwrites them with
+    // workspace-aware variants AFTER this block runs (via the
+    // framework-specific monorepoMode dispatch below).
+    const auxOptions: ProjectOptions = options.monorepoMode
+      ? { ...options, directory: path.join(options.directory, 'apps', 'web') }
+      : options;
+
     // Generate/overwrite core files based on options
     logVerbose(`Writing ${path.join(options.directory, 'package.json')}`);
     await writePackageJson(options, template);
@@ -418,8 +437,8 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     await writeReadme(options);
 
     if (options.designTokens) {
-      logVerbose(`Writing ${path.join(options.directory, 'helix.tokens.json')}`);
-      await writeTokensConfig(options);
+      logVerbose(`Writing ${path.join(auxOptions.directory, 'helix.tokens.json')}`);
+      await writeTokensConfig(auxOptions);
     }
 
     if (options.eslint) {
@@ -507,13 +526,22 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
         break;
     }
 
-    // Write the HELiX integration helper
-    logVerbose(`Writing ${path.join(options.directory, 'src', 'helix-setup.ts')}`);
-    await writeHelixSetup(options);
+    // Write the HELiX integration helper. In monorepo mode this lands at
+    // apps/web/src/helix-setup.ts (auxOptions redirects above) so
+    // apps/web/src/app/layout.tsx's `import '../helix-setup'` resolves.
+    // A monorepo-root src/helix-setup.ts has nothing to import it.
+    logVerbose(`Writing ${path.join(auxOptions.directory, 'src', 'helix-setup.ts')}`);
+    await writeHelixSetup(auxOptions);
 
-    // Write .gitignore
-    logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
-    await writeGitignore(options);
+    // Write .gitignore — but ONLY in flat mode. The monorepo orchestrator
+    // (scaffoldMonorepoRoot) has already emitted a workspace-aware
+    // .gitignore that covers .turbo/, every framework's build output, etc.
+    // Letting the flat writer run here would clobber that with the much
+    // shorter flat-mode gitignore and break workspace tooling assumptions.
+    if (!options.monorepoMode) {
+      logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
+      await writeGitignore(options);
+    }
 
     // Fire post-write after all file writes complete
     await hookManager.execute('post-write', hookCtx);
@@ -942,6 +970,13 @@ async function writeTokensConfig(options: ProjectOptions): Promise<void> {
   // silently dead. Skip both for this framework so the scaffold has a
   // single, correct token surface.
   if (options.framework === 'wc-storybook') return;
+
+  // Ensure the target dir exists. For flat scaffolds this is a no-op
+  // (the root was ensured earlier by scaffoldProject). For monorepo
+  // mode, options.directory has been redirected at apps/web/ and that
+  // dir may not exist yet (scaffoldMonorepoRoot runs LATER, inside the
+  // per-framework monorepo dispatch). safeEnsureDir is idempotent.
+  await safeEnsureDir(options.directory);
 
   const content = `/* HELiX Design Tokens — Theme Overrides */
 /* Import the base token layer, then override as needed */

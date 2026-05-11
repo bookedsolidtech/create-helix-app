@@ -8,12 +8,13 @@
  * tsconfig reference + storybook scripts, and that a second run produces
  * byte-identical output.
  *
- * The framework-specific monorepo emitters (react-next/react-vite/
- * wc-storybook) still throw after the orchestrator runs — Phase C
- * deliberately stops at the root. Tests pre-create the target directory
- * so scaffoldProject's "rollback partial scaffold on throw" cleanup
- * (src/scaffold.ts ~line 574) doesn't wipe the orchestrator output we
- * want to inspect.
+ * v0.7.0 Phase D update — react-next monorepo now emits a complete
+ * apps/web tree (no throw). The remaining stub frameworks are react-vite
+ * (Phase E) and wc-storybook (Phase F), so these tests now drive the
+ * orchestrator through react-vite to exercise the same root-emit code
+ * path without colliding with the now-resolving react-next emitter.
+ * Once Phase E lands, switch to wc-storybook; once Phase F lands, drop
+ * the runOrchestrator helper entirely and assert on a successful resolve.
  */
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import fs from 'fs-extra';
@@ -33,15 +34,21 @@ afterEach(async () => {
 
 /**
  * Helper — runs the orchestrator via the public scaffold() API and
- * swallows the expected "app emit pending in Phase D/E/F" throw. The
- * orchestrator runs before the throw, so root files DO land.
+ * swallows the expected "app emit pending" throw. The orchestrator runs
+ * before the throw, so root files DO land.
  *
  * Pre-creates the target dir so scaffoldProject's rollback-on-throw
  * doesn't remove the emitted root artifacts.
+ *
+ * The framework parameter defaults to react-vite — its monorepo emitter
+ * is still the Phase A "not yet implemented" stub, so it gives us a
+ * controlled throw after the orchestrator has done its work. Use
+ * wc-storybook for the explicit cross-framework case in the
+ * "runs across all three monorepo entry points" suite.
  */
 async function runOrchestrator(args: {
   dir: string;
-  framework: 'react-next' | 'react-vite' | 'wc-storybook';
+  framework?: 'react-vite' | 'wc-storybook';
   name: string;
   includeDesignSystem?: boolean;
 }): Promise<void> {
@@ -50,7 +57,7 @@ async function runOrchestrator(args: {
     scaffold({
       name: args.name,
       directory: args.dir,
-      framework: args.framework,
+      framework: args.framework ?? 'react-vite',
       monorepoMode: true,
       includeDesignSystem: args.includeDesignSystem,
       force: true,
@@ -62,7 +69,7 @@ async function runOrchestrator(args: {
 describe('v0.7.0 Phase C — scaffoldMonorepoRoot emits the 7 root artifacts', () => {
   it('writes pnpm-workspace.yaml with apps/* and packages/* globs', async () => {
     const dir = path.join(TEST_ROOT, 'rn-workspace');
-    await runOrchestrator({ dir, framework: 'react-next', name: 'phase-c-rn' });
+    await runOrchestrator({ dir, framework: 'react-vite', name: 'phase-c-rn' });
 
     const content = await fs.readFile(path.join(dir, 'pnpm-workspace.yaml'), 'utf8');
     expect(content).toContain("- 'apps/*'");
@@ -71,7 +78,7 @@ describe('v0.7.0 Phase C — scaffoldMonorepoRoot emits the 7 root artifacts', (
 
   it('writes turbo.json with turbo 2.x schema (tasks, not pipeline)', async () => {
     const dir = path.join(TEST_ROOT, 'rn-turbo');
-    await runOrchestrator({ dir, framework: 'react-next', name: 'phase-c-rn' });
+    await runOrchestrator({ dir, framework: 'react-vite', name: 'phase-c-rn' });
 
     const turbo = await fs.readJson(path.join(dir, 'turbo.json'));
     expect(turbo.$schema).toBe('https://turbo.build/schema.json');
@@ -90,7 +97,7 @@ describe('v0.7.0 Phase C — scaffoldMonorepoRoot emits the 7 root artifacts', (
     const dir = path.join(TEST_ROOT, 'rn-pkg');
     await runOrchestrator({
       dir,
-      framework: 'react-next',
+      framework: 'react-vite',
       name: 'phase-c-rn',
       includeDesignSystem: true,
     });
@@ -115,7 +122,7 @@ describe('v0.7.0 Phase C — scaffoldMonorepoRoot emits the 7 root artifacts', (
     const dir = path.join(TEST_ROOT, 'rn-tsconfig');
     await runOrchestrator({
       dir,
-      framework: 'react-next',
+      framework: 'react-vite',
       name: 'phase-c-rn',
       includeDesignSystem: true,
     });
@@ -133,7 +140,7 @@ describe('v0.7.0 Phase C — scaffoldMonorepoRoot emits the 7 root artifacts', (
     const dir = path.join(TEST_ROOT, 'rn-readme');
     await runOrchestrator({
       dir,
-      framework: 'react-next',
+      framework: 'react-vite',
       name: 'phase-c-rn',
       includeDesignSystem: true,
     });
@@ -157,7 +164,7 @@ describe('v0.7.0 Phase C — scaffoldMonorepoRoot emits the 7 root artifacts', (
     const dir = path.join(TEST_ROOT, 'rn-dirs');
     await runOrchestrator({
       dir,
-      framework: 'react-next',
+      framework: 'react-vite',
       name: 'phase-c-rn',
       includeDesignSystem: true,
     });
@@ -174,7 +181,7 @@ describe('v0.7.0 Phase C — includeDesignSystem === false drops the DS package'
     const dir = path.join(TEST_ROOT, 'rn-no-ds');
     await runOrchestrator({
       dir,
-      framework: 'react-next',
+      framework: 'react-vite',
       name: 'phase-c-rn-no-ds',
       includeDesignSystem: false,
     });
@@ -244,7 +251,7 @@ describe('v0.7.0 Phase C — idempotency', () => {
 
     await runOrchestrator({
       dir,
-      framework: 'react-next',
+      framework: 'react-vite',
       name: 'phase-c-idem',
       includeDesignSystem: true,
     });
@@ -264,7 +271,7 @@ describe('v0.7.0 Phase C — idempotency', () => {
     // Second pass — same args, same dir.
     await runOrchestrator({
       dir,
-      framework: 'react-next',
+      framework: 'react-vite',
       name: 'phase-c-idem',
       includeDesignSystem: true,
     });
