@@ -183,10 +183,14 @@ describe('wc-storybook factory — golden snapshot', () => {
     }
   });
 
-  it('the dsName parameterization reaches the Phase 2 component conformance MDXes', async () => {
-    // Each ported MDX (card, checkbox, dialog, form, select, tabs,
-    // text-input) interpolates `<{dsName}-{component}>` tags — verify
-    // a representative subset to catch regression in the substitution.
+  it('the Phase 2 component conformance MDXes keep filenames + titles parameterized while demos use upstream hx-* tags', async () => {
+    // Round-7 codex-review correction: the scaffolder only ships ONE
+    // wrapper component (${ds}-button); the other six pages (card,
+    // checkbox, dialog, form, select, tabs, text-input) would render
+    // undefined custom elements if their live demos were
+    // <${ds}-component>. So we verify the GoldenCard / GoldenForm
+    // titles + filenames still flow through, but the live demo tags
+    // are the registered upstream `<hx-*>` literals.
     const card = await fs.readFile(
       path.join(TARGET, 'src/stories/components/golden-card.mdx'),
       'utf-8',
@@ -195,11 +199,19 @@ describe('wc-storybook factory — golden snapshot', () => {
       path.join(TARGET, 'src/stories/components/golden-form.mdx'),
       'utf-8',
     );
-    expect(card).toContain('<golden-card');
-    expect(form).toContain('<golden-form');
-    // And NO literal <hx-*> tags should survive the port.
-    expect(card).not.toMatch(/<hx-card[\s>]/);
-    expect(form).not.toMatch(/<hx-form[\s>]/);
+    // Parameterization reaches the page title + conceptual class names.
+    expect(card).toContain('Components/GoldenCard/Conformance');
+    expect(card).toContain('GoldenCard');
+    expect(form).toContain('Components/GoldenForm/Conformance');
+    expect(form).toContain('GoldenForm');
+    // Live demos render the registered upstream tags so first-run
+    // Storybook does not show undefined custom elements.
+    expect(card).toMatch(/<hx-card\b/);
+    expect(form).toMatch(/<hx-form\b/);
+    // And there must NOT be a stray live <golden-card> / <golden-form>
+    // tag — those wrappers are not scaffolded.
+    expect(card).not.toMatch(/<golden-card[\s>]/);
+    expect(form).not.toMatch(/<golden-form[\s>]/);
   });
 
   it('the Phase 4 scene stories use cross-domain-neutral copy (no healthcare references)', async () => {

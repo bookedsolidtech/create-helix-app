@@ -7,7 +7,12 @@ import * as p from '@clack/prompts';
 import { getTemplate, getComponentsForBundles } from './templates.js';
 import type { ProjectOptions, AnyTemplateConfig } from './types.js';
 import { HelixError, ErrorCode } from './errors.js';
-import { validateDsName, validateTokenPrefix, unscopeName } from './validation.js';
+import {
+  validateDsName,
+  validateTokenPrefix,
+  unscopeName,
+  validateScopedNameForFramework,
+} from './validation.js';
 import { HookManager, buildHookContext } from './plugins/hooks.js';
 import { loadHelixRcHooks } from './plugins/config-loader.js';
 import { discoverPlugins } from './plugins/plugin-discovery.js';
@@ -279,6 +284,20 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
 
   logVerbose(`Template: ${template.id} (${template.name})`);
   logVerbose(`Directory: ${options.directory}`);
+
+  // SECURITY / defense-in-depth: reject scoped @scope/name inputs for
+  // frameworks whose templates interpolate the raw name into invalid fields
+  // (Stencil's `namespace`, Ember's `modulePrefix` and asset URLs, etc.).
+  // CLI + api.validate() apply this same guard before calling us, but a
+  // programmatic caller that pairs the exported validateProjectName() with
+  // scaffoldProject() directly would otherwise sneak past — validateProjectName
+  // is purposely permissive (it mirrors npm's package-name contract, which
+  // does allow @scope/name). Catch it here so the direct-API surface is as
+  // safe as the CLI/JSON paths.
+  const scopedError = validateScopedNameForFramework(options.name, options.framework);
+  if (scopedError) {
+    throw new HelixError(ErrorCode.PATH_TRAVERSAL, scopedError);
+  }
 
   // SECURITY: Validate the output directory path before writing any files.
   // Defense-in-depth: CLI validates project names via /^[a-z0-9-_]+$/i, making
@@ -8468,16 +8487,27 @@ import helixConfig from '../helix.storybook.config';
 // FIRST, then library (registers components which read tokens), then
 // the consumer's \`{prefix}-*\` overrides on top.
 import '@helixui/tokens/tokens.css';
-// Anchor every hx-* registration into the bundle. Bare
-// \`import '@helixui/library'\` and per-component side-effect imports get
-// tree-shaken during \`storybook build\` because Rollup chases through
-// dist/components/*/index.js (which only re-exports) into dist/shared/*
-// (where the @customElement decorators run) and decides those modules
-// are pure. Importing a NAMED export and \`window\`-attaching it forces
-// Rollup to keep the import chain alive — the chain's evaluation runs
-// the registration as a side effect.
+// Register the hx-* tags every generated MDX page references. The bare
+// \`import '@helixui/library'\` form gets tree-shaken during
+// \`storybook build\` because Rollup chases through dist/components/*/index.js
+// (which only re-exports) into dist/shared/* (where the @customElement
+// decorators run) and decides those modules are pure. To defeat that, we
+// (1) anchor a NAMED export from the library into \`window\` so Rollup keeps
+// the index module chain alive, AND (2) add per-component side-effect
+// imports from \`@helixui/library/components/*\` for every tag the
+// scaffolded MDXes use. The package.json marks
+// \`./dist/components/*/index.js\` as side-effecting so these imports are
+// preserved in production.
 import { HelixButton } from '@helixui/library';
 (window as unknown as { __helixUiAnchor: typeof HelixButton }).__helixUiAnchor = HelixButton;
+import '@helixui/library/components/hx-button';
+import '@helixui/library/components/hx-card';
+import '@helixui/library/components/hx-checkbox';
+import '@helixui/library/components/hx-dialog';
+import '@helixui/library/components/hx-form';
+import '@helixui/library/components/hx-select';
+import '@helixui/library/components/hx-tabs';
+import '@helixui/library/components/hx-text-input';
 import '../src/tokens/tokens.css';
 import consumerCem from '../custom-elements.json';
 // Helix's own custom-elements manifest ships every hx-* declaration

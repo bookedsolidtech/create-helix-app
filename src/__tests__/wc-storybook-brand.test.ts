@@ -1086,7 +1086,21 @@ describe('wc-storybook Phase 2 — 7 component conformance MDXes', () => {
   }
 
   for (const component of PHASE2_COMPONENTS) {
-    it(`aurora-${component}.mdx substitutes <hx-${component}> → <aurora-${component}>`, async () => {
+    it(`aurora-${component}.mdx renders <hx-${component}> live demos (round-7 revert)`, async () => {
+      // Round-7 codex-review correction: Phase 2 originally substituted
+      // every live tag to <${ds}-${component}>, but the scaffolder only
+      // emits ONE wrapper (${ds}-button). The other six MDX pages
+      // (card, checkbox, dialog, form, select, tabs, text-input) would
+      // render undefined custom elements at runtime. The fix:
+      //
+      //  - Live HTML/JSX tags in code blocks → revert to upstream hx-*
+      //    literals (which @helixui/library registers on import).
+      //  - APGPatternCard tag={"..."} → revert to hx-* (it reads CEM by
+      //    tag name).
+      //  - File names (aurora-${component}.mdx) and conceptual class-
+      //    name references (AuroraCard, AuroraDialog) stay parameterized
+      //    because those describe the consumer's eventual wrapper, not
+      //    the live demo.
       const opts = makeWcStorybookOptions({ name: `phase2-${component}-tag` });
       await scaffoldProject(opts);
       const fp = path.join(
@@ -1097,12 +1111,14 @@ describe('wc-storybook Phase 2 — 7 component conformance MDXes', () => {
         `aurora-${component}.mdx`,
       );
       const src = await fs.readFile(fp, 'utf-8');
-      // Positive: scaffolded ds-prefixed tag is present.
-      expect(src).toMatch(new RegExp(`<aurora-${component}\\b`));
-      // Negative: literal helix tag did NOT leak through. The scaffolder
-      // owns the substitution surface; if hx-* leaks here, the consumer's
-      // emitted MDX talks about a tag they have not registered.
-      expect(src).not.toMatch(new RegExp(`<hx-${component}\\b`));
+      // Positive: the live demo MUST use the upstream hx-* tag, since the
+      // scaffold registers the upstream library elements but not a
+      // matching aurora-* wrapper for components other than button.
+      expect(src).toMatch(new RegExp(`<hx-${component}\\b`));
+      // Negative: a stray live aurora-${component} tag would render an
+      // undefined custom element in the consumer's Storybook. The
+      // scaffolded MDX must not emit one.
+      expect(src).not.toMatch(new RegExp(`<aurora-${component}\\b`));
     });
   }
 
