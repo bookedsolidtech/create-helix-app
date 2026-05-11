@@ -555,6 +555,8 @@ export async function runCLI(): Promise<void> {
     brandVerticals: brandVerticalsFromArgs,
     showExperimental,
     doctorQuick,
+    monorepo: monorepoFlag,
+    noDesignSystem: noDesignSystemFlag,
   } = parsed;
 
   // Load config file and environment variables
@@ -684,6 +686,16 @@ export async function runCLI(): Promise<void> {
     --show-experimental     Surface 13 stub-quality framework templates in
                             the interactive prompt, the 'list' subcommand,
                             and as valid --template values. Off by default.
+    --monorepo              For react-next / react-vite, scaffold a
+                            pnpm + turbo monorepo (apps/web + packages/
+                            design-system + packages/types + packages/
+                            utils). Skips the "Include @{scope}/design-
+                            system?" prompt. Default for app frameworks
+                            in interactive mode. Ignored for wc-storybook.
+    --no-design-system      Opposite of --monorepo. Skip the prompt and
+                            scaffold the flat (single-app) shape with no
+                            packages/design-system alongside. Ignored
+                            for wc-storybook.
 
   Available frameworks:
 ${frameworkList}
@@ -818,9 +830,17 @@ ${presetList}
 
       framework: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
         const resolveFramework = async (): Promise<Framework> => {
-          // v0.6.0 Phase C — interactive prompt filters out experimental
-          // templates by default. --show-experimental re-includes them.
-          // templateArg (--template=<id>) bypasses this entirely; args.ts
+          // v0.7.0 Phase B — "Pick a starter kit" two-step prompt.
+          //   Q1: What does this project build?
+          //     wc-storybook (default) | react-next | react-vite
+          //   Q2 (only when Q1 ∈ {react-next, react-vite}):
+          //     Include @{scope}/design-system package?  (Y/n)
+          //
+          // Experimental gate (v0.6.0 Phase C) is preserved when
+          // --show-experimental is passed: the extra templates are
+          // appended to Q1 as a secondary group. The default 3-option
+          // shape stays in place for the common case.
+          // templateArg (--template=<id>) bypasses Q1 entirely; args.ts
           // already rejects hidden ids at parse time with a friendly hint.
           const promptTemplates = showExperimental
             ? TEMPLATES
@@ -829,14 +849,18 @@ ${presetList}
             templateArg !== null
               ? (templateArg as Framework)
               : ((await p.select({
-                  message: 'Which framework?',
+                  message: 'What does this project build?',
                   options: promptTemplates.map((t) => ({
                     value: t.id as Framework,
                     label: t.color(t.name),
                     hint:
                       t.id === 'wc-storybook'
                         ? 'Design system + Storybook (recommended for new projects)'
-                        : t.hint,
+                        : t.id === 'react-next'
+                          ? 'Next.js app'
+                          : t.id === 'react-vite'
+                            ? 'Vite SPA'
+                            : t.hint,
                   })),
                   initialValue: 'wc-storybook' as Framework,
                 })) as Framework);
@@ -853,6 +877,31 @@ ${presetList}
           return fw;
         };
         return resolveFramework();
+      },
+
+      // v0.7.0 Phase B — Q2: "Include @{scope}/design-system package?"
+      // Only shown for app frameworks (react-next, react-vite). Default
+      // is yes — every consumer building a Helix app wants the DS
+      // alongside. --monorepo / --no-design-system skip the question.
+      // wc-storybook (or any other framework) resolves to false (DS-only
+      // scaffold isn't a monorepo wrap, and other frameworks have no
+      // monorepo emitter yet in v0.7.0).
+      includeDesignSystem: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as Framework | undefined) ?? null;
+        const isAppFramework = fw === 'react-next' || fw === 'react-vite';
+        if (!isAppFramework) {
+          return Promise.resolve(false);
+        }
+        if (monorepoFlag) {
+          return Promise.resolve(true);
+        }
+        if (noDesignSystemFlag) {
+          return Promise.resolve(false);
+        }
+        return p.confirm({
+          message: 'Include @{scope}/design-system package alongside?',
+          initialValue: true,
+        });
       },
 
       componentBundles: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
@@ -1073,6 +1122,16 @@ ${presetList}
     })(),
     // heroScenarios deferred — consumers populate via helix.storybook.config.ts.
     heroScenarios: undefined,
+    // v0.7.0 Phase B — derive monorepoMode from the prompt's Q2 answer.
+    // wc-storybook coerces to false (DS-only scaffold). For app
+    // frameworks, monorepoMode tracks the DS-include answer 1:1 — Phase
+    // B doesn't ship the "monorepo without DS" combo. Phase A's stub
+    // monorepo emitters throw "not yet implemented" until Phases D/E/F
+    // fill them in.
+    monorepoMode:
+      project.framework === 'wc-storybook' ? false : (project.includeDesignSystem as boolean),
+    includeDesignSystem:
+      project.framework === 'wc-storybook' ? false : (project.includeDesignSystem as boolean),
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);

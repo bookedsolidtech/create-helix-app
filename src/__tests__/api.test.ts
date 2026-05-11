@@ -231,6 +231,12 @@ describe('scaffold — dry run', () => {
       name: 'dry-run-app',
       directory: path.join(TEST_DIR, 'dry-run-app'),
       framework: 'react-vite',
+      // v0.7.0 Phase B — react-next / react-vite default to monorepoMode:true
+      // via the public API to match the interactive prompt's Q2 default.
+      // These existing tests assert the flat single-app dry-run shape, so
+      // they pin monorepoMode:false explicitly. The monorepo dry-run
+      // coverage lives in src/__tests__/api-monorepo-options.test.ts.
+      monorepoMode: false,
       dryRun: true,
     };
     const result = await scaffold(opts);
@@ -245,6 +251,7 @@ describe('scaffold — dry run', () => {
       name: 'dry-run-files',
       directory: path.join(TEST_DIR, 'dry-run-files'),
       framework: 'react-vite',
+      monorepoMode: false,
       dryRun: true,
     };
     const result = await scaffold(opts);
@@ -263,6 +270,7 @@ describe('scaffold — dry run', () => {
       name: 'dry-run-no-write',
       directory: dir,
       framework: 'react-vite',
+      monorepoMode: false,
       dryRun: true,
     };
     await scaffold(opts);
@@ -318,6 +326,10 @@ describe('scaffold — real scaffolding', () => {
       name: 'real-scaffold',
       directory: dir,
       framework: 'react-vite',
+      // v0.7.0 Phase B — pin the flat shape so this test exercises the
+      // existing react-vite scaffolder. Monorepo coverage lives in
+      // api-monorepo-options.test.ts.
+      monorepoMode: false,
       installDeps: false,
     });
 

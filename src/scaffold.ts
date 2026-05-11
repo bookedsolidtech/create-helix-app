@@ -36,6 +36,9 @@ import { getAccessibilityMdxEmissions } from './scaffold/wc-storybook/mdx-access
 import { getTokenMdxEmissions } from './scaffold/wc-storybook/mdx-tokens.js';
 import { getIconographyMdxEmission } from './scaffold/wc-storybook/mdx-iconography.js';
 import { getSceneEmissions } from './scaffold/wc-storybook/scenes.js';
+import { scaffoldReactNextMonorepo } from './scaffold/react-next/monorepo.js';
+import { scaffoldReactViteMonorepo } from './scaffold/react-vite/monorepo.js';
+import { scaffoldWcStorybookMonorepo } from './scaffold/wc-storybook/monorepo.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -104,7 +107,19 @@ export function getLastScaffoldTiming(): ScaffoldTiming | null {
   return _lastTiming;
 }
 
-async function safeWriteFile(filePath: string, content: string): Promise<void> {
+/**
+ * Internal-but-exported writers used by the monorepo orchestrator
+ * (src/scaffold/monorepo.ts) and the per-framework monorepo emitters
+ * (Phases D/E/F). They wrap dry-run state so callers don't have to know
+ * about the module-local `_dryRunActive` flag — pass them a path + bytes
+ * and they either land on disk or are recorded as a dry-run entry.
+ *
+ * Not part of the public package surface; consumed only by sibling
+ * scaffold modules under src/scaffold/. Kept un-prefixed (no underscore)
+ * because they ARE the canonical scaffold writers — the prefix would
+ * imply "private to scaffold.ts" which is no longer true.
+ */
+export async function safeWriteFile(filePath: string, content: string): Promise<void> {
   if (_dryRunActive) {
     _dryRunEntries.push({ path: filePath, size: Buffer.byteLength(content, 'utf8') });
     return;
@@ -133,7 +148,7 @@ function escapeMdxText(s: string): string {
     .replace(/`/g, '&#96;');
 }
 
-async function safeWriteJson(
+export async function safeWriteJson(
   filePath: string,
   data: unknown,
   opts?: { spaces: number },
@@ -146,7 +161,7 @@ async function safeWriteJson(
   await fs.writeJson(filePath, data, opts ?? { spaces: 2 });
 }
 
-async function safeEnsureDir(dirPath: string): Promise<void> {
+export async function safeEnsureDir(dirPath: string): Promise<void> {
   if (_dryRunActive) return;
   await fs.ensureDir(dirPath);
 }
@@ -396,6 +411,25 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     // Fire pre-write before generating files
     await hookManager.execute('pre-write', hookCtx);
 
+    // v0.7.0 Phase D: when monorepoMode is true, the per-app auxiliary
+    // writers (helix.tokens.json, helix-tokens.css, helix-responsive.css,
+    // src/helix-setup.ts) need to land under apps/web/ rather than at the
+    // monorepo root; otherwise the workspace ends up with stray src/ +
+    // helix-*.css files at the root that no package actually imports, and
+    // apps/web/src/app/layout.tsx's `import '../../helix-tokens.css'`
+    // resolves to the WRONG file (the unbundled root one rather than the
+    // apps/web sibling). Redirecting the writer's options.directory at
+    // apps/web/ is the minimum-surface fix — it keeps the
+    // framework-agnostic writers entirely unchanged.
+    //
+    // package.json / README.md / tsconfig.json / .gitignore stay at the
+    // root in monorepo mode; scaffoldMonorepoRoot overwrites them with
+    // workspace-aware variants AFTER this block runs (via the
+    // framework-specific monorepoMode dispatch below).
+    const auxOptions: ProjectOptions = options.monorepoMode
+      ? { ...options, directory: path.join(options.directory, 'apps', 'web') }
+      : options;
+
     // Generate/overwrite core files based on options
     logVerbose(`Writing ${path.join(options.directory, 'package.json')}`);
     await writePackageJson(options, template);
@@ -403,8 +437,8 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     await writeReadme(options);
 
     if (options.designTokens) {
-      logVerbose(`Writing ${path.join(options.directory, 'helix.tokens.json')}`);
-      await writeTokensConfig(options);
+      logVerbose(`Writing ${path.join(auxOptions.directory, 'helix.tokens.json')}`);
+      await writeTokensConfig(auxOptions);
     }
 
     if (options.eslint) {
@@ -427,10 +461,18 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     logVerbose(`Running ${options.framework} scaffold generator`);
     switch (options.framework) {
       case 'react-next':
-        await scaffoldReactNext(options);
+        if (options.monorepoMode) {
+          await scaffoldReactNextMonorepo(options);
+        } else {
+          await scaffoldReactNext(options);
+        }
         break;
       case 'react-vite':
-        await scaffoldReactVite(options);
+        if (options.monorepoMode) {
+          await scaffoldReactViteMonorepo(options);
+        } else {
+          await scaffoldReactVite(options);
+        }
         break;
       case 'remix':
         await scaffoldRemix(options);
@@ -463,7 +505,11 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
         await scaffoldLitVite(options);
         break;
       case 'wc-storybook':
-        await scaffoldWcStorybook(options);
+        if (options.monorepoMode) {
+          await scaffoldWcStorybookMonorepo(options);
+        } else {
+          await scaffoldWcStorybook(options);
+        }
         break;
       case 'preact-vite':
         await scaffoldPreactVite(options);
@@ -480,13 +526,22 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
         break;
     }
 
-    // Write the HELiX integration helper
-    logVerbose(`Writing ${path.join(options.directory, 'src', 'helix-setup.ts')}`);
-    await writeHelixSetup(options);
+    // Write the HELiX integration helper. In monorepo mode this lands at
+    // apps/web/src/helix-setup.ts (auxOptions redirects above) so
+    // apps/web/src/app/layout.tsx's `import '../helix-setup'` resolves.
+    // A monorepo-root src/helix-setup.ts has nothing to import it.
+    logVerbose(`Writing ${path.join(auxOptions.directory, 'src', 'helix-setup.ts')}`);
+    await writeHelixSetup(auxOptions);
 
-    // Write .gitignore
-    logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
-    await writeGitignore(options);
+    // Write .gitignore — but ONLY in flat mode. The monorepo orchestrator
+    // (scaffoldMonorepoRoot) has already emitted a workspace-aware
+    // .gitignore that covers .turbo/, every framework's build output, etc.
+    // Letting the flat writer run here would clobber that with the much
+    // shorter flat-mode gitignore and break workspace tooling assumptions.
+    if (!options.monorepoMode) {
+      logVerbose(`Writing ${path.join(options.directory, '.gitignore')}`);
+      await writeGitignore(options);
+    }
 
     // Fire post-write after all file writes complete
     await hookManager.execute('post-write', hookCtx);
@@ -916,6 +971,13 @@ async function writeTokensConfig(options: ProjectOptions): Promise<void> {
   // single, correct token surface.
   if (options.framework === 'wc-storybook') return;
 
+  // Ensure the target dir exists. For flat scaffolds this is a no-op
+  // (the root was ensured earlier by scaffoldProject). For monorepo
+  // mode, options.directory has been redirected at apps/web/ and that
+  // dir may not exist yet (scaffoldMonorepoRoot runs LATER, inside the
+  // per-framework monorepo dispatch). safeEnsureDir is idempotent.
+  await safeEnsureDir(options.directory);
+
   const content = `/* HELiX Design Tokens — Theme Overrides */
 /* Import the base token layer, then override as needed */
 
@@ -1197,7 +1259,7 @@ function toPascalCase(str: string): string {
 
 // ─── Framework-specific scaffolding ───────────────────────────────────────────
 
-async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
+export async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const appDir = path.join(srcDir, 'app');
   await safeEnsureDir(appDir);
@@ -3154,7 +3216,7 @@ export default function DashboardExample() {
   await writeReactErrorBoundary(options);
 }
 
-async function scaffoldReactVite(options: ProjectOptions): Promise<void> {
+export async function scaffoldReactVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const componentsDir = path.join(srcDir, 'components', 'helix');
   await safeEnsureDir(srcDir);
@@ -7759,7 +7821,7 @@ body {
 
 // ─── wc-storybook: Design System Factory ─────────────────────────────────────
 
-async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
+export async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   // Defensive validation — programmatic callers (scaffoldProject() invoked
   // directly without going through CLI/JSON parsing) can otherwise pass
   // dsName values like '../../outside' that get interpolated into
@@ -11770,7 +11832,16 @@ function tokenValue(t: TokenEntry): string {
   return '$value' in t ? t.$value : t.value;
 }
 
-const colorTokens = tokens.color as ColorTokens;
+// v0.7.0 Phase H follow-up — \`tokens.color\` is typed by TS from the
+// imported tokens.json as a deeply-narrowed literal object. The
+// resulting type doesn't structurally satisfy the keyed \`ColorTokens\`
+// shape (Record<string, ColorScale | TokenEntry>), so a single
+// \`as ColorTokens\` cast errors with TS2352. The double cast through
+// \`unknown\` is the explicit escape hatch — the runtime shape IS valid
+// (the build-tokens.ts pipeline guarantees the DTCG / legacy shape on
+// every leaf); we just can't get TS to narrow tokens.json's literal
+// type into the keyed lookup form without rewriting the type definition.
+const colorTokens = tokens.color as unknown as ColorTokens;
 
 function colorSwatchGrid(group: string, scale: ColorScale) {
   // Defensive: the consumer's tokens.json may not include this group

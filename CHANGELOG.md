@@ -1,5 +1,42 @@
 # create-helix
 
+## 0.7.0
+
+### Minor Changes
+
+- v0.7.0 — **two-step starter-kit picker + monorepo by default for app frameworks.** The interactive prompt now asks two questions instead of one: (1) "What does this project build?" — `wc-storybook`, `react-next`, `react-vite`, or `drupal-theme` — and (2) when the answer is an app framework, "Include `@{scope}/design-system` package?" (Y/n, default **yes**). When the consumer keeps the design system, `create-helix` emits a turbo + pnpm-workspaces monorepo (`apps/web/` + `packages/{design-system,types,utils}/`) modeled on the [shadcn `apps/web` + `packages/ui` precedent](https://github.com/shadcn-ui/ui/tree/main/apps/www). `wc-storybook` continues to scaffold flat — it is the design system, so wrapping it would duplicate the layer.
+
+  **Phases shipped this minor:**
+  - **Phase A — scaffolder fork.** `src/scaffolders/react-next.ts`, `react-vite.ts`, and `wc-storybook.ts` forked into `{flat, monorepo, _shared}.ts` modules. Flat scaffolders preserve the v0.6.x emit byte-for-byte; monorepo scaffolders compose with the new orchestrator; `_shared.ts` holds the cross-cutting helpers (token-prefix derivation, dependency lists, brand wiring).
+  - **Phase B — two-step prompt + flag plumbing.** New "Pick a starter kit" prompt (`src/cli/prompts/starter-kit.ts`). New `monorepoMode` and `includeDesignSystem` API fields on `scaffold()`. New CLI flags `--monorepo` / `--no-design-system`. Three input paths (interactive / CLI / API) feed a single normalizer so the downstream scaffolder sees one shape.
+  - **Phase C — monorepo orchestrator.** `scaffoldMonorepoRoot()` emits `pnpm-workspace.yaml`, `turbo.json`, root `package.json` (workspace scripts + dev tooling only), `tsconfig.json` (project references), `tsconfig.base.json` (shared compiler options + path aliases), `.editorconfig`, `.prettierrc`, `eslint.config.js`, and a root README that describes the monorepo shape.
+  - **Phase D — Next.js apps/web emit.** `react-next` monorepo flavor emits `apps/web/` with `name: "@{scope}/web"`, `workspace:*` deps on the workspace packages, `transpilePackages` for each consumed package, `experimental.externalDir: true`, and `tsconfig.json` that extends `tsconfig.base.json` plus `paths` entries pointing at `../../packages/*/src`.
+  - **Phase E — Vite apps/web emit.** `react-vite` monorepo flavor emits `apps/web/` with the same workspace shape plus Vite-specific wiring: `optimizeDeps.exclude` lists the workspace packages and `server.fs.allow: ['..', '../..']` permits the dev server to read across workspace boundaries.
+  - **Phase F — wc-storybook packages/design-system emit.** When picked at Q1, `wc-storybook` always scaffolds flat. But when `react-next` or `react-vite` keeps the DS at Q2, the DS emitter ports `wc-storybook`'s Storybook depth (Cover, foundations IA, AAA conformance pages, brand toolbar, catalog auto-generation, ~99-entry hx-\* sidebar) into `packages/design-system/`, plus a React wrappers barrel at `packages/design-system/src/react.ts` so `apps/web` consumes typed React components. Phases D and E were retrofitted to call this DS emitter rather than recreate the depth.
+  - **Phase G — packages/types + packages/utils.** Two stub workspace packages. `packages/types/src/index.ts` exports `AppEnv` (`'development' | 'production' | 'test'`), `Id<TBrand>` branded-string utility, and `NonEmptyArray<T>`. `packages/utils/src/index.ts` exports `cn(...classes)` (clsx-style class join), `isPresent<T>(value)` (`!== null && !== undefined`), and `assertNever(value)` (exhaustiveness check). Both packages ship with `tsconfig.json` extending the base, `package.json` declaring the workspace name, and `vitest` stub test files.
+  - **Phase H — golden snapshots + E2E install gate.** Three new golden snapshots (`wc-storybook-monorepo`, `react-next-monorepo`, `react-vite-monorepo`) under `tests/golden/`. New `tests/e2e/monorepo-install.test.ts` gated by `E2E=1` runs an actual `pnpm install && pnpm type-check` against each flavor end-to-end (~33s for all three). The E2E gate is opt-in (not in default `pnpm test`) so CI doesn't pay the pnpm-install cost on every run, but every release captain runs it before tagging.
+  - **Phase H follow-up — Phase F bug fixes.** Three regressions surfaced by the E2E gate: (1) `packages/design-system/package.json` was missing `@lit/react` despite the React wrappers barrel using `createComponent`; (2) `packages/design-system/tsconfig.json` `include` was too narrow to pick up the generated catalog; (3) the brand-tokens emitter cast `ColorTokens` to a wider union that broke the `tsc --noEmit` strict check. All three fixed and re-verified end-to-end.
+  - **Phase I — docs + changeset.** This entry. Plus a final smoke that scaffolds an `aurora-monorepo`, runs `pnpm install` clean (394 packages added, 5.6s), and boots `pnpm dev` — Next.js reports `Ready in 257ms` at `http://localhost:3000`, Storybook reports `Storybook ready!` at `http://localhost:6006/`, and the catalog generator produces 99 entries (10 atoms / 82 molecules / 7 organisms) before the dev servers come up. Plus a new top-level `MIGRATING.md` spelling out the v0.6 → v0.7 mental-model shift and the manual flat → monorepo recipe for early adopters.
+
+  **Visible UX changes consumers will notice immediately:**
+  - _Two-step prompt._ BEFORE (v0.6.x): one prompt — "Which framework?" — returns a flat single-app project. AFTER (v0.7.0): two prompts — "What does this project build?" then "Include design-system package?" When the consumer keeps both defaults (`react-next` + yes), the output is a turbo monorepo with `apps/web/` and `packages/{design-system,types,utils}/`, not a single-app dir.
+  - _Output shape for app frameworks._ BEFORE: `my-project/{src,public,package.json,…}` — flat. AFTER: `my-project/{apps/web,packages/{design-system,types,utils},pnpm-workspace.yaml,turbo.json,tsconfig.base.json,package.json}` — monorepo. The shape mirrors shadcn's `apps/web` + `packages/ui` precedent.
+  - _Workspace deps._ BEFORE: `apps/web/package.json` (the only `package.json`) carries every npm dep directly. AFTER: `apps/web/package.json` carries `"@{scope}/design-system": "workspace:*"` (plus `types`, `utils`) and resolves them through `pnpm-workspace.yaml`; the actual npm deps live in each workspace package's own `package.json`.
+  - _Dev server lifecycle._ BEFORE: `pnpm dev` runs a single Next.js/Vite dev server. AFTER: `pnpm dev` at the root runs `turbo run dev`, which boots `apps/web` (port 3000) and `packages/design-system` Storybook (port 6006) concurrently with shared logs.
+
+  **Opt-out paths (preserve v0.6.x behavior):**
+  - Interactive: answer "n" at Q2.
+  - CLI: `--no-design-system`.
+  - API: `scaffold({ framework: 'react-next', monorepoMode: false })`.
+
+  **BREAKING — for NEW scaffolds only.** v0.5.x and v0.6.x scaffolds are unaffected; their flat shape is preserved on disk and the CLI does not auto-migrate them. New scaffolds default to the monorepo shape for `react-next` and `react-vite` only. See [`MIGRATING.md`](./MIGRATING.md) for the manual recipe.
+
+  **Deferred to a future release:**
+  - `create-helix migrate-to-monorepo` subcommand → v0.7.1.
+  - Publishable design-system package (workspace-internal only in v0.7.0).
+  - npm / yarn workspace support (pnpm-only).
+  - `docs/FOLLOW-UP-v0.5.1-sync-tokens.md` punch list carries forward.
+
 ## 0.6.0
 
 ### Minor Changes

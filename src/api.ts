@@ -85,6 +85,28 @@ export interface ScaffoldOptions {
   brandVerticals?: string[];
   /** Per-component hero scenes. wc-storybook only. */
   heroScenarios?: HeroScenario[];
+  /**
+   * v0.7.0 Phase B: route the scaffolder to its monorepo-shape variant
+   * (apps/web + packages/design-system, pnpm + turbo). Defaults:
+   *  - `framework === 'wc-storybook'`: coerced to `false` (a DS-only
+   *    scaffold isn't a monorepo; this is NOT an error — passing `true`
+   *    is silently ignored).
+   *  - `framework ∈ {react-next, react-vite}` with `monorepoMode`
+   *    omitted: defaults to `true`, matching the interactive prompt's
+   *    "Include @{scope}/design-system?" default-Yes. Pass `false`
+   *    explicitly to get the flat single-app shape (v0.6.x behavior).
+   *  - Other frameworks: ignored (no monorepo emitter yet).
+   */
+  monorepoMode?: boolean;
+  /**
+   * v0.7.0 Phase B: whether the monorepo includes a
+   * `packages/design-system` workspace alongside `apps/web`. Reserved
+   * for future combos (`monorepoMode:true, includeDesignSystem:false`
+   * → monorepo with just apps/web). Phase B does NOT ship that combo:
+   * the value tracks `monorepoMode` for the react-next / react-vite
+   * paths and is coerced to `false` for wc-storybook.
+   */
+  includeDesignSystem?: boolean;
 }
 
 /**
@@ -201,6 +223,28 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
   // modes on for this template, matching what cli.ts does for the
   // interactive path.
   const wcStorybookForce = options.framework === 'wc-storybook';
+  // v0.7.0 Phase B — monorepoMode defaulting:
+  //  - wc-storybook: coerced to false (DS-only scaffold isn't a monorepo;
+  //    silently ignored, NOT an error — callers may pass `true` from a
+  //    generic config without paying attention to framework).
+  //  - react-next / react-vite: undefined → true (matches the interactive
+  //    prompt's "Include @{scope}/design-system?" default-Yes). Explicit
+  //    `false` opts into the flat single-app shape (v0.6.x behavior).
+  //  - other frameworks: respected as-is (no monorepo emitter yet, so a
+  //    truthy value will fall through dispatch and the flat scaffolder
+  //    runs — the unbuilt frameworks see no behavior change in Phase B).
+  const isAppFramework = options.framework === 'react-next' || options.framework === 'react-vite';
+  const resolvedMonorepoMode = wcStorybookForce
+    ? false
+    : isAppFramework
+      ? (options.monorepoMode ?? true)
+      : (options.monorepoMode ?? false);
+  // includeDesignSystem currently tracks monorepoMode 1:1 — Phase B does
+  // not ship the "monorepo without DS" combo. wc-storybook coerces to
+  // false (the scaffold IS the DS).
+  const resolvedIncludeDesignSystem = wcStorybookForce
+    ? false
+    : (options.includeDesignSystem ?? resolvedMonorepoMode);
   await scaffoldProject({
     name: options.name,
     directory: options.directory,
@@ -221,6 +265,8 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
     brandTagline: options.brandTagline,
     brandVerticals: options.brandVerticals,
     heroScenarios: options.heroScenarios,
+    monorepoMode: resolvedMonorepoMode,
+    includeDesignSystem: resolvedIncludeDesignSystem,
   });
 
   const result: ScaffoldResult = {
