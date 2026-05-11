@@ -8772,6 +8772,12 @@ export default preview;
   // hex values into Storybook's create() ThemeVars. The previous hard-
   // coded #0066cc primary was wrong — Helix's primary-600 resolves to
   // #0F7078 in light mode. This module makes that drift impossible.
+  //
+  // `darkMode: false` honors the consumer's flag — only the light mode is
+  // emitted, the brand toolbar collapses to single-mode, and the brand-
+  // overrides CSS section drops the dark + high-contrast media queries.
+  // When darkMode is true (the default), all three modes ship.
+  const themeModesLiteral = options.darkMode ? `['light', 'dark', 'high-contrast']` : `['light']`;
 
   await safeWriteFile(
     path.join(storybookDir, 'manager-theme.ts'),
@@ -8795,7 +8801,7 @@ import { tokenEntries, darkTokenEntries, highContrastTokenEntries } from '@helix
 import { resolveTokenRef } from '@helixui/tokens/utils';
 import { create, type ThemeVars } from 'storybook/theming';
 
-export const HELIX_THEME_MODES = ['light', 'dark', 'high-contrast'] as const;
+export const HELIX_THEME_MODES = ${themeModesLiteral} as const;
 export type HelixThemeMode = (typeof HELIX_THEME_MODES)[number];
 
 const lightMap: Record<string, string> = Object.fromEntries(
@@ -9555,9 +9561,19 @@ export function classifyTier(decl: CemDeclaration): Tier {
  * HIPAA-adjacent exclusion — a tag is redacted if its name matches any of the
  * protected-health patterns per Build Spec §5. Consumers may fork this file
  * to widen or narrow the regex.
+ *
+ * The keyword list covers (a) the explicit PHI/PII privacy markers and
+ * (b) healthcare-vertical component naming the HELiX upstream has already
+ * shipped (hx-patient-banner, hx-clinical-status, etc.). Anchoring on the
+ * vertical names — not just the privacy markers — is what makes the
+ * default non-healthcare scaffold actually emit a non-healthcare catalog.
+ * See feedback_realistic_sample_data memory rule: sample data MUST be
+ * generic cross-domain, not healthcare-locked.
  */
 export function isHipaaAdjacent(tag: string): boolean {
-  return /phi|pii|protected|sensitive/i.test(tag);
+  return /phi|pii|protected|sensitive|patient|clinic|clinical|medical|chart|appointment|prescription|medication|consent|intake|provider|diagnosis|treatment|symptom/i.test(
+    tag,
+  );
 }
 
 /**

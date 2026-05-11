@@ -721,8 +721,14 @@ describe('wc-storybook integration', () => {
     expect(helpers).toContain('export function isHipaaAdjacent');
     expect(helpers).toContain('export function deriveArgTypes');
     expect(helpers).toContain('export function deriveArgs');
-    // HIPAA regex matches Build Spec §5 exactly
-    expect(helpers).toContain('/phi|pii|protected|sensitive/i');
+    // HIPAA-adjacency regex covers both the privacy markers AND the
+    // healthcare-vertical component names HELiX upstream ships. Anchoring
+    // on the vertical names (patient/clinic/medical/etc.) is what keeps
+    // the default non-healthcare scaffold from leaking domain-locked
+    // catalog stories — see feedback_realistic_sample_data memory rule.
+    expect(helpers).toContain('phi|pii|protected|sensitive');
+    expect(helpers).toContain('patient|clinic|clinical|medical');
+    expect(helpers).toContain('prescription|medication|consent|intake');
   });
 
   it('scaffolds scripts/generate-catalog.ts as an executable tsx codegen script', async () => {
@@ -856,9 +862,13 @@ describe('wc-storybook integration', () => {
           if (m) tags.add(m[0]);
         }
         expect(tags.size).toBeGreaterThanOrEqual(90);
-        // HIPAA redaction per Build Spec §5
+        // HIPAA-adjacency redaction per Build Spec §5 — broadened to cover
+        // healthcare-vertical naming (patient/clinic/medical/etc.) so the
+        // default scaffold doesn't ship domain-locked stories.
         for (const tag of tags) {
-          expect(tag).not.toMatch(/phi|pii|protected|sensitive/i);
+          expect(tag).not.toMatch(
+            /phi|pii|protected|sensitive|patient|clinic|clinical|medical|chart|appointment|prescription|medication|consent|intake|provider|diagnosis|treatment|symptom/i,
+          );
         }
         await fs.remove(tmp);
       },

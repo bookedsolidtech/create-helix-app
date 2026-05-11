@@ -230,6 +230,23 @@ describe('wc-storybook Phase 2 — generate-catalog respects config', () => {
     expect(hipaaCallIdx).toBeGreaterThan(0);
     expect(configCallIdx).toBeGreaterThan(hipaaCallIdx);
   });
+
+  it('HIPAA-adjacency regex covers healthcare-vertical component names', async () => {
+    // Earlier the regex only matched PHI/PII privacy markers, so HELiX-
+    // upstream healthcare tags like hx-patient-banner / hx-clinical-status
+    // slipped past the filter and shipped in the default scaffold catalog.
+    // Anchoring on the vertical names plugs that leak.
+    const opts = makeWcStorybookOptions({ name: 'phase2-catalog-hipaa-broad' });
+    await scaffoldProject(opts);
+    const helpers = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', '_catalog-helpers.ts'),
+      'utf-8',
+    );
+    expect(helpers).toContain('phi|pii|protected|sensitive');
+    expect(helpers).toContain('patient|clinic|clinical|medical');
+    expect(helpers).toContain('prescription|medication|consent|intake');
+    expect(helpers).toContain('diagnosis|treatment|symptom');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -495,6 +512,30 @@ describe('wc-storybook Phase 3c — manager-theme.ts + manager.ts', () => {
     expect(src).toContain('export function coerceThemeMode');
     // Brand title interpolates the consumer's dsName.
     expect(src).toContain("brandTitle: 'Aurora Design System'");
+  });
+
+  it('darkMode:true emits all three theme modes (light, dark, high-contrast)', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-darkmode-on', darkMode: true });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'manager-theme.ts'),
+      'utf-8',
+    );
+    expect(src).toContain("HELIX_THEME_MODES = ['light', 'dark', 'high-contrast']");
+  });
+
+  it('darkMode:false collapses the theme array to light only', async () => {
+    const opts = makeWcStorybookOptions({ name: 'phase3c-darkmode-off', darkMode: false });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'manager-theme.ts'),
+      'utf-8',
+    );
+    // Honors the consumer's --no-dark-mode flag — dark + high-contrast
+    // are dropped from the emitted theme table. Prior behavior shipped
+    // all three regardless of the flag.
+    expect(src).toContain("HELIX_THEME_MODES = ['light']");
+    expect(src).not.toContain("HELIX_THEME_MODES = ['light', 'dark', 'high-contrast']");
   });
 
   it('emits manager.ts with boot-theme + GLOBALS_UPDATED listener', async () => {
