@@ -127,7 +127,9 @@ describe('wc-storybook monorepo integration (Phase F)', () => {
     expect(tsconfig.compilerOptions.composite).toBe(true);
     expect(tsconfig.compilerOptions.declaration).toBe(true);
     expect(tsconfig.compilerOptions.outDir).toBe('./dist');
-    expect(tsconfig.compilerOptions.rootDir).toBe('./src');
+    // v0.7.0 Phase H follow-up — rootDir intentionally dropped (tsc
+    // infers from `include`). See _shared.ts:writeDesignSystemTsConfig.
+    expect(tsconfig.compilerOptions.rootDir).toBeUndefined();
     expect(tsconfig.compilerOptions.experimentalDecorators).toBe(true);
     expect(tsconfig.compilerOptions.useDefineForClassFields).toBe(false);
   });

@@ -11832,7 +11832,16 @@ function tokenValue(t: TokenEntry): string {
   return '$value' in t ? t.$value : t.value;
 }
 
-const colorTokens = tokens.color as ColorTokens;
+// v0.7.0 Phase H follow-up — \`tokens.color\` is typed by TS from the
+// imported tokens.json as a deeply-narrowed literal object. The
+// resulting type doesn't structurally satisfy the keyed \`ColorTokens\`
+// shape (Record<string, ColorScale | TokenEntry>), so a single
+// \`as ColorTokens\` cast errors with TS2352. The double cast through
+// \`unknown\` is the explicit escape hatch — the runtime shape IS valid
+// (the build-tokens.ts pipeline guarantees the DTCG / legacy shape on
+// every leaf); we just can't get TS to narrow tokens.json's literal
+// type into the keyed lookup form without rewriting the type definition.
+const colorTokens = tokens.color as unknown as ColorTokens;
 
 function colorSwatchGrid(group: string, scale: ColorScale) {
   // Defensive: the consumer's tokens.json may not include this group

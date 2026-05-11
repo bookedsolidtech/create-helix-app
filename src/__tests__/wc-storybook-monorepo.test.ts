@@ -127,14 +127,26 @@ describe('v0.7.0 Phase F — wc-storybook monorepo emits packages/design-system'
     expect(tsconfig.compilerOptions.declaration).toBe(true);
     expect(tsconfig.compilerOptions.declarationMap).toBe(true);
     expect(tsconfig.compilerOptions.outDir).toBe('./dist');
-    expect(tsconfig.compilerOptions.rootDir).toBe('./src');
+    // v0.7.0 Phase H follow-up — rootDir intentionally NOT set; tsc
+    // infers it from `include` patterns. Pinning ./src here trapped
+    // helix.storybook.config.ts (at the package root) and tokens.json
+    // (excluded by the *.ts glob) outside the project, breaking
+    // `pnpm type-check`.
+    expect(tsconfig.compilerOptions.rootDir).toBeUndefined();
     // Lit decorator runtime — both flags required for components to render.
     expect(tsconfig.compilerOptions.experimentalDecorators).toBe(true);
     expect(tsconfig.compilerOptions.useDefineForClassFields).toBe(false);
     expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
     expect(tsconfig.include).toContain('src/**/*.ts');
     expect(tsconfig.include).toContain('src/**/*.tsx');
+    // v0.7.0 Phase H follow-up — JSON token files + the root-level
+    // Storybook config knob have to be in the project graph.
+    expect(tsconfig.include).toContain('src/**/*.json');
+    expect(tsconfig.include).toContain('helix.storybook.config.ts');
+    expect(tsconfig.include).toContain('custom-elements.json');
     expect(tsconfig.exclude).toContain('node_modules');
+    expect(tsconfig.exclude).toContain('.storybook');
+    expect(tsconfig.exclude).toContain('scripts');
 
     // The base file itself exists at the monorepo root (emitted by Phase C).
     const base = await fs.readJson(path.join(dir, 'tsconfig.base.json'));

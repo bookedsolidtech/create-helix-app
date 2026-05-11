@@ -126,6 +126,32 @@ export async function writeDesignSystemPackageJson(args: {
   // Dependencies + peerDependencies + devDependencies are copied through
   // unchanged so a fresh `pnpm install` resolves the same Storybook 10 /
   // Lit 3 / Vitest 3 surface the flat path ships.
+  // v0.7.0 Phase H follow-up — the monorepo emit's src/index.ts is the
+  // React-wrappers barrel (writeDesignSystemIndex below). It imports
+  // `@lit/react` for createComponent + relies on `react` / `react-dom`
+  // resolving for the React renderer types. The flat wc-storybook
+  // template does NOT ship these because the standalone wc-storybook
+  // factory emits a Lit-only barrel (bare <hx-*> in framework-agnostic
+  // templates). In monorepo mode we MUST add them or `pnpm type-check`
+  // fails on a missing `@lit/react` module declaration.
+  //
+  // Versions are pinned to match what apps/web declares (Phase D's
+  // writeAppsWebPackageJson and Phase E's writeAppsWebPackageJson) so a
+  // fresh `pnpm install` doesn't surface a multi-version React in the
+  // workspace. peerDependencies (rather than dependencies) for react +
+  // react-dom because the consumer app already ships its own React;
+  // packages/design-system just needs to type-check against it without
+  // pulling a second copy under packages/design-system/node_modules/.
+  const dsExtraDeps: Record<string, string> = {
+    ...(template.dependencies ?? {}),
+    '@lit/react': '^1.0.0',
+  };
+  const dsExtraPeerDeps: Record<string, string> = {
+    ...(template.peerDependencies ?? {}),
+    react: '^19.1.0',
+    'react-dom': '^19.1.0',
+  };
+
   const pkg: Record<string, unknown> = {
     name: `@${scope}/design-system`,
     version: '0.0.0',
@@ -146,15 +172,11 @@ export async function writeDesignSystemPackageJson(args: {
       './styles': './dist/styles.css',
     },
     scripts: wcStorybookScripts(),
-    dependencies: {
-      ...(template.dependencies ?? {}),
-    },
+    dependencies: dsExtraDeps,
     devDependencies: {
       ...(template.devDependencies ?? {}),
     },
-    ...(template.peerDependencies && Object.keys(template.peerDependencies).length > 0
-      ? { peerDependencies: template.peerDependencies }
-      : {}),
+    peerDependencies: dsExtraPeerDeps,
   };
 
   await safeWriteJson(pkgPath, pkg, { spaces: 2 });
@@ -189,6 +211,16 @@ export async function writeDesignSystemPackageJson(args: {
  */
 export async function writeDesignSystemTsConfig(args: { rootDir: string }): Promise<void> {
   const { rootDir } = args;
+  // v0.7.0 Phase H follow-up — `rootDir: './src'` was too narrow:
+  //   1. src/stories/*.mdx imports `helix.storybook.config.ts` (at the
+  //      package root, NOT under src/) → TS6307.
+  //   2. src/stories/Tokens.mdx imports `src/tokens/tokens.json` → TS6059
+  //      because the glob `src/**/*.ts(x)` excludes .json.
+  // Drop `rootDir` (tsc infers it from `include` patterns when not set)
+  // and widen `include` to cover the root-level Storybook config knob +
+  // JSON token files. The exclude list keeps Storybook config (.storybook/
+  // has its own type setup under Storybook 10 + Vite) and tsx-runnable
+  // build scripts out of the editor type-check pass.
   const tsconfig = {
     extends: '../../tsconfig.base.json',
     compilerOptions: {
@@ -210,11 +242,22 @@ export async function writeDesignSystemTsConfig(args: { rootDir: string }): Prom
       declaration: true,
       declarationMap: true,
       outDir: './dist',
-      rootDir: './src',
       composite: true,
     },
-    include: ['src/**/*.ts', 'src/**/*.tsx'],
-    exclude: ['node_modules', 'dist', 'storybook-static'],
+    include: [
+      'src/**/*.ts',
+      'src/**/*.tsx',
+      'src/**/*.json',
+      'helix.storybook.config.ts',
+      // src/stories/_components/{A11yStatusCard,APGPatternCard}.tsx import
+      // `../../../custom-elements.json` (the CEM artifact emitted at the
+      // package root by `cem analyze`). Without this entry tsc 6307s with
+      // "File '<root>/custom-elements.json' is not listed within the file
+      // list of project". Same root-level file family as the
+      // helix.storybook.config.ts entry above.
+      'custom-elements.json',
+    ],
+    exclude: ['node_modules', 'dist', 'storybook-static', '.storybook', 'scripts'],
   };
   await safeWriteJson(path.join(rootDir, DS_PACKAGE_REL, 'tsconfig.json'), tsconfig, { spaces: 2 });
 }
