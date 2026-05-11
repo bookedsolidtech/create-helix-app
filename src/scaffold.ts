@@ -902,6 +902,15 @@ import '@helixui/library';
 }
 
 async function writeTokensConfig(options: ProjectOptions): Promise<void> {
+  // wc-storybook ships its own token pipeline (src/tokens/tokens.json →
+  // src/tokens/tokens.css via build-tokens.ts) and the imports across
+  // its scaffolded files all point at src/tokens/tokens.css. Writing
+  // helix-tokens.css + helix-responsive.css at the project root would
+  // ship two authoritative-looking token entry points where one is
+  // silently dead. Skip both for this framework so the scaffold has a
+  // single, correct token surface.
+  if (options.framework === 'wc-storybook') return;
+
   const content = `/* HELiX Design Tokens — Theme Overrides */
 /* Import the base token layer, then override as needed */
 

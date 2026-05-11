@@ -793,19 +793,29 @@ ${presetList}
         return resolveFramework();
       },
 
-      componentBundles: () =>
-        bundlesFromFlag !== null
-          ? Promise.resolve(bundlesFromFlag as ComponentBundle[])
-          : p.multiselect({
-              message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
-              options: COMPONENT_BUNDLES.map((b) => ({
-                value: b.id as ComponentBundle,
-                label: b.name,
-                hint: b.description,
-              })),
-              initialValues: ['core', 'forms'] as ComponentBundle[],
-              required: true,
-            }),
+      componentBundles: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        if (bundlesFromFlag !== null) return Promise.resolve(bundlesFromFlag as ComponentBundle[]);
+        // wc-storybook seeds helix.storybook.config.ts.components.include
+        // from this selection, so default to 'all' there — otherwise an
+        // Enter-through-the-defaults scaffold would hide every non-core/
+        // non-forms tag. Other framework templates keep ['core', 'forms']
+        // since they don't surface a runtime catalog.
+        const fw = ctx.results.framework as Framework | undefined;
+        const initial: ComponentBundle[] =
+          fw === 'wc-storybook'
+            ? (['all'] as ComponentBundle[])
+            : (['core', 'forms'] as ComponentBundle[]);
+        return p.multiselect({
+          message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
+          options: COMPONENT_BUNDLES.map((b) => ({
+            value: b.id as ComponentBundle,
+            label: b.name,
+            hint: b.description,
+          })),
+          initialValues: initial,
+          required: true,
+        });
+      },
 
       features: () => {
         const defaultFeatures = [
