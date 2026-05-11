@@ -3549,16 +3549,21 @@ export default function App() {
             Type-safe, accessible, and themeable out of the box.
           </p>
           <div className="hero-actions">
-            <a href="https://github.com/bookedsolidtech/helix#getting-started" target="_blank" rel="noopener noreferrer">
-              <hx-button variant="primary" size="lg">
-                Get Started
-              </hx-button>
-            </a>
-            <a href="#components">
-              <hx-button variant="outline" size="lg">
-                View Components
-              </hx-button>
-            </a>
+            {/* hx-button supports href / target natively; nesting <a><hx-button>
+                produces invalid interactive-in-interactive markup and breaks
+                keyboard focus semantics. */}
+            <hx-button
+              variant="primary"
+              size="lg"
+              href="https://github.com/bookedsolidtech/helix#getting-started"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Get Started
+            </hx-button>
+            <hx-button variant="outline" size="lg" href="#components">
+              View Components
+            </hx-button>
           </div>
         </div>
       </section>
@@ -3609,7 +3614,7 @@ export default function App() {
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <hx-button variant="primary">Primary</hx-button>
                 <hx-button variant="secondary">Secondary</hx-button>
-                <hx-button variant="outlined">Outlined</hx-button>
+                <hx-button variant="outline">Outline</hx-button>
                 <hx-button variant="danger">Danger</hx-button>
               </div>
             </hx-card>

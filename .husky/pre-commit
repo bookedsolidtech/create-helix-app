@@ -32,7 +32,7 @@ if ! command -v gitleaks >/dev/null 2>&1; then
   echo "  Linux:  download from https://github.com/gitleaks/gitleaks/releases" >&2
   exit 1
 fi
-gitleaks protect --staged --config "$MAIN_ROOT/.gitleaks.toml" --redact --exit-code 1
+gitleaks protect --staged --config "$(git rev-parse --show-toplevel)/.gitleaks.toml" --redact --exit-code 1
 
 # ── Gate 2: .env / .envrc staged file check ──────────────────────────────────
 # Check for .env* or .envrc files anywhere in the repo (including subdirectories).
