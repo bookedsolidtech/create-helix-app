@@ -36,6 +36,9 @@ import { getAccessibilityMdxEmissions } from './scaffold/wc-storybook/mdx-access
 import { getTokenMdxEmissions } from './scaffold/wc-storybook/mdx-tokens.js';
 import { getIconographyMdxEmission } from './scaffold/wc-storybook/mdx-iconography.js';
 import { getSceneEmissions } from './scaffold/wc-storybook/scenes.js';
+import { scaffoldReactNextMonorepo } from './scaffold/react-next/monorepo.js';
+import { scaffoldReactViteMonorepo } from './scaffold/react-vite/monorepo.js';
+import { scaffoldWcStorybookMonorepo } from './scaffold/wc-storybook/monorepo.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -427,10 +430,18 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     logVerbose(`Running ${options.framework} scaffold generator`);
     switch (options.framework) {
       case 'react-next':
-        await scaffoldReactNext(options);
+        if (options.monorepoMode) {
+          await scaffoldReactNextMonorepo(options);
+        } else {
+          await scaffoldReactNext(options);
+        }
         break;
       case 'react-vite':
-        await scaffoldReactVite(options);
+        if (options.monorepoMode) {
+          await scaffoldReactViteMonorepo(options);
+        } else {
+          await scaffoldReactVite(options);
+        }
         break;
       case 'remix':
         await scaffoldRemix(options);
@@ -463,7 +474,11 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
         await scaffoldLitVite(options);
         break;
       case 'wc-storybook':
-        await scaffoldWcStorybook(options);
+        if (options.monorepoMode) {
+          await scaffoldWcStorybookMonorepo(options);
+        } else {
+          await scaffoldWcStorybook(options);
+        }
         break;
       case 'preact-vite':
         await scaffoldPreactVite(options);
@@ -1197,7 +1212,7 @@ function toPascalCase(str: string): string {
 
 // ─── Framework-specific scaffolding ───────────────────────────────────────────
 
-async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
+export async function scaffoldReactNext(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const appDir = path.join(srcDir, 'app');
   await safeEnsureDir(appDir);
@@ -3154,7 +3169,7 @@ export default function DashboardExample() {
   await writeReactErrorBoundary(options);
 }
 
-async function scaffoldReactVite(options: ProjectOptions): Promise<void> {
+export async function scaffoldReactVite(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const componentsDir = path.join(srcDir, 'components', 'helix');
   await safeEnsureDir(srcDir);
@@ -7759,7 +7774,7 @@ body {
 
 // ─── wc-storybook: Design System Factory ─────────────────────────────────────
 
-async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
+export async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   // Defensive validation — programmatic callers (scaffoldProject() invoked
   // directly without going through CLI/JSON parsing) can otherwise pass
   // dsName values like '../../outside' that get interpolated into

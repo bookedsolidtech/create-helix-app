@@ -134,6 +134,15 @@ export interface ProjectOptions {
    * Currently consumed only by the wc-storybook factory.
    */
   heroScenarios?: HeroScenario[];
+  /**
+   * v0.7.0 Phase A: routes scaffolders to their monorepo-shape variants
+   * (apps/web + packages/design-system) rather than the flat single-app
+   * shape. Optional; defaults to false (flat). Wired from CLI in Phase B
+   * and from per-framework monorepo emitters in Phases D/E/F. In Phase A
+   * the dispatch routes monorepoMode=true to stubs that throw
+   * "not yet implemented" — Phase A only establishes the fork shape.
+   */
+  monorepoMode?: boolean;
 }
 
 export interface ComponentBundleConfig {
