@@ -1069,6 +1069,18 @@ async function writeHelixSetup(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   await safeEnsureDir(srcDir);
 
+  // wc-storybook emits tokens via the build-tokens pipeline to
+  // src/tokens/tokens.css. Pointing helix-setup at the legacy root
+  // helix-tokens.css would silently bypass the actual brand-token layer
+  // — edits to src/tokens/tokens.json would never reach a consumer who
+  // imports helix-setup.ts to register components. Use the scaffold's
+  // real token output for this framework.
+  const tokensImport = options.designTokens
+    ? options.framework === 'wc-storybook'
+      ? "\nimport './tokens/tokens.css';"
+      : "\nimport '../helix-tokens.css';"
+    : '';
+
   let content: string;
 
   if (isAll) {
@@ -1077,7 +1089,7 @@ async function writeHelixSetup(options: ProjectOptions): Promise<void> {
  * All 98 components registered as custom elements.
  */
 import '@helixui/library';
-${options.designTokens ? "\nimport '../helix-tokens.css';" : ''}
+${tokensImport}
 
 export {};
 `;
@@ -1093,7 +1105,7 @@ export {};
  * Full component list: https://github.com/bookedsolidtech/helix
  */
 import '@helixui/library';
-${options.designTokens ? "\nimport '../helix-tokens.css';" : ''}
+${tokensImport}
 
 export {};
 `;
@@ -11331,7 +11343,22 @@ const meta: Meta = {
     // Empty string when no content is configured — far cleaner than
     // "placeholder text" leaking through on a tag that wasn't covered
     // by CATALOG_DEFAULT_CONTENT yet.
-    const slot = (args as Record<string, unknown>).content ?? '';
+    //
+    // HTML-escape the slot so consumer edits via the Storybook arg
+    // control render as literal text. The factory's CATALOG_DEFAULT_CONTENT
+    // values are all plain text already; if a consumer wants markup in
+    // a slot they can author a dedicated .stories.ts with html\\\`…\\\` and
+    // bypass the catalog path. Prior behavior treated typed-in
+    // \\\`<em>Save</em>\\\` as live markup, which could break the preview
+    // DOM on malformed input.
+    const escapeHtml = (s) =>
+      String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    const slot = escapeHtml((args as Record<string, unknown>).content ?? '');
     // Some Helix tags are CHILD components — they only render inside a
     // specific parent (e.g. hx-carousel-item inside hx-carousel,
     // hx-tab/hx-tab-panel inside hx-tabs). Rendered standalone they
