@@ -3239,6 +3239,11 @@ export default defineConfig({
  * For event handling use addEventListener/useEffect or the @lit/react
  * wrappers in src/components/helix/wrappers.tsx.
  */
+// Import React types so DetailedHTMLProps / HTMLAttributes resolve when
+// this file is type-checked. The earlier "declare global" form picked
+// up an ambient React namespace; the module-augmentation form below
+// needs explicit import access.
+import type * as React from 'react';
 
 type HxElement = React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> &
   Record<string, unknown>;
@@ -3500,10 +3505,40 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 import { Navbar } from './components/Navbar';
 import './index.css';
 
+// Resolve the initial theme from (1) persisted localStorage choice,
+// (2) prefers-color-scheme media query, (3) light default. Wrapped in
+// typeof-window guard so it stays SSR-safe if a consumer ever swaps in
+// a non-Vite renderer.
+function resolveInitialTheme(): 'light' | 'dark' {
+  if (typeof window === 'undefined') return 'light';
+  try {
+    const stored = window.localStorage.getItem('helix:theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+  } catch {
+    /* localStorage disabled */
+  }
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+}
+
 export default function App() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>(resolveInitialTheme);
   const [inputVal, setInputVal] = useState('');
   const inputRef = useRef<HTMLElement | null>(null);
+
+  // Sync resolved theme to <html data-theme="..."> + localStorage on mount
+  // AND on every toggle, so reloads keep the choice and CSS sees the
+  // right token cascade from first paint.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      window.localStorage.setItem('helix:theme', theme);
+    } catch {
+      /* localStorage disabled */
+    }
+  }, [theme]);
 
   // Bind the hx-input listener ONCE per mount. The previous ref-callback
   // pattern re-registered on every render — under React StrictMode that
