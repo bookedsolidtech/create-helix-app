@@ -1061,8 +1061,13 @@ ${presetList}
     }
   }
 
+  // For scoped names like @acme/design-system the scaffold lands at
+  // ./design-system/, not ./@acme/design-system/. Print the actual on-disk
+  // directory so the suggested `cd` command works as typed.
+  const cdTarget =
+    path.relative(process.cwd(), options.directory) || unscopeName(project.name as string);
   const nextSteps = [
-    `cd ${project.name}`,
+    `cd ${cdTarget}`,
     options.framework === 'vanilla' ? 'open index.html' : 'npm run dev',
   ];
 

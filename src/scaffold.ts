@@ -12918,6 +12918,12 @@ const UNITLESS_PATTERNS: readonly RegExp[] = [
   /(?:^|[/-])line[-/]height(?:$|[/-])/i,
   /(?:^|[/-])z[-/]index(?:$|[/-])/i,
   /(?:^|[/-])density(?:$|[/-])/i,
+  // responsive font-size scale tokens (responsive/font-size-scale/mobile, etc.)
+  // are MULTIPLIERS (0.875, 1.0, 1.125) consumed by calc(), not raw lengths.
+  // Coercing to 'px' breaks the documented --hx-responsive-font-size-scale
+  // contract — keep them bare.
+  /(?:^|[/-])font[-/]size[-/]scale(?:$|[/-])/i,
+  /(?:^|[/-])scale(?:$|[/-])/i,
 ];
 
 // Token name patterns that resolve to CSS time values. These get a 'ms'
