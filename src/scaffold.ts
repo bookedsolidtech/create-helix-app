@@ -774,7 +774,14 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         'cem:catalog': 'tsx scripts/generate-catalog.ts',
         'build:tokens': 'tsx scripts/build-tokens.ts',
         'watch:tokens': 'tsx scripts/build-tokens.ts --watch',
-        'tokens:sync': 'tsx scripts/sync-tokens.ts',
+        // tokens:sync pulls fresh values from Figma into tokens.json, then
+        // immediately rebuilds tokens.css so the Storybook + components
+        // see the synced values without a separate manual step. The watch
+        // path (watch:tokens) handles continuous rebuild while the dev
+        // server is running; tokens:sync covers one-shot pulls (Figma
+        // import / CI / cold runs) so synced JSON never commits ahead of
+        // a stale generated CSS.
+        'tokens:sync': 'tsx scripts/sync-tokens.ts && tsx scripts/build-tokens.ts',
         // Resets src/tokens/tokens.json from the upstream @helixui/tokens
         // platform shape. The previous one-liner used createRequire(__filename),
         // which throws ERR_INVALID_ARG_VALUE under `node -e` because
@@ -12712,6 +12719,37 @@ function leafValue(n: TokenLeaf): string | number {
   return n.value;
 }
 
+function leafType(n: TokenLeaf): string | undefined {
+  if ('$value' in n) return (n as DtcgLeaf).$type;
+  return undefined;
+}
+
+// Format a token leaf value for CSS. Numeric DTCG values need their unit
+// from $type (dimension -> px, duration -> ms) so a leaf shaped
+// { $value: 8, $type: 'dimension' } lands as ...-space-sm: 8px instead
+// of the invalid ...-space-sm: 8. String values pass through verbatim
+// (Figma exports dimensions as "8px" strings already in most cases).
+// Legacy leaves without $type fall back to the name-pattern guards
+// (UNITLESS / DURATION regexes applied downstream).
+function formatLeafForCss(leaf: TokenLeaf, fullName: string): string {
+  const raw = leafValue(leaf);
+  const type = leafType(leaf);
+  if (typeof raw === 'string') return raw;
+  // raw is number — needs a unit. Prefer $type (precise) then fall back
+  // to name-pattern guards (so legacy tokens without $type also work).
+  if (type === 'duration') return String(raw) + 'ms';
+  if (type === 'dimension') return String(raw) + 'px';
+  if (type === 'fontWeight' || type === 'number' || type === 'opacity') return String(raw);
+  // No $type — defer to name-pattern guards. DURATION_PATTERNS and
+  // UNITLESS_PATTERNS are emitted alongside this walker via the same
+  // template literal; they apply by token-name regex in resolveValue().
+  // For the walker path here, mirror the same defaults: unitless for
+  // known unitless names, ms for duration names, px otherwise.
+  if (DURATION_PATTERNS.some((re) => re.test(fullName))) return String(raw) + 'ms';
+  if (UNITLESS_PATTERNS.some((re) => re.test(fullName))) return String(raw);
+  return String(raw) + 'px';
+}
+
 // One-shot deprecation warning per build — repeated warnings on every
 // leaf would drown the build log without adding signal. Hoisted to module
 // scope so the watch-mode rebuild path also fires it on each rebuild.
@@ -12733,7 +12771,7 @@ function walk(node: TokenNode, segments: string[], out: CssVar[]): void {
   if (isDtcgLeaf(node) || isLegacyLeaf(node)) {
     if (isLegacyLeaf(node)) warnLegacyOnce();
     const name = PREFIX + '-' + segments.join('-');
-    out.push({ name, value: String(leafValue(node)) });
+    out.push({ name, value: formatLeafForCss(node, segments.join('-')) });
     return;
   }
   if (typeof node !== 'object' || node === null) return;

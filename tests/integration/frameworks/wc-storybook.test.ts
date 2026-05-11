@@ -527,10 +527,14 @@ describe('wc-storybook integration', () => {
     expect(pkg.scripts['storybook']).not.toMatch(/\bpnpm\s+watch:tokens\b/);
     expect(pkg.scripts['build-storybook']).not.toMatch(/\bpnpm\s+/);
     expect(pkg.scripts['build']).not.toMatch(/\bpnpm\s+/);
-    // tokens:sync pulls from Figma REST. Single-purpose — build:tokens is a
-    // separate step so callers compose (or rely on the `storybook` concurrent
-    // watch:tokens) rather than paying for an implicit rebuild every sync.
-    expect(pkg.scripts['tokens:sync']).toBe('tsx scripts/sync-tokens.ts');
+    // tokens:sync pulls from Figma REST, then immediately rebuilds
+    // tokens.css so the synced JSON never commits ahead of stale generated
+    // CSS. The watch path (watch:tokens) handles continuous rebuild during
+    // dev; tokens:sync chains build-tokens for one-shot pulls (Figma
+    // import / CI / cold runs).
+    expect(pkg.scripts['tokens:sync']).toBe(
+      'tsx scripts/sync-tokens.ts && tsx scripts/build-tokens.ts',
+    );
     // tokens:refresh-platform delegates to scripts/refresh-tokens.ts (a
     // real source file) instead of an inline `node -e` one-liner that
     // crashed with ERR_INVALID_ARG_VALUE because `node -e` evaluates
