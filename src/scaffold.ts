@@ -3549,12 +3549,16 @@ export default function App() {
             Type-safe, accessible, and themeable out of the box.
           </p>
           <div className="hero-actions">
-            <hx-button variant="primary" size="lg">
-              Get Started
-            </hx-button>
-            <hx-button variant="outlined" size="lg">
-              View Components
-            </hx-button>
+            <a href="https://github.com/bookedsolidtech/helix#getting-started" target="_blank" rel="noopener noreferrer">
+              <hx-button variant="primary" size="lg">
+                Get Started
+              </hx-button>
+            </a>
+            <a href="#components">
+              <hx-button variant="outline" size="lg">
+                View Components
+              </hx-button>
+            </a>
           </div>
         </div>
       </section>
