@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-
+set -e
 # ── Resolve main repo root (handles git worktrees) ───────────────────────────
 # In a worktree, --git-common-dir returns an absolute path to the main .git dir.
 # In the main repo, it returns the relative string ".git".
