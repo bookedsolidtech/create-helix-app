@@ -98,12 +98,19 @@ describe('wc-storybook integration', () => {
   it('.storybook/manager.ts has ds name branding with storybook/theming', async () => {
     const o = opts('wcs-manager');
     await scaffoldProject(o);
+    // Brand-title + create() live in manager-theme.ts now (the manager-theme
+    // refactor split the chrome from the theme so the manager can subscribe
+    // to GLOBALS_UPDATED for live mode-switch). manager.ts imports the theme
+    // table from there.
     const manager = await readText(o.directory, '.storybook/manager.ts');
-    expect(manager).toContain('Bolt Design System');
-    expect(manager).toContain('brandTitle');
-    expect(manager).toContain("from 'storybook/theming'");
+    const managerTheme = await readText(o.directory, '.storybook/manager-theme.ts');
+    expect(manager).toContain("from './manager-theme'");
+    expect(manager).toContain('helixChromeThemes');
+    expect(managerTheme).toContain('Bolt Design System');
+    expect(managerTheme).toContain('brandTitle');
+    expect(managerTheme).toContain("from 'storybook/theming'");
     // v10 uses storybook/theming not storybook/theming/create
-    expect(manager).not.toContain('storybook/theming/create');
+    expect(managerTheme).not.toContain('storybook/theming/create');
   });
 
   it('.storybook/vitest.setup.ts has setProjectAnnotations', async () => {
@@ -170,7 +177,11 @@ describe('wc-storybook integration', () => {
     const o = opts('wcs-welcome');
     await scaffoldProject(o);
     const welcome = await readText(o.directory, 'src/stories/Welcome.stories.ts');
-    expect(welcome).toContain("title: 'Welcome'");
+    // Brand-storytelling phase nested the title under `Welcome/Introduction`
+    // (the storySort entry above orders `Welcome` first, with `Introduction`
+    // as the surface). Both literal segments must survive the dsName + brand
+    // interpolation pass.
+    expect(welcome).toContain("title: 'Welcome/Introduction'");
     expect(welcome).toContain('Introduction');
     expect(welcome).toContain('Bolt Design System');
     expect(welcome).toContain('pnpm storybook');
@@ -180,7 +191,11 @@ describe('wc-storybook integration', () => {
     const o = opts('wcs-tokenstory');
     await scaffoldProject(o);
     const colors = await readText(o.directory, 'src/stories/design-tokens/Colors.stories.ts');
-    expect(colors).toContain("title: 'Design Tokens/Colors'");
+    // The brand-storytelling phase renested token-swatch stories under
+    // `Foundations/Token Swatches/*` (the narrative `Foundations/*.mdx`
+    // pages own `Foundations/` directly). Path on disk kept as
+    // `design-tokens/` for npm-name continuity.
+    expect(colors).toContain("title: 'Foundations/Token Swatches/Colors'");
     expect(colors).toContain('tokens/tokens.json');
     expect(colors).toContain('--hx-color-');
     expect(colors).toContain('export const Primary');
@@ -192,7 +207,7 @@ describe('wc-storybook integration', () => {
     const o = opts('wcs-tokenborders');
     await scaffoldProject(o);
     const borders = await readText(o.directory, 'src/stories/design-tokens/Borders.stories.ts');
-    expect(borders).toContain("title: 'Design Tokens/Borders'");
+    expect(borders).toContain("title: 'Foundations/Token Swatches/Borders'");
     expect(borders).toContain('tokens/tokens.json');
     expect(borders).toContain('--hx-border-radius-');
     expect(borders).toContain('export const Radius');
@@ -203,7 +218,7 @@ describe('wc-storybook integration', () => {
     const o = opts('wcs-tokenshadows');
     await scaffoldProject(o);
     const shadows = await readText(o.directory, 'src/stories/design-tokens/Shadows.stories.ts');
-    expect(shadows).toContain("title: 'Design Tokens/Shadows'");
+    expect(shadows).toContain("title: 'Foundations/Token Swatches/Shadows'");
     expect(shadows).toContain('tokens/tokens.json');
     expect(shadows).toContain('--hx-shadow-');
     expect(shadows).toContain('export const AllShadows');
@@ -213,7 +228,7 @@ describe('wc-storybook integration', () => {
     const o = opts('wcs-tokenspacing');
     await scaffoldProject(o);
     const spacing = await readText(o.directory, 'src/stories/design-tokens/Spacing.stories.ts');
-    expect(spacing).toContain("title: 'Design Tokens/Spacing'");
+    expect(spacing).toContain("title: 'Foundations/Token Swatches/Spacing'");
     expect(spacing).toContain('tokens/tokens.json');
     expect(spacing).toContain('--hx-space-');
     expect(spacing).toContain('export const SpaceScale');
@@ -298,7 +313,13 @@ describe('wc-storybook integration', () => {
     expect(gen).toContain("const PREFIX = '--bolt'");
     expect(gen).toContain('tokens.json');
     expect(gen).toContain('--watch');
-    expect(gen).toContain('fs.watch(INPUT');
+    // Watcher targets the PARENT DIRECTORY (not the file inode) so editors
+    // that save by atomic rename — VS Code, JetBrains, prettier-cli — do not
+    // sever the watch and stop the rebuild loop. The directory-level event
+    // is filtered by filename. Locking the shape here so a future "simplification"
+    // back to `fs.watch(INPUT, …)` regresses the ~3s rebuild loop fix (fe8ebdb).
+    expect(gen).toContain('fs.watch(inputDir');
+    expect(gen).toContain('path.dirname(INPUT)');
     expect(gen).toContain('AUTO-GENERATED');
   });
 
@@ -364,8 +385,14 @@ describe('wc-storybook integration', () => {
     expect(sync).toMatch(/z[-/]index/);
     expect(sync).toMatch(/duration/);
     expect(sync).toMatch(/density/);
-    // The numeric branch must consult isUnitlessName before appending 'px'.
-    expect(sync).toContain("isUnitlessName(name) ? String(raw) : String(raw) + 'px'");
+    // The numeric branch must consult isDurationName and isUnitlessName
+    // before defaulting to a px suffix. The duration branch was added in a
+    // follow-up to the original unitless fix so transition / animation tokens
+    // emit `200ms` instead of the invalid `200px`. All three branches are
+    // load-bearing — locking each as an independent assertion.
+    expect(sync).toContain("if (isDurationName(name)) return String(raw) + 'ms';");
+    expect(sync).toContain('if (isUnitlessName(name)) return String(raw);');
+    expect(sync).toContain("return String(raw) + 'px';");
     // The originating variable name has to thread down through alias resolution
     // so the decision is anchored on what the consumer asked for, not the
     // alias target's name.
