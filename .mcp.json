@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "rea": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["node_modules/@bookedsolid/rea/dist/cli/index.js", "serve"]
+    },
+    "obsidian": {
+      "command": "npx",
+      "args": ["-y", "obsidian-mcp"],
+      "env": {
+        "OBSIDIAN_VAULT_PATH": "/Volumes/Development/booked/data/bst"
+      }
+    }
+  }
+}

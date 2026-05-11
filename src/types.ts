@@ -11,6 +11,7 @@ export type Framework =
   | 'astro'
   | 'vanilla'
   | 'lit-vite'
+  | 'wc-storybook'
   | 'preact-vite'
   | 'stencil'
   | 'ember';
@@ -32,6 +33,14 @@ export interface TemplateConfig {
   color: (text: string) => string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  /**
+   * Optional peer-dependency pins. Used by design-system-factory templates
+   * (e.g. wc-storybook) to communicate the cascade-token contract version
+   * the consumer host MUST satisfy. Plain `dependencies` still cover the
+   * dev-time install; `peerDependencies` document the consumer-facing
+   * version range.
+   */
+  peerDependencies?: Record<string, string>;
   features: string[];
 }
 
@@ -48,12 +57,33 @@ export interface CustomTemplateConfig {
   color: (text: string) => string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  peerDependencies?: Record<string, string>;
   features: string[];
   isCustom: true;
 }
 
 /** Union of built-in and custom template configs. */
 export type AnyTemplateConfig = TemplateConfig | CustomTemplateConfig;
+
+/**
+ * A hero scenario authored at scaffold time and rendered into the
+ * generated wc-storybook factory's per-component MDX docs page. Each
+ * scenario contextualizes a component inside a real product moment
+ * (e.g. a sign-in form, an intake flow) so the Storybook surface
+ * reads as a brand experience rather than a generic catalog.
+ *
+ * Scaffolder threads zero or more scenarios through to the wc-storybook
+ * generator. Empty list falls back to cross-domain neutral defaults
+ * (per `feedback_realistic_sample_data` memory rule).
+ */
+export interface HeroScenario {
+  /** The component tag the scenario contextualizes (e.g. "spike-button"). */
+  componentId: string;
+  /** Heading shown above the scene (e.g. "Sign in to Your Workspace"). */
+  title: string;
+  /** Short narrative body describing the scenario context. */
+  body: string;
+}
 
 export interface ProjectOptions {
   name: string;
@@ -68,6 +98,32 @@ export interface ProjectOptions {
   dryRun?: boolean;
   force?: boolean;
   verbose?: boolean;
+  /** Design system codename — drives element tag prefix and JS class prefix (e.g. 'bolt' → bolt-button, BoltButton) */
+  dsName?: string;
+  /** CSS custom property token prefix (e.g. '--bolt') — drives all generated CSS var() names */
+  tokenPrefix?: string;
+  /**
+   * Brand tagline rendered into the wc-storybook Cover and Brand MDX
+   * pages. Optional — falls back to a cross-domain neutral default
+   * ("Design system extending HELiX") when omitted.
+   * Currently consumed only by the wc-storybook factory.
+   */
+  brandTagline?: string;
+  /**
+   * Brand verticals (markets, domains) the design system is targeting,
+   * e.g. ['fintech', 'wellness']. Drives the wc-storybook brand
+   * toolbar dropdown — empty list suppresses the dropdown (single-brand
+   * mode). Currently consumed only by the wc-storybook factory.
+   */
+  brandVerticals?: string[];
+  /**
+   * Hero scenarios for the wc-storybook factory's per-component MDX.
+   * Each scenario provides a contextualized hero scene for one component
+   * tag. Empty list falls back to cross-domain neutral defaults
+   * (form sign-in, intake, confirmation, navigation).
+   * Currently consumed only by the wc-storybook factory.
+   */
+  heroScenarios?: HeroScenario[];
 }
 
 export interface ComponentBundleConfig {

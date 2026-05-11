@@ -15,6 +15,7 @@ const FRAMEWORK_IDS: Framework[] = [
   'astro',
   'vanilla',
   'lit-vite',
+  'wc-storybook',
   'preact-vite',
   'stencil',
   'ember',

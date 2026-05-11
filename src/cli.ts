@@ -14,6 +14,10 @@ import {
   validateFramework,
   validatePreset,
   validateDirectory,
+  validateDsName,
+  validateTokenPrefix,
+  unscopeName,
+  validateScopedNameForFramework,
 } from './validation.js';
 import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
@@ -237,6 +241,10 @@ export async function runJsonScaffold(
     tokensFlag: boolean;
     bundlesFromFlag: ComponentBundle[] | null;
     outputDirArg: string | null;
+    dsNameFromArgs?: string | null;
+    tokenPrefixFromArgs?: string | null;
+    brandTaglineFromArgs?: string | null;
+    brandVerticalsFromArgs?: string[] | null;
   },
 ): Promise<void> {
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
@@ -251,27 +259,147 @@ export async function runJsonScaffold(
     process.exit(1);
   }
 
+  // Reject scoped names for frameworks that can't consume them (Stencil's
+  // namespace, Ember's modulePrefix and asset URLs both choke on `/` /
+  // `@`). validateProjectName itself permits scoped shapes for library
+  // templates; the framework gate runs after we know which template was
+  // picked.
+  const scopeErr = validateScopedNameForFramework(name, templateArg);
+  if (scopeErr) {
+    const result: ScaffoldJsonResult = { success: false, error: scopeErr };
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(1);
+  }
+
+  // Default the output directory to the UNSCOPED name. `@acme/design-system`
+  // would otherwise create `./@acme/design-system/` as nested directories;
+  // unscoping yields `./design-system/`. The package.json still records
+  // the full scoped name; this only affects the on-disk folder layout.
   const directory =
     opts.outputDirArg !== null
       ? path.resolve(process.cwd(), opts.outputDirArg)
-      : path.resolve(process.cwd(), name);
+      : path.resolve(process.cwd(), unscopeName(name));
 
-  const bundles: ComponentBundle[] =
-    opts.bundlesFromFlag ?? (['core', 'forms'] as ComponentBundle[]);
+  // wc-storybook now seeds helix.storybook.config.ts.components.include
+  // from these bundles, so a no-flag scaffold with the old ['core', 'forms']
+  // default would hide every non-core/non-forms tag (navigation, layout,
+  // feedback, etc.) until the consumer manually edited the config file.
+  // Default to 'all' for wc-storybook so the catalog matches the
+  // "full catalog out of the box" advertised behavior; other framework
+  // templates keep the smaller default since they don't surface a catalog.
+  const bundleDefault: ComponentBundle[] =
+    templateArg === 'wc-storybook'
+      ? (['all'] as ComponentBundle[])
+      : (['core', 'forms'] as ComponentBundle[]);
+  const bundles: ComponentBundle[] = opts.bundlesFromFlag ?? bundleDefault;
 
+  // JSON-mode bypasses the interactive prompt entirely — apply the same
+  // dsName / tokenPrefix regex here so wc-storybook scaffolds can't get a
+  // path-traversal-shaped or invalid-identifier-shaped value through JSON
+  // inputs that the interactive flow would have rejected.
+  if (templateArg === 'wc-storybook') {
+    if (opts.dsNameFromArgs !== null && opts.dsNameFromArgs !== undefined) {
+      const err = validateDsName(opts.dsNameFromArgs);
+      if (err) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --ds-name "${opts.dsNameFromArgs}": ${err}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+    if (opts.tokenPrefixFromArgs !== null && opts.tokenPrefixFromArgs !== undefined) {
+      const err = validateTokenPrefix(opts.tokenPrefixFromArgs);
+      if (err) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --token-prefix "${opts.tokenPrefixFromArgs}": ${err}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+    // When --ds-name is omitted in JSON mode, fall back to the project
+    // name only IF it passes validateDsName. Project names like '123-ui'
+    // or 'foo_bar' are valid npm names but invalid dsNames (leading
+    // digit / underscore). The interactive + API paths gracefully
+    // degrade to 'my-ds' — JSON mode now does the same so the supported
+    // project-name surface is consistent across entry points. Explicit
+    // --ds-name still validates strictly: when the caller supplies a
+    // value, they get a real error, not a silent default.
+    if (opts.dsNameFromArgs !== null && opts.dsNameFromArgs !== undefined) {
+      const dsErr = validateDsName(opts.dsNameFromArgs);
+      if (dsErr) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --ds-name "${opts.dsNameFromArgs}": ${dsErr}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+    // Note: the scaffolder itself falls back to 'my-ds' when name is not
+    // a valid dsName (see scaffoldWcStorybook entry), so JSON mode no
+    // longer rejects those project names — automation gets the same
+    // forgiveness as interactive/API.
+  }
+
+  // wc-storybook is a TypeScript + token-pipeline factory. The interactive
+  // CLI and API both coerce typescript / designTokens to true regardless of
+  // user input — JSON mode must do the same so `--json --template
+  // wc-storybook --no-typescript` doesn't produce a broken scaffold where
+  // tsconfig.json / token files are skipped while the generator still
+  // emits .ts components.
+  const isWcStorybook = templateArg === 'wc-storybook';
   const options: import('./types.js').ProjectOptions = {
     name,
     directory,
     framework: templateArg as Framework,
     componentBundles: bundles,
-    typescript: opts.typescriptFlag,
+    typescript: isWcStorybook ? true : opts.typescriptFlag,
     eslint: opts.eslintFlag,
-    designTokens: opts.tokensFlag,
+    designTokens: isWcStorybook ? true : opts.tokensFlag,
     darkMode: opts.darkModeFlag,
     installDeps: !opts.isNoInstall,
     dryRun: opts.isDryRun,
     force: opts.isForce,
     verbose: opts.isVerbose,
+    // dsName: pass through explicit --ds-name when valid; otherwise
+    // strip the @scope/ prefix and pass the basename when it's a valid
+    // dsName, else undefined so the scaffolder falls back to 'my-ds'.
+    // Same forgiveness as interactive + API paths — `@acme/design-system`
+    // resolves to dsName='design-system', not 'my-ds'.
+    dsName: (() => {
+      if (opts.dsNameFromArgs) return opts.dsNameFromArgs;
+      const candidate = unscopeName(name);
+      return validateDsName(candidate) === undefined ? candidate : undefined;
+    })(),
+    // For wc-storybook, default tokenPrefix to --{validDsName} so the
+    // consumer's brand layer gets its own namespace; defaulting to --hx
+    // caused cyclic self-references in the bridge layer and dropped the
+    // override surface. Other frameworks keep --hx (they don't emit a
+    // brand bridge). Falls back to undefined when neither --token-prefix
+    // nor a valid name is available — scaffolder then derives from its
+    // resolved dsName ('my-ds' worst case).
+    tokenPrefix: (() => {
+      if (opts.tokenPrefixFromArgs) return opts.tokenPrefixFromArgs;
+      if (templateArg !== 'wc-storybook') return '--hx';
+      const candidate = opts.dsNameFromArgs ?? unscopeName(name);
+      if (validateDsName(candidate) !== undefined) return undefined;
+      // dsName='hx' would derive '--hx', which validateTokenPrefix rejects
+      // as reserved. Match the scaffolder's special-case fallback so
+      // `create-helix hx --json --template wc-storybook` succeeds.
+      return candidate === 'hx' ? `--${candidate}-ds` : `--${candidate}`;
+    })(),
+    // Brand-storytelling fields — wc-storybook factory only. Optional with
+    // cross-domain neutral defaults so JSON / --yes flows don't break and
+    // sample copy honors the realistic-sample-data rule (no domain lock).
+    brandTagline: opts.brandTaglineFromArgs ?? undefined,
+    brandVerticals: opts.brandVerticalsFromArgs ?? undefined,
+    // heroScenarios is too complex for a CLI flag in v1; consumers edit
+    // helix.storybook.config.ts post-scaffold to populate scenes.
+    heroScenarios: undefined,
   };
 
   try {
@@ -291,10 +419,16 @@ export async function runJsonScaffold(
         name,
         directory,
         framework: templateArg,
-        typescript: opts.typescriptFlag,
-        eslint: opts.eslintFlag,
-        darkMode: opts.darkModeFlag,
-        designTokens: opts.tokensFlag,
+        // Echo the EFFECTIVE flags (after wc-storybook coercion) so JSON
+        // consumers see what was actually scaffolded, not the raw CLI
+        // input. wc-storybook always emits TypeScript + tokens
+        // regardless of --no-typescript / --no-tokens; reporting
+        // `typescript: false` while the project contains tsconfig.json
+        // and .ts sources misleads any tooling that reads this payload.
+        typescript: options.typescript,
+        eslint: options.eslint,
+        darkMode: options.darkMode,
+        designTokens: options.designTokens,
         bundles: bundles,
       },
       files,
@@ -385,6 +519,10 @@ export async function runCLI(): Promise<void> {
     explicitFlags,
     projectName,
     skipAudit,
+    dsName: dsNameFromArgs,
+    tokenPrefix: tokenPrefixFromArgs,
+    brandTagline: brandTaglineFromArgs,
+    brandVerticals: brandVerticalsFromArgs,
   } = parsed;
 
   // Load config file and environment variables
@@ -605,6 +743,10 @@ ${presetList}
       tokensFlag,
       bundlesFromFlag,
       outputDirArg,
+      dsNameFromArgs,
+      tokenPrefixFromArgs,
+      brandTaglineFromArgs,
+      brandVerticalsFromArgs,
     });
     return;
   }
@@ -623,31 +765,57 @@ ${presetList}
           validate: validateProjectName,
         }),
 
-      framework: () =>
-        templateArg !== null
-          ? Promise.resolve(templateArg as Framework)
-          : p.select({
-              message: 'Which framework?',
-              options: TEMPLATES.map((t) => ({
-                value: t.id as Framework,
-                label: t.color(t.name),
-                hint: t.hint,
-              })),
-            }),
+      framework: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const resolveFramework = async (): Promise<Framework> => {
+          const fw =
+            templateArg !== null
+              ? (templateArg as Framework)
+              : ((await p.select({
+                  message: 'Which framework?',
+                  options: TEMPLATES.map((t) => ({
+                    value: t.id as Framework,
+                    label: t.color(t.name),
+                    hint: t.hint,
+                  })),
+                })) as Framework);
+          // Reject scoped names paired with non-library frameworks. By
+          // the time the framework prompt resolves we know both pieces;
+          // emit a clear error rather than letting Stencil/Ember choke
+          // downstream on `@scope/...` interpolation in their config.
+          const enteredName = (ctx.results.name as string | undefined) ?? '';
+          const scopeErr = validateScopedNameForFramework(enteredName, fw);
+          if (scopeErr) {
+            p.cancel(scopeErr);
+            process.exit(1);
+          }
+          return fw;
+        };
+        return resolveFramework();
+      },
 
-      componentBundles: () =>
-        bundlesFromFlag !== null
-          ? Promise.resolve(bundlesFromFlag as ComponentBundle[])
-          : p.multiselect({
-              message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
-              options: COMPONENT_BUNDLES.map((b) => ({
-                value: b.id as ComponentBundle,
-                label: b.name,
-                hint: b.description,
-              })),
-              initialValues: ['core', 'forms'] as ComponentBundle[],
-              required: true,
-            }),
+      componentBundles: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        if (bundlesFromFlag !== null) return Promise.resolve(bundlesFromFlag as ComponentBundle[]);
+        // wc-storybook seeds helix.storybook.config.ts.components.include
+        // from this selection, so default to 'all' there — otherwise an
+        // Enter-through-the-defaults scaffold would hide every non-core/
+        // non-forms tag. Other framework templates keep ['core', 'forms']
+        // since they don't surface a runtime catalog.
+        const fw = ctx.results.framework as Framework | undefined;
+        const initial: ComponentBundle[] =
+          fw === 'wc-storybook'
+            ? (['all'] as ComponentBundle[])
+            : (['core', 'forms'] as ComponentBundle[]);
+        return p.multiselect({
+          message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
+          options: COMPONENT_BUNDLES.map((b) => ({
+            value: b.id as ComponentBundle,
+            label: b.name,
+            hint: b.description,
+          })),
+          initialValues: initial,
+          required: true,
+        });
+      },
 
       features: () => {
         const defaultFeatures = [
@@ -680,6 +848,107 @@ ${presetList}
         });
       },
 
+      dsName: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') {
+          return Promise.resolve(projectName ?? 'my-ds');
+        }
+        if (dsNameFromArgs !== null) {
+          // Flag/JSON path used to interpolate the value verbatim — guard with
+          // the same regex the interactive prompt enforces. Inputs like
+          // `../../tmp` and `123_app` would otherwise reach scaffold output
+          // paths and class names unchecked.
+          const err = validateDsName(dsNameFromArgs);
+          if (err) {
+            console.error(`Invalid --ds-name "${dsNameFromArgs}": ${err}`);
+            process.exit(1);
+          }
+          return Promise.resolve(dsNameFromArgs);
+        }
+        // Resolve the project name from the prompt-result context if the
+        // user just typed it in this same wizard run — `projectName` is the
+        // captured CLI positional which is null when invoked as plain
+        // `npx create-helix`, so accepting defaults always seeded
+        // dsName='my-ds' even when the user picked a great name like
+        // 'acme-ui'. The interactive group records the typed name under
+        // ctx.results.name; falling back to that gives sensible defaults.
+        const enteredName = (ctx.results.name as string | undefined) ?? null;
+        // Strip the @scope/ prefix before validating as a dsName candidate
+        // so '@acme/design-system' surfaces 'design-system' as the prompt
+        // default — same forgiveness as the JSON / API paths. Without this,
+        // scoped names always fell back to 'my-ds' even though the
+        // unscoped basename is itself a perfectly valid dsName.
+        const rawDsDefault = dsNameFromArgs ?? enteredName ?? projectName ?? 'my-ds';
+        const dsDefault = unscopeName(rawDsDefault);
+        const dsInitial = validateDsName(dsDefault) === undefined ? dsDefault : 'my-ds';
+        return p.text({
+          message: 'Design system codename',
+          placeholder: dsInitial,
+          initialValue: dsInitial,
+          validate: (v) => validateDsName(v),
+        });
+      },
+
+      tokenPrefix: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') {
+          return Promise.resolve('--hx');
+        }
+        if (tokenPrefixFromArgs !== null) {
+          // See validateDsName comment — same flag/JSON validation gap.
+          const err = validateTokenPrefix(tokenPrefixFromArgs);
+          if (err) {
+            console.error(`Invalid --token-prefix "${tokenPrefixFromArgs}": ${err}`);
+            process.exit(1);
+          }
+          return Promise.resolve(tokenPrefixFromArgs);
+        }
+        // Derive the default from dsName so the consumer's brand layer
+        // gets its own --{ds}-* namespace by default. Defaulting to --hx
+        // produced cyclic self-references in the generated bridge layer
+        // (--hx-button-bg: var(--hx-button-bg, ...)) and silently
+        // dropped the entire override surface.
+        //
+        // Special-case dsName='hx' to match the JSON/API derivations: the
+        // literal '--hx' is reserved by validateTokenPrefix, so seeding
+        // it as the prompt's initialValue would make Enter on the default
+        // fail immediately.
+        const dsResult = (ctx.results.dsName as string) ?? dsNameFromArgs ?? projectName ?? 'my-ds';
+        const defaultPrefix = dsResult === 'hx' ? `--${dsResult}-ds` : `--${dsResult}`;
+        return p.text({
+          message: 'CSS token prefix',
+          placeholder: defaultPrefix,
+          initialValue: defaultPrefix,
+          validate: (v) => validateTokenPrefix(v),
+        });
+      },
+
+      brandTagline: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        // Brand-storytelling prompts are wc-storybook-only. Other frameworks
+        // get an empty string here and the scaffolder applies a neutral default.
+        if (fw !== 'wc-storybook') return Promise.resolve('');
+        if (brandTaglineFromArgs !== null) return Promise.resolve(brandTaglineFromArgs);
+        return p.text({
+          message: 'Brand tagline ' + pc.dim('(rendered into Cover + Brand MDX)'),
+          placeholder: 'Design system extending HELiX',
+          initialValue: '',
+        });
+      },
+
+      brandVerticals: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') return Promise.resolve('');
+        if (brandVerticalsFromArgs !== null) {
+          return Promise.resolve(brandVerticalsFromArgs.join(','));
+        }
+        return p.text({
+          message: 'Brand verticals ' + pc.dim('(comma-separated; empty = single-brand mode)'),
+          placeholder: 'fintech, wellness',
+          initialValue: '',
+        });
+      },
+
       installDeps: () =>
         isNoInstall
           ? Promise.resolve(false)
@@ -698,20 +967,50 @@ ${presetList}
 
   const options: ProjectOptions = {
     name: project.name as string,
+    // Same unscoping as the JSON path: scoped names like
+    // @acme/design-system land in ./design-system/ rather than nested
+    // ./@acme/design-system/ directories. package.json records the full
+    // scoped name; only the on-disk folder is unscoped.
     directory:
       outputDirArg !== null
         ? path.resolve(process.cwd(), outputDirArg)
-        : path.resolve(process.cwd(), project.name as string),
+        : path.resolve(process.cwd(), unscopeName(project.name as string)),
     framework: project.framework as Framework,
     componentBundles: project.componentBundles as ComponentBundle[],
-    typescript: (project.features as string[]).includes('typescript'),
+    // wc-storybook is a Lit + TypeScript + token-pipeline factory. The
+    // emitted scaffold ALWAYS uses TypeScript (strict mode for decorators)
+    // and ALWAYS emits the token build pipeline (build-tokens.ts ->
+    // tokens.css). Reading the generic features set here let users opt
+    // out of flags the template requires, producing inconsistent output
+    // (summary said "TypeScript: no" while the emitted tsconfig.json /
+    // .ts files were unchanged). Force them on for wc-storybook so the
+    // generated scaffold matches its own contract.
+    typescript:
+      project.framework === 'wc-storybook' || (project.features as string[]).includes('typescript'),
     eslint: (project.features as string[]).includes('eslint'),
-    designTokens: (project.features as string[]).includes('tokens'),
+    designTokens:
+      project.framework === 'wc-storybook' || (project.features as string[]).includes('tokens'),
     darkMode: (project.features as string[]).includes('dark-mode'),
     installDeps: project.installDeps as boolean,
     dryRun: isDryRun,
     force: isForce,
     verbose: isVerbose,
+    dsName: project.dsName as string,
+    tokenPrefix: project.tokenPrefix as string,
+    // Brand-storytelling fields. Empty string from non-wc-storybook frameworks
+    // resolves to undefined so the scaffolder's neutral defaults kick in.
+    brandTagline: ((project.brandTagline as string) ?? '').trim() || undefined,
+    brandVerticals: (() => {
+      const raw = ((project.brandVerticals as string) ?? '').trim();
+      if (!raw) return undefined;
+      const list = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      return list.length > 0 ? list : undefined;
+    })(),
+    // heroScenarios deferred — consumers populate via helix.storybook.config.ts.
+    heroScenarios: undefined,
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);
@@ -733,7 +1032,17 @@ ${presetList}
 
   // ── Dependency audit ─────────────────────────────────────────────────────
   if (!skipAudit) {
-    const templateDeps = template?.dependencies ?? {};
+    // Audit every package the template adds to the consumer project, not
+    // just `dependencies`. wc-storybook is a library-mode template that
+    // puts almost the entire toolchain (Storybook, Vite, Playwright,
+    // ESLint, Helix packages) in devDependencies + peerDependencies —
+    // auditing only `dependencies` would silently skip vulnerability /
+    // license coverage on most of the actual install footprint.
+    const templateDeps = {
+      ...(template?.dependencies ?? {}),
+      ...(template?.devDependencies ?? {}),
+      ...(template?.peerDependencies ?? {}),
+    };
     const auditResult = await auditDependencies(templateDeps);
     if (!auditResult.networkError) {
       for (const v of auditResult.vulnerabilities) {
@@ -781,8 +1090,13 @@ ${presetList}
     }
   }
 
+  // For scoped names like @acme/design-system the scaffold lands at
+  // ./design-system/, not ./@acme/design-system/. Print the actual on-disk
+  // directory so the suggested `cd` command works as typed.
+  const cdTarget =
+    path.relative(process.cwd(), options.directory) || unscopeName(project.name as string);
   const nextSteps = [
-    `cd ${project.name}`,
+    `cd ${cdTarget}`,
     options.framework === 'vanilla' ? 'open index.html' : 'npm run dev',
   ];
 

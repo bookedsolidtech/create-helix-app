@@ -35,6 +35,7 @@ const VALID_FRAMEWORKS: Framework[] = [
   'preact-vite',
   'stencil',
   'ember',
+  'wc-storybook',
 ];
 
 const VALID_BUNDLES: ComponentBundle[] = [

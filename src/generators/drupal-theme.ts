@@ -98,6 +98,11 @@ export function generateStyleCss(): string {
  * Global theme stylesheet.
  * Component-scoped styles live in components/{group}/{name}/{name}.css
  */
+/* helix-responsive.css ships responsive token defaults; helix-overrides.css
+ * is where consumers reshape them. Load responsive FIRST so override values
+ * win the cascade — the reverse order silently reset overrides back to the
+ * scaffold defaults on every page render. */
+@import url("helix-responsive.css");
 @import url("helix-overrides.css");
 
 *,
@@ -155,6 +160,68 @@ export function generateHelixOverridesCss(): string {
   /* --hx-radius-sm: 0.25rem; */
   /* --hx-radius-md: 0.375rem; */
   /* --hx-radius-lg: 0.5rem; */
+}
+`;
+}
+
+/**
+ * Generates css/helix-responsive.css — the starter responsive semantic mode.
+ *
+ * Per Charles Attisano (Helix design lead, _brainstorm canvas 329:1199 in
+ * wITXImaAPUCpBs2nRPv17k): every consumer of helix-tokens must declare its
+ * own responsive mode. helix-tokens upstream ships theme/contrast modes
+ * (default / dark / hc) but cannot ship breakpoints — every Drupal site
+ * has different breakpoint needs, so the consumer-side scaffolder owns
+ * the responsive defaults.
+ *
+ * Three token paths seeded today (mobile-first):
+ *   --hx-responsive-grid-columns       4 / 8 / 12
+ *   --hx-responsive-stack-gap          8px / 16px / 24px
+ *   --hx-responsive-font-size-scale    0.875 / 1 / 1
+ *
+ * Override by editing this file or re-declaring inside your own media
+ * queries. If your design system uses different breakpoints, rewrite the
+ * thresholds here (768px, 1280px) to match.
+ */
+export function generateHelixResponsiveCss(): string {
+  return `/**
+ * @file
+ * HELiX Responsive Semantic Mode — Starter Defaults.
+ *
+ * Per Charles Attisano (Helix design lead): every consumer of helix-tokens
+ * must declare a responsive semantic mode. helix-tokens upstream ships
+ * theme/contrast modes but cannot ship breakpoints — every consumer site
+ * has different breakpoint needs.
+ *
+ * Tokens defined here:
+ *   --hx-responsive-grid-columns       grid system column count
+ *   --hx-responsive-stack-gap          default vertical rhythm gap (px)
+ *   --hx-responsive-font-size-scale    multiplier on the type ramp
+ */
+
+:root {
+  /* mobile (default — applied below the first breakpoint) */
+  --hx-responsive-grid-columns: 4;
+  --hx-responsive-stack-gap: 8px;
+  --hx-responsive-font-size-scale: 0.875;
+}
+
+@media (min-width: 768px) {
+  :root {
+    /* tablet */
+    --hx-responsive-grid-columns: 8;
+    --hx-responsive-stack-gap: 16px;
+    --hx-responsive-font-size-scale: 1;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    /* desktop */
+    --hx-responsive-grid-columns: 12;
+    --hx-responsive-stack-gap: 24px;
+    --hx-responsive-font-size-scale: 1;
+  }
 }
 `;
 }
@@ -720,7 +787,8 @@ ${themeName}/
 │   └── views/
 ├── css/                 ← Global stylesheets
 │   ├── style.css
-│   └── helix-overrides.css
+│   ├── helix-overrides.css
+│   └── helix-responsive.css
 ├── js/                  ← Drupal behaviors (once() pattern)
 ├── templates/           ← Template overrides — delegate to SDCs
 └── docker/              ← Standalone test stack (not for production)
@@ -740,6 +808,35 @@ Override HELiX CSS custom properties in \`css/helix-overrides.css\`:
   --hx-font-family-base: 'Your Font', sans-serif;
 }
 \`\`\`
+
+## Responsive mode
+
+Every \`create-helix\` Drupal scaffold ships with a starter responsive
+semantic mode in \`css/helix-responsive.css\` (mobile / tablet / desktop).
+\`helix-tokens\` (upstream) ships theme/contrast modes but cannot ship
+breakpoints — every consumer site has different breakpoint needs, so the
+scaffolder seeds the responsive defaults consumer-side.
+
+Token paths seeded today:
+
+- \`--hx-responsive-grid-columns\` — grid system column count
+- \`--hx-responsive-stack-gap\` — default vertical rhythm gap
+- \`--hx-responsive-font-size-scale\` — multiplier on the type ramp
+
+Override the values or rewrite the breakpoint thresholds in
+\`css/helix-responsive.css\` to match your design system. Example:
+
+\`\`\`css
+@media (min-width: 1024px) {
+  :root {
+    --hx-responsive-grid-columns: 16;
+    --hx-responsive-stack-gap: 32px;
+  }
+}
+\`\`\`
+
+(Source: per Charles Attisano, Helix design lead — every starter must include
+a responsive semantic mode.)
 
 ## Architecture
 
@@ -796,6 +893,11 @@ export async function scaffoldDrupalTheme(options: DrupalOptions): Promise<void>
   await fs.writeFile(
     path.join(dir, 'css', 'helix-overrides.css'),
     generateHelixOverridesCss(),
+    'utf-8',
+  );
+  await fs.writeFile(
+    path.join(dir, 'css', 'helix-responsive.css'),
+    generateHelixResponsiveCss(),
     'utf-8',
   );
 

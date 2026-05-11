@@ -56,7 +56,13 @@ describe('SBOM release workflow integration', () => {
 });
 
 describe('SBOM generation execution', () => {
-  it('cyclonedx-npm binary is available after install', () => {
+  // cyclonedx-npm invokes `npm ls` under the hood, which takes ~10s on this
+  // repo's dep graph in isolation and can stretch to 30s+ when the full vitest
+  // pool runs concurrently. Vitest's default 15s testTimeout was insufficient
+  // and caused intermittent failures on the matrix runners. Bump to 90s so the
+  // test can complete (or short-circuit via the catch-block skip path) under
+  // any concurrency load. Stays well under the file-level 10-min cap.
+  it('cyclonedx-npm binary is available after install', { timeout: 90_000 }, () => {
     // Check if the binary is resolvable via pnpm
     const result = execSync('pnpm bin', { cwd: ROOT, encoding: 'utf-8' }).trim();
     const binDir = result;

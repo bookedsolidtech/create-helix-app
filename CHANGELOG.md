@@ -1,5 +1,119 @@
 # create-helix
 
+## 0.4.0 (unreleased)
+
+### Minor Changes
+
+- **wc-storybook factory — brand-storytelling defaults**
+
+  The flagship `wc-storybook` template now ships a fully-staged Storybook
+  out of the box — Cover narrative + foundations IA + per-component AAA
+  conformance pages + token-driven manager chrome with FOUC prevention.
+  Same designer-grade experience the figma-tokens / Helix Web Component
+  Starter Kit Figma library delivers in Figma.
+  - **3 new brand prompts** — `brandTagline`, `brandVerticals`,
+    `heroScenarios` (interactive only). All optional with cross-domain
+    neutral defaults so `--yes` and CI flows continue to work.
+  - **2 new CLI flags** — `--brand-tagline` and `--brand-verticals`
+    (comma-separated). `heroScenarios` is interactive-only for v1.
+  - **`helix.storybook.config.ts`** consumer knob with 5 sections:
+    `components` / `docs` / `brand` / `aaa` / `narrative`. Default is
+    "everything visible".
+  - **4 new Storybook addons** matching upstream Helix —
+    `@chromatic-com/storybook`, `@storybook/addon-designs`,
+    `@storybook/addon-links`, `storybook-addon-pseudo-states`.
+  - **5 React docs components** — `ConsumerObligations`,
+    `InlineAuditPanel`, `APGPatternCard`, `A11yStatusCard`,
+    `HelixDocsPage`. The `A11yStatusCard` auto-injects on every component
+    autodocs page via the `HelixDocsPage` global container.
+  - **FOUC sync scripts** — `manager-head.html` + `preview-head.html`
+    pre-paint resolve theme/brand from URL globals → localStorage →
+    `light` default. Same `helix:storybook:globals` localStorage key
+    across both surfaces (regression guard test).
+  - **Token-driven manager chrome** — `manager-theme.ts` reads
+    `tokenEntries`, `darkTokenEntries`, `highContrastTokenEntries`,
+    `resolveTokenRef` from `@helixui/tokens` and feeds resolved hex into
+    `Storybook create()` ThemeVars. The previous hardcoded `#0066cc`
+    primary is replaced with the consumer's per-mode brand color.
+  - **3 docs CSS files** (a11y-card, brand-overrides, helix-docs;
+    2,400 LOC total) bundled in `assets/wc-storybook/storybook-docs/`
+    and copied into the consumer scaffold via `fs.copy`.
+  - **10 narrative MDX pages** — `Cover.mdx`, `Overview.mdx`, 7 under
+    `foundations/` (Tokens / Color / Typography / Spacing / Layout /
+    Brand / Accessibility), and `patterns/Index.mdx`. All live-bind to
+    consumer tokens via `var({prefix}-*)`.
+  - **Reference per-component MDX** — `{ds}-button.mdx` with hero scene
+    consuming `heroScenarios[0]` if matched, else neutral
+    "Sign in to your workspace" default. Title resolves to
+    `Components/{ClassName}Button/Conformance` to avoid Storybook
+    indexer collision with auto-derived `.stories.ts` entries.
+  - **Editorial-first storySort** in `preview.ts`:
+    Cover → Overview → Accessibility → Foundations → Patterns →
+    Playground → Components.
+  - **52 new unit tests** in `wc-storybook-brand.test.ts` covering
+    emitter outputs, prop-shape contracts, escape round-trip guards,
+    FOUC localStorage-key contract, MDX-title disambiguation, brand
+    prompt threading, and the 10-narrative-MDX file count.
+
+  Existing `Welcome.stories.ts` + `HelixCatalog.stories.ts` +
+  `design-tokens/*.stories.ts` continue to ship — storySort orders
+  Cover above Welcome so the editorial flow leads.
+
+- **wc-storybook factory — helix editorial-depth lift**
+
+  Builds on the brand-storytelling foundation by porting the editorial
+  depth that lives in HELiX's own `apps/storybook/`. Both repos are MIT
+  / Clarity House LLC — port is licence-clean. The scaffolded consumer
+  now reaches ~277 Storybook entries (up from ~242), roughly 80% of
+  upstream HELiX's editorial depth.
+  - **7 React helper components** ported from
+    `helix/apps/storybook/stories/_components/` — `TokenSwatchGrid`,
+    `ContrastMatrix`, `RatioCard`, `CodeBlock`, `CodeTabs`, plus
+    `useResolvedToken` hook and APCA `contrast.ts` util. Each emitter
+    lives in its own module under `src/scaffold/wc-storybook/helpers.ts`
+    for grep-ability.
+  - **7 component conformance MDXes** ported from
+    `helix/apps/storybook/stories/components/` — `card`, `checkbox`,
+    `dialog`, `form`, `select`, `tabs`, `text-input`. Each MDX
+    parameterized by `dsName` so `<aurora-card>`, `<aurora-form>` etc.
+    render the consumer's tags. Composition mirrors the existing button
+    MDX (A11yStatusCard + APGPatternCard + ConsumerObligations).
+  - **8 accessibility narrative MDXes** ported from
+    `helix/apps/storybook/stories/accessibility/` — Dashboard, AAA
+    Story Template, Keyboard Contracts, Success Criteria, Consumer
+    Obligations, Focus Management, Contrast Deep-Dive, Forced Colors.
+    Title-namespaced under top-level `Accessibility/*`.
+  - **2 token deep-dives** ported from
+    `helix/apps/storybook/stories/tokens/` — `Borders.mdx` and
+    `Shadows.mdx`. Title-namespaced under `Foundations/Tokens/*`.
+  - **3 cross-domain-neutral scene stories** ported from
+    `helix/apps/storybook/stories/patterns/scenes/` — `Account Setup`
+    (was patient-intake), `Team Dashboard` (was provider-dashboard),
+    `Settings`. All healthcare-vertical references stripped per the
+    cross-domain-neutral rule.
+  - **`Tokens.stories.tsx` playground** ported verbatim from upstream
+    `helix/apps/storybook/stories/playground/Tokens.stories.tsx` —
+    already domain-neutral.
+  - **`InlineAuditPanel` opt-in pattern** — the panel ships as a no-op
+    stub rendering `null` by default. Consumers wire their own
+    `markdown` prop to surface AAA-AUDIT.md content. The audit source
+    lives at `packages/hx-library/src/components/hx-*/AAA-AUDIT.md`
+    inside the HELiX monorepo and isn't published with
+    `@helixui/library`, so we do not ship live audit rendering. See
+    `docs/FOLLOW-UP-shared-storybook-kit.md` for trigger conditions
+    that would make this live.
+  - **Golden snapshot refresh** in
+    `tests/golden/wc-storybook-scaffold/golden.test.ts` covers all
+    new Phase 1-4 emitted files plus three new assertions: dsName
+    parameterization reaches Phase 2 MDXes, no `<hx-*>` literal tags
+    survive the port, and Phase 4 scenes contain no healthcare
+    references.
+
+  Adds `docs/FOLLOW-UP-shared-storybook-kit.md` documenting the
+  deferred `@helixui/storybook-kit` extraction. Trigger conditions:
+  2+ HELiX MDX drift events, consumer demand for live AAA-AUDIT.md
+  rendering, or a third codebase wanting the same kit.
+
 ## 0.3.0
 
 ### Minor Changes

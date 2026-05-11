@@ -21,8 +21,17 @@ import {
   validateDirectory,
   validateFramework,
   validatePreset,
+  validateDsName,
+  validateTokenPrefix,
+  validateScopedNameForFramework,
 } from './validation.js';
-import type { Framework, ComponentBundle, TemplateConfig, PresetConfig } from './types.js';
+import type {
+  Framework,
+  ComponentBundle,
+  TemplateConfig,
+  PresetConfig,
+  HeroScenario,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -56,6 +65,26 @@ export interface ScaffoldOptions {
   dryRun?: boolean;
   /** Overwrite existing non-empty directory (default: false) */
   force?: boolean;
+  /**
+   * Design system codename. Becomes the custom-element tag prefix and class
+   * name root (e.g. dsName='aurora' → <aurora-button>, AuroraButton).
+   * Defaults to the project name when valid as a dsName, else 'my-ds'.
+   * wc-storybook only — ignored by other framework templates.
+   */
+  dsName?: string;
+  /**
+   * CSS custom property prefix for the brand token layer (e.g. '--aurora').
+   * Defaults to `--{dsName}` so the consumer's brand layer gets a unique
+   * namespace. Cannot be `--hx` (reserved for upstream HELiX, would create
+   * cyclic bridge declarations). wc-storybook only.
+   */
+  tokenPrefix?: string;
+  /** Brand tagline rendered on the Cover page. wc-storybook only. */
+  brandTagline?: string;
+  /** Brand verticals — populates the Storybook brand toolbar. wc-storybook only. */
+  brandVerticals?: string[];
+  /** Per-component hero scenes. wc-storybook only. */
+  heroScenarios?: HeroScenario[];
 }
 
 /**
@@ -81,6 +110,15 @@ export interface TemplateDefinition {
   hint: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  /**
+   * Peer dependencies the consumer host must satisfy. Populated for
+   * library templates (wc-storybook today) where the published package
+   * documents a contract version of @helixui/library / @helixui/tokens.
+   * Omitted for app-style templates that declare no peers. Tooling that
+   * audits or pre-installs template requirements should read this when
+   * present.
+   */
+  peerDependencies?: Record<string, string>;
   features: string[];
 }
 
@@ -110,6 +148,13 @@ function toTemplateDefinition(t: TemplateConfig): TemplateDefinition {
     hint: t.hint,
     dependencies: t.dependencies,
     devDependencies: t.devDependencies,
+    // Forward peerDependencies when populated so api.ts consumers can
+    // discover the consumer-host contract surface (wc-storybook's
+    // @helixui/library + @helixui/tokens 3.3.1 pin). App-style templates
+    // declare no peers — omit the field rather than emit an empty object.
+    ...(t.peerDependencies && Object.keys(t.peerDependencies).length > 0
+      ? { peerDependencies: t.peerDependencies }
+      : {}),
     features: t.features,
   };
 }
@@ -147,18 +192,35 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
     }
   }
 
+  // wc-storybook is a Lit + TypeScript + token-pipeline factory that
+  // ALWAYS emits TypeScript and the token build pipeline. Honoring a
+  // caller-supplied typescript:false / designTokens:false would put the
+  // pre-pass into JS-mode (non-TS eslint config, no token files) while
+  // the wc-storybook generator still wrote .ts components — `npm run
+  // lint` and `pnpm type-check` would break immediately. Force both
+  // modes on for this template, matching what cli.ts does for the
+  // interactive path.
+  const wcStorybookForce = options.framework === 'wc-storybook';
   await scaffoldProject({
     name: options.name,
     directory: options.directory,
     framework: options.framework,
     componentBundles: options.componentBundles ?? ['all'],
-    typescript: options.typescript ?? true,
+    typescript: wcStorybookForce ? true : (options.typescript ?? true),
     eslint: options.eslint ?? true,
-    designTokens: options.designTokens ?? true,
+    designTokens: wcStorybookForce ? true : (options.designTokens ?? true),
     darkMode: options.darkMode ?? false,
     installDeps: options.installDeps ?? false,
     dryRun: options.dryRun ?? false,
     force: options.force ?? false,
+    // wc-storybook naming + brand fields. Forwarded as-is so the
+    // scaffolder's own defaults (dsName ← project name, tokenPrefix ←
+    // --{ds}, brand prompts ← cross-domain neutral) apply when omitted.
+    dsName: options.dsName,
+    tokenPrefix: options.tokenPrefix,
+    brandTagline: options.brandTagline,
+    brandVerticals: options.brandVerticals,
+    heroScenarios: options.heroScenarios,
   });
 
   const result: ScaffoldResult = {
@@ -230,6 +292,13 @@ export function validate(options: Partial<ScaffoldOptions>): ValidationResult {
   if (options.framework !== undefined) {
     if (!validateFramework(options.framework)) {
       errors['framework'] = `Unknown framework: "${options.framework}"`;
+    } else if (options.name !== undefined && !errors['name']) {
+      // Scoped names are only valid for library templates. Stencil and
+      // Ember interpolate the project name into namespace fields and
+      // asset URLs that can't contain `/` or `@`. Run this gate after
+      // the basic name + framework checks pass.
+      const scopeErr = validateScopedNameForFramework(options.name, options.framework);
+      if (scopeErr) errors['name'] = scopeErr;
     }
   } else {
     errors['framework'] = 'Framework is required';
@@ -240,6 +309,24 @@ export function validate(options: Partial<ScaffoldOptions>): ValidationResult {
     const invalid = options.componentBundles.filter((b) => !validBundleIds.includes(b));
     if (invalid.length > 0) {
       errors['componentBundles'] = `Unknown component bundle(s): ${invalid.join(', ')}`;
+    }
+  }
+
+  // wc-storybook naming validation. dsName + tokenPrefix get interpolated
+  // into directory paths and class names — programmatic callers must not
+  // be able to pass values that traverse outside options.directory or
+  // emit cyclic bridge declarations. Both fields are wc-storybook-only;
+  // for other frameworks they're documented as ignored, so validation
+  // is gated on the selected framework to avoid rejecting shared
+  // options objects like `{ framework: 'react-vite', tokenPrefix: '--hx' }`.
+  if (options.framework === 'wc-storybook') {
+    if (options.dsName !== undefined) {
+      const err = validateDsName(options.dsName);
+      if (err) errors['dsName'] = err;
+    }
+    if (options.tokenPrefix !== undefined) {
+      const err = validateTokenPrefix(options.tokenPrefix);
+      if (err) errors['tokenPrefix'] = err;
     }
   }
 

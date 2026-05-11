@@ -33,3 +33,30 @@ test-scaffold.ts
 
 # Session context (not committed)
 @RESTART.md
+
+# === rea managed — do not edit between markers ===
+.rea/audit.jsonl
+.rea/audit-*.jsonl
+.rea/HALT
+.rea/metrics.jsonl
+.rea/serve.pid
+.rea/serve.state.json
+.rea/fingerprints.json
+.rea/review-cache.jsonl
+.rea/*.tmp
+.rea/*.tmp.*
+.rea/install-manifest.json.bak
+.rea/install-manifest.json.tmp
+.gitignore.rea-tmp-*
+.rea.lock
+.rea/last-review.json
+# === end rea managed ===
+
+# Runtime caches not yet covered by rea-managed block
+.rea/last-review.cache.json
+
+# Claude Code scheduled-task runtime state
+.claude/scheduled_tasks.lock
+
+# Local-only Figma screenshots from MCP probes (figgy debugging)
+tmp-screenshots/

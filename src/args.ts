@@ -27,6 +27,13 @@ export interface ParsedArgs {
   bundles: ComponentBundle[] | null;
   outputDir: string | null;
 
+  // Design system factory (wc-storybook)
+  dsName: string | null;
+  tokenPrefix: string | null;
+  brandTagline: string | null;
+  /** Comma-separated list of brand verticals; null when flag absent */
+  brandVerticals: string[] | null;
+
   // Boolean toggles
   typescript: boolean;
   eslint: boolean;
@@ -106,9 +113,71 @@ export function parseArgs(argv: string[]): ParsedArgs {
     tokens: argv.includes('--tokens') || argv.includes('--no-tokens'),
   };
 
-  // --template
-  const templateArgIndex = argv.indexOf('--template');
-  const templateStr = templateArgIndex !== -1 ? (argv[templateArgIndex + 1] ?? null) : null;
+  // Set of every documented CLI option so readValueFlag (defined below)
+  // can distinguish "next argv is the value" from "next argv is the
+  // next flag". Scoped to this function so both the legacy flags
+  // (--template / --preset / --bundles / --output-dir / --profile) and
+  // the wc-storybook flags (--ds-name / --token-prefix / --brand-*)
+  // share one parser. Missing entries cause space-form value-flags to
+  // incorrectly capture the next flag as the value.
+  const KNOWN_OPTIONS = new Set([
+    '--ds-name',
+    '--token-prefix',
+    '--brand-tagline',
+    '--brand-verticals',
+    '--template',
+    '--name',
+    '--directory',
+    '--output-dir',
+    '-o',
+    '--profile',
+    '--config',
+    '--bundles',
+    '--preset',
+    '--yes',
+    '-y',
+    '--json',
+    '--dry-run',
+    '--force',
+    '--verbose',
+    '--quiet',
+    '-q',
+    '--no-install',
+    '--no-eslint',
+    '--no-tokens',
+    '--no-typescript',
+    '--no-dark-mode',
+    '--typescript',
+    '--eslint',
+    '--tokens',
+    '--dark-mode',
+    '--skip-audit',
+    '--offline',
+    '--no-config',
+    '--drupal',
+    '--help',
+    '-h',
+    '--version',
+    '-v',
+  ]);
+  // Helper: read a value flag accepting either `--flag value` or
+  // `--flag=value`. The repo's own docs use both forms; routing every
+  // value-flag through this helper keeps the two surfaces consistent
+  // (previously --template / --preset / --bundles / --output-dir /
+  // --profile silently dropped the `=` form).
+  const readValueFlag = (flag: string): string | null => {
+    const eqPrefix = `${flag}=`;
+    const eqEntry = argv.find((a) => a.startsWith(eqPrefix));
+    if (eqEntry !== undefined) return eqEntry.slice(eqPrefix.length);
+    const idx = argv.indexOf(flag);
+    if (idx === -1) return null;
+    const next = argv[idx + 1];
+    if (next === undefined || KNOWN_OPTIONS.has(next)) return null;
+    return next;
+  };
+
+  // --template (accepts both `--template wc-storybook` and `--template=wc-storybook`)
+  const templateStr = readValueFlag('--template');
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
 
   if (templateStr !== null && !validFrameworks.includes(templateStr as Framework)) {
@@ -119,9 +188,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
   const template = templateStr as Framework | null;
 
-  // --preset
-  const presetArgIndex = argv.indexOf('--preset');
-  const presetStr = presetArgIndex !== -1 ? (argv[presetArgIndex + 1] ?? null) : null;
+  // --preset (accepts both space- and `=`-forms)
+  const presetStr = readValueFlag('--preset');
 
   if (presetStr !== null && !isValidPreset(presetStr)) {
     throw new HelixError(
@@ -131,9 +199,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
   const preset = presetStr as DrupalPreset | null;
 
-  // --bundles
-  const bundlesArgIndex = argv.indexOf('--bundles');
-  const bundlesStr = bundlesArgIndex !== -1 ? (argv[bundlesArgIndex + 1] ?? null) : null;
+  // --bundles (accepts both space- and `=`-forms)
+  const bundlesStr = readValueFlag('--bundles');
   const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
 
   let bundles: ComponentBundle[] | null = null;
@@ -149,14 +216,32 @@ export function parseArgs(argv: string[]): ParsedArgs {
     bundles = requested;
   }
 
-  // --output-dir / -o
-  const outputDirArgIndex =
-    argv.indexOf('--output-dir') !== -1 ? argv.indexOf('--output-dir') : argv.indexOf('-o');
-  const outputDir = outputDirArgIndex !== -1 ? (argv[outputDirArgIndex + 1] ?? null) : null;
+  // --output-dir / -o (accepts both space- and `=`-forms on either alias)
+  const outputDir = readValueFlag('--output-dir') ?? readValueFlag('-o');
 
-  // --profile
-  const profileArgIndex = argv.indexOf('--profile');
-  const profile = profileArgIndex !== -1 ? (argv[profileArgIndex + 1] ?? null) : null;
+  // --profile (accepts both space- and `=`-forms)
+  const profile = readValueFlag('--profile');
+
+  // --ds-name (design system codename, used by wc-storybook)
+  const dsName = readValueFlag('--ds-name');
+
+  // --token-prefix (CSS custom property prefix, used by wc-storybook)
+  const tokenPrefix = readValueFlag('--token-prefix');
+
+  // --brand-tagline (used by wc-storybook factory Cover + Brand MDX)
+  const brandTagline = readValueFlag('--brand-tagline');
+
+  // --brand-verticals (comma-separated list, used by wc-storybook brand toolbar)
+  const brandVerticalsRaw = readValueFlag('--brand-verticals');
+  const brandVerticals: string[] | null =
+    brandVerticalsRaw === null
+      ? null
+      : brandVerticalsRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+  // heroScenarios are interactive-only — too complex for a CLI flag; --yes
+  // / non-interactive flows fall back to neutral defaults in the scaffolder.
 
   return {
     subcommand,
@@ -182,6 +267,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     skipAudit,
     offline,
     profile,
+    dsName,
+    tokenPrefix,
+    brandTagline,
+    brandVerticals,
     showVersion,
     showHelp,
   };

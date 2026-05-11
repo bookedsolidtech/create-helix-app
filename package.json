@@ -29,6 +29,8 @@
     "bench:ci": "vitest bench --reporter=json --outputFile=bench-results.json && node scripts/bench-ci.mjs",
     "bench:update-baselines": "vitest bench --reporter=json --outputFile=bench-results.json && node scripts/update-baselines.mjs",
     "verify": "pnpm run lint && pnpm run format:check && pnpm run type-check",
+    "test:build-smoke": "tsx scripts/wc-storybook-build-smoke.ts",
+    "test:build-smoke:gallery": "tsx scripts/wc-storybook-smoke-gallery.ts",
     "preflight": "bash scripts/preflight.sh",
     "license-check": "npx license-checker --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD' --summary",
     "sbom": "cyclonedx-npm --output-format JSON --output-file sbom.json",
@@ -42,24 +44,30 @@
     "@clack/prompts": "^0.10.0",
     "fast-glob": "^3.3.3",
     "fs-extra": "^11.3.0",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "@helixui/tokens": "^3.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
+    "@bookedsolid/rea": "^0.28.0",
     "@changesets/cli": "^2.30.0",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
+    "@cyclonedx/cyclonedx-npm": "^4.0.0",
     "@eslint/js": "^9.0.0",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.15.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "axe-core": "^4.11.4",
     "eslint": "^9.0.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.5.2",
+    "playwright": "^1.59.1",
     "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.0.0",
-    "@vitest/coverage-v8": "^3.0.0",
-    "vitest": "^3.0.0",
-    "@cyclonedx/cyclonedx-npm": "^4.0.0"
+    "vitest": "^3.0.0"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
@@ -71,10 +79,16 @@
     ]
   },
   "engines": {
-    "node": "^20.0.0 || ^22.0.0 || ^24.0.0",
+    "node": "^22.0.0 || ^24.0.0",
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.15.9",
+  "pnpm": {
+    "overrides": {
+      "vite": ">=7.3.2",
+      "fast-uri": ">=3.1.2"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },

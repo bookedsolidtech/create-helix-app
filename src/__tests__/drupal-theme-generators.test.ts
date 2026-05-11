@@ -11,6 +11,7 @@ import {
   generateTemplateOverride,
   generateStyleCss,
   generateHelixOverridesCss,
+  generateHelixResponsiveCss,
   generateDockerCompose,
   generateThemePhp,
 } from '../generators/drupal-theme.js';
@@ -123,6 +124,12 @@ describe('generateThemeLibraries', () => {
     const yml = generateThemeLibraries('my_theme', standardPreset);
     expect(yml).toContain('helix-overrides:');
     expect(yml).toContain('css/helix-overrides.css: {}');
+  });
+
+  it('contains helix-responsive entry (responsive semantic mode)', () => {
+    const yml = generateThemeLibraries('my_theme', standardPreset);
+    expect(yml).toContain('helix-responsive:');
+    expect(yml).toContain('css/helix-responsive.css: {}');
   });
 
   it('is valid YAML structure (key: value pairs)', () => {
@@ -388,6 +395,11 @@ describe('generateStyleCss', () => {
     expect(css).toContain('@import url("helix-overrides.css")');
   });
 
+  it('imports helix-responsive.css', () => {
+    const css = generateStyleCss();
+    expect(css).toContain('@import url("helix-responsive.css")');
+  });
+
   it('has body reset styles', () => {
     const css = generateStyleCss();
     expect(css).toContain('body {');
@@ -400,6 +412,28 @@ describe('generateHelixOverridesCss', () => {
     const css = generateHelixOverridesCss();
     expect(css).toContain(':root {');
     expect(css).toContain('--hx-color-primary');
+  });
+});
+
+// Per Charles Attisano (Helix design lead, _brainstorm canvas 329:1199 in
+// wITXImaAPUCpBs2nRPv17k): every consumer of helix-tokens must declare its
+// own responsive mode. Drupal themes are consumers, so the regression guard
+// applies here too.
+describe('generateHelixResponsiveCss', () => {
+  it('seeds the responsive token paths', () => {
+    const css = generateHelixResponsiveCss();
+    expect(css).toContain('--hx-responsive-grid-columns');
+    expect(css).toContain('--hx-responsive-stack-gap');
+    expect(css).toContain('--hx-responsive-font-size-scale');
+  });
+
+  it('declares mobile / tablet / desktop breakpoints', () => {
+    const css = generateHelixResponsiveCss();
+    // mobile is the implicit :root default; tablet + desktop are min-width
+    // media queries.
+    expect(css).toContain(':root {');
+    expect(css).toMatch(/@media\s*\(\s*min-width:\s*768px\s*\)/);
+    expect(css).toMatch(/@media\s*\(\s*min-width:\s*1280px\s*\)/);
   });
 });
 

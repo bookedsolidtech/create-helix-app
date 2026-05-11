@@ -5,9 +5,101 @@ import {
   validateFramework,
   validatePreset,
   validateThemeName,
+  validateDsName,
+  validateTokenPrefix,
   VALID_FRAMEWORKS,
   VALID_PRESETS,
 } from '../validation.js';
+
+// ---------------------------------------------------------------------------
+// validateDsName — wc-storybook design system codename
+// ---------------------------------------------------------------------------
+
+describe('validateDsName', () => {
+  it('accepts a simple lowercase name', () => {
+    expect(validateDsName('bolt')).toBeUndefined();
+  });
+
+  it('accepts a hyphenated name', () => {
+    expect(validateDsName('my-ds')).toBeUndefined();
+  });
+
+  it('accepts trailing digits', () => {
+    expect(validateDsName('ds2')).toBeUndefined();
+  });
+
+  it('rejects empty string', () => {
+    expect(validateDsName('')).toBe('Required');
+  });
+
+  it('rejects path-traversal-shaped input', () => {
+    expect(validateDsName('../../tmp')).toBeDefined();
+  });
+
+  it('rejects names starting with a digit', () => {
+    expect(validateDsName('123_app')).toBeDefined();
+  });
+
+  it('rejects underscores (unlike validateProjectName)', () => {
+    expect(validateDsName('my_ds')).toBeDefined();
+  });
+
+  it('rejects uppercase letters', () => {
+    expect(validateDsName('MyDs')).toBeDefined();
+  });
+
+  it('rejects whitespace', () => {
+    expect(validateDsName('my ds')).toBeDefined();
+  });
+
+  it('rejects slashes (path-traversal)', () => {
+    expect(validateDsName('foo/bar')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateTokenPrefix — wc-storybook CSS custom property prefix
+// ---------------------------------------------------------------------------
+
+describe('validateTokenPrefix', () => {
+  // --hx is now reserved for the upstream HELiX namespace. Allowing it
+  // would let scaffolders emit cyclic bridge declarations (a generated
+  // `--hx-button-bg: var(--hx-button-bg, ...)` rule which CSS drops
+  // silently). Consumer brands must pick their own prefix.
+  it('rejects --hx as reserved for upstream HELiX', () => {
+    expect(validateTokenPrefix('--hx')).toMatch(/reserved for the upstream HELiX/);
+  });
+
+  it('accepts a hyphenated suffix', () => {
+    expect(validateTokenPrefix('--my-ds')).toBeUndefined();
+  });
+
+  it('accepts brand-specific prefixes', () => {
+    expect(validateTokenPrefix('--acme')).toBeUndefined();
+    expect(validateTokenPrefix('--bolt')).toBeUndefined();
+    expect(validateTokenPrefix('--aurora')).toBeUndefined();
+  });
+
+  it('rejects empty string', () => {
+    expect(validateTokenPrefix('')).toBe('Required');
+  });
+
+  it('rejects single dash prefix', () => {
+    expect(validateTokenPrefix('-bolt')).toBeDefined();
+  });
+
+  it('rejects no leading dashes', () => {
+    expect(validateTokenPrefix('bolt')).toBeDefined();
+  });
+
+  it('rejects digit-leading suffix', () => {
+    expect(validateTokenPrefix('--1bolt')).toBeDefined();
+  });
+
+  it('rejects uppercase suffix', () => {
+    expect(validateTokenPrefix('--Bolt')).toBeDefined();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // validateProjectName
@@ -38,16 +130,33 @@ describe('validateProjectName', () => {
     expect(validateProjectName('   ')).toBe('Project name is required');
   });
 
-  it('rejects a name with a forward slash', () => {
-    expect(validateProjectName('my/app')).toBe(
-      'Project name cannot contain path separators (/ or \\)',
+  it('rejects a name with a forward slash that is NOT an npm scope', () => {
+    // @scope/name is now allowed for publishable library scaffolds
+    // (wc-storybook). A bare slash without the @-prefix is still
+    // rejected because it has no scope semantics — it's a path
+    // separator. The error message comes from the unscoped-pattern
+    // check since `my/app` doesn't match either branch.
+    expect(validateProjectName('my/app')).toMatch(
+      /lowercase letters, numbers, hyphens, and underscores/,
     );
   });
 
   it('rejects a name with a backslash', () => {
     expect(validateProjectName('my\\app')).toBe(
-      'Project name cannot contain path separators (/ or \\)',
+      'Project name cannot contain backslash path separators',
     );
+  });
+
+  it('accepts npm scoped names for publishable libraries', () => {
+    expect(validateProjectName('@acme/design-system')).toBeUndefined();
+    expect(validateProjectName('@booked/ui-kit')).toBeUndefined();
+  });
+
+  it('rejects malformed scoped names', () => {
+    // empty scope or empty name segment
+    expect(validateProjectName('@/x')).toMatch(/Scoped names must follow @scope\/name/);
+    expect(validateProjectName('@a/')).toMatch(/Scoped names must follow @scope\/name/);
+    expect(validateProjectName('@/')).toMatch(/Scoped names must follow @scope\/name/);
   });
 
   it('rejects a name starting with a dot', () => {
@@ -184,8 +293,8 @@ describe('validateFramework', () => {
     expect(validateFramework('React-Next')).toBe(false);
   });
 
-  it('VALID_FRAMEWORKS contains the expected 15 entries', () => {
-    expect(VALID_FRAMEWORKS).toHaveLength(15);
+  it('VALID_FRAMEWORKS contains the expected 16 entries', () => {
+    expect(VALID_FRAMEWORKS).toHaveLength(16);
   });
 
   it('VALID_FRAMEWORKS includes react-next', () => {
