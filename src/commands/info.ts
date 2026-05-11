@@ -31,6 +31,10 @@ export function showTemplateInfo(id: string, json: boolean): void {
               ? { peerDependencies: template.peerDependencies }
               : {}),
             features: template.features,
+            // v0.6.0 Phase C — experimental flag surfaces in JSON so
+            // tooling/CI can branch on it (e.g. block experimental in
+            // policy gates) without having to maintain its own allowlist.
+            ...(template.experimental === true ? { experimental: true } : {}),
           },
           null,
           2,
@@ -40,6 +44,17 @@ export function showTemplateInfo(id: string, json: boolean): void {
     }
 
     console.log('');
+    if (template.experimental === true) {
+      // v0.6.0 Phase C — info'd experimental templates lead with a warning
+      // so consumers reading the detail page understand why the template
+      // doesn't surface in the default prompt.
+      console.log(
+        pc.yellow(
+          '  ⚠ This template is experimental — minimal scaffold, may not be production-ready.',
+        ),
+      );
+      console.log('');
+    }
     console.log(pc.bold('  ' + template.name));
     console.log(pc.dim('  ' + template.description));
     console.log('');

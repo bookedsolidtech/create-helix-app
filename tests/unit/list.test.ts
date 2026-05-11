@@ -19,13 +19,26 @@ describe('list command', () => {
   });
 
   describe('normal (TUI) mode', () => {
-    it('outputs all 16 framework templates', () => {
-      listAll(false);
+    it('outputs all 16 framework templates with --show-experimental', () => {
+      // v0.6.0 Phase C — default mode filters to 3 production templates.
+      // The every-template sweep now opts in via the showExperimental
+      // escape valve to stay meaningful without enumerating each id.
+      listAll(false, true);
       const output = logs.join('\n');
       expect(TEMPLATES).toHaveLength(16);
       for (const t of TEMPLATES) {
         expect(output).toContain(t.id);
       }
+    });
+
+    it('default mode outputs only the 3 production templates + footer hint', () => {
+      listAll(false);
+      const output = logs.join('\n');
+      expect(output).toContain('react-next');
+      expect(output).toContain('react-vite');
+      expect(output).toContain('wc-storybook');
+      expect(output).toMatch(/13 experimental templates hidden/);
+      expect(output).toContain('--show-experimental');
     });
 
     it('outputs all 5 Drupal presets', () => {
@@ -38,8 +51,8 @@ describe('list command', () => {
       }
     });
 
-    it('includes framework descriptions', () => {
-      listAll(false);
+    it('includes framework descriptions (--show-experimental for the full set)', () => {
+      listAll(false, true);
       const output = logs.join('\n');
       for (const t of TEMPLATES) {
         expect(output).toContain(t.description);
@@ -54,8 +67,8 @@ describe('list command', () => {
       }
     });
 
-    it('includes framework names', () => {
-      listAll(false);
+    it('includes framework names (--show-experimental for the full set)', () => {
+      listAll(false, true);
       const output = logs.join('\n');
       for (const t of TEMPLATES) {
         expect(output).toContain(t.name);
@@ -85,12 +98,22 @@ describe('list command', () => {
       expect(Array.isArray(parsed.presets)).toBe(true);
     });
 
-    it('JSON frameworks array contains all 14 templates', () => {
-      listAll(true);
+    it('JSON frameworks array contains all 16 templates when --show-experimental is passed', () => {
+      listAll(true, true);
       const parsed = JSON.parse(logs[0]) as {
         frameworks: { id: string; name: string; description: string }[];
       };
       expect(parsed.frameworks).toHaveLength(TEMPLATES.length);
+    });
+
+    it('default JSON contains only the 3 production templates + experimentalHidden field', () => {
+      listAll(true);
+      const parsed = JSON.parse(logs[0]) as {
+        frameworks: { id: string }[];
+        experimentalHidden?: number;
+      };
+      expect(parsed.frameworks).toHaveLength(3);
+      expect(parsed.experimentalHidden).toBe(13);
     });
 
     it('JSON presets array contains all 5 Drupal presets', () => {
@@ -133,8 +156,8 @@ describe('list command', () => {
       }
     });
 
-    it('JSON framework ids match TEMPLATES', () => {
-      listAll(true);
+    it('JSON framework ids match TEMPLATES (with --show-experimental)', () => {
+      listAll(true, true);
       const parsed = JSON.parse(logs[0]) as {
         frameworks: { id: string; name: string; description: string }[];
       };

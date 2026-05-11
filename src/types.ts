@@ -42,6 +42,16 @@ export interface TemplateConfig {
    */
   peerDependencies?: Record<string, string>;
   features: string[];
+  /**
+   * When true, the template is hidden from the interactive framework prompt
+   * and from the default `create-helix list` output. v0.6.0 Phase C marks
+   * 13 stub-quality scaffolders as experimental so consumers default to the
+   * 3 production frameworks (wc-storybook, react-next, react-vite) — the
+   * Drupal flow lives on its own path. Pass `--show-experimental` to
+   * re-include them in prompts/lists; API callers (scaffold({framework: ...}))
+   * bypass this filter entirely so existing integrations keep working.
+   */
+  experimental?: boolean;
 }
 
 /**

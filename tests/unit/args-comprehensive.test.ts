@@ -58,13 +58,16 @@ describe('--template flag', () => {
     expect(result.template).toBe('react-next');
   });
 
-  it('--template vue-vite sets template', () => {
-    const result = parseArgs(['--template', 'vue-vite']);
+  it('--template vue-vite sets template (requires --show-experimental in v0.6.0+)', () => {
+    // v0.6.0 Phase C — vue-vite is experimental; without --show-experimental
+    // parseArgs throws a friendly redirect. Pair the flag so this contract
+    // continues to exercise the value-parsing path.
+    const result = parseArgs(['--show-experimental', '--template', 'vue-vite']);
     expect(result.template).toBe('vue-vite');
   });
 
-  it('--template svelte-kit sets template', () => {
-    const result = parseArgs(['--template', 'svelte-kit']);
+  it('--template svelte-kit sets template (requires --show-experimental in v0.6.0+)', () => {
+    const result = parseArgs(['--show-experimental', '--template', 'svelte-kit']);
     expect(result.template).toBe('svelte-kit');
   });
 
@@ -280,8 +283,11 @@ describe('combined flags', () => {
   });
 
   it('full combination: name + template + preset + output-dir + dry-run', () => {
+    // v0.6.0 Phase C — 'vanilla' is experimental; pair with --show-experimental
+    // so the combined-flag exercise still hits the value-parsing path.
     const result = parseArgs([
       'my-theme',
+      '--show-experimental',
       '--template',
       'vanilla',
       '--preset',

@@ -94,6 +94,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['ssr', 'nested-routes', 'react-wrappers', 'form-integration'],
+    experimental: true,
   },
   {
     id: 'vue-nuxt',
@@ -110,6 +111,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['ssr', 'native-wc-support', 'auto-imports'],
+    experimental: true,
   },
   {
     id: 'vue-vite',
@@ -128,6 +130,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['hot-reload', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'solid-vite',
@@ -146,6 +149,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['hot-reload', 'fine-grained-reactivity', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'qwik-vite',
@@ -163,6 +167,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['resumability', 'zero-hydration', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'svelte-kit',
@@ -183,6 +188,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['ssr', 'native-wc-support', 'runes'],
+    experimental: true,
   },
   {
     id: 'angular',
@@ -206,6 +212,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '~5.5.0',
     },
     features: ['signals', 'standalone-components', 'custom-elements-schema'],
+    experimental: true,
   },
   {
     id: 'astro',
@@ -222,6 +229,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['islands', 'zero-js-default', 'content-collections'],
+    experimental: true,
   },
   {
     id: 'vanilla',
@@ -232,6 +240,7 @@ export const TEMPLATES: TemplateConfig[] = [
     dependencies: {},
     devDependencies: {},
     features: ['zero-config', 'cdn', 'no-build-step'],
+    experimental: true,
   },
   {
     id: 'lit-vite',
@@ -249,6 +258,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['web-components', 'reactive-properties', 'decorators', 'shadow-dom'],
+    experimental: true,
   },
   {
     id: 'wc-storybook',
@@ -394,6 +404,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['hot-reload', 'react-compatible-api', 'hooks', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'stencil',
@@ -411,6 +422,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['web-components', 'shadow-dom', 'lazy-loading', 'decorators'],
+    experimental: true,
   },
   {
     id: 'ember',
@@ -429,6 +441,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['classic-routing', 'conventions', 'native-wc-support', 'octane'],
+    experimental: true,
   },
 ];
 
