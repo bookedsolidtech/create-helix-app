@@ -11425,7 +11425,7 @@ const meta: Meta = {
     // bypass the catalog path. Prior behavior treated typed-in
     // \\\`<em>Save</em>\\\` as live markup, which could break the preview
     // DOM on malformed input.
-    const escapeHtml = (s) =>
+    const escapeHtml = (s: unknown): string =>
       String(s)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
