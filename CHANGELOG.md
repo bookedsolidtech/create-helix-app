@@ -1,5 +1,143 @@
 # create-helix
 
+## 0.5.0
+
+### Minor Changes
+
+- 817b26c: Add named config profiles support to .helixrc.json with --profile flag and config list-profiles command
+- 90806c2: Add retry utility with exponential backoff for network operations.
+
+  Introduces `src/retry.ts` — a generic `withRetry<T>` function that wraps any async operation with up to 3 configurable retry attempts, exponential backoff (initial 1 s, max 30 s) with full jitter, AbortSignal support, and TUI progress output ("Retrying... (attempt 2/3)"). Exhausting all retries throws a `HelixError` with code `HELIX_E010_RETRY_EXHAUSTED`. Applied to npm registry queries in `commands/upgrade.ts` and the network connectivity probe in `doctor.ts`.
+
+- 05cd95a: Add structured logging with configurable levels and JSON output format.
+
+  Introduces `src/logger.ts` — a lightweight singleton logger (no external deps) with four levels (debug, info, warn, error). Output format is JSON when `HELIX_LOG_FORMAT=json` (for log aggregators) and human-readable colored output otherwise. Log level is controlled via the `HELIX_LOG_LEVEL` env var or the `setLogLevel()` function (for `--log-level` flag integration). Debug-level messages capture file writes, template resolution, config loading, and validation steps. Scaffold verbose output and config warnings are now routed through the logger.
+
+- 2d8203a: Add CLI version check that warns when a newer version is available on npm
+- eb3320e: Add custom template override support via templateDir
+
+  Enterprises can now point a `templateDir` field in `.helixrc.json` (or set
+  `HELIX_TEMPLATE_DIR` env var) to a directory of JSON template definition files.
+  Custom templates follow the same `TemplateConfig` interface and are shown in the
+  interactive TUI selector with a `[custom]` badge. If a custom template shares an
+  ID with a built-in one, the custom version wins.
+
+- a09b12c: feat: add dependency vulnerability and license audit before scaffolding
+
+  Adds `src/security/dep-audit.ts` that checks template dependencies against
+  the npm registry advisory API for known vulnerabilities and verifies that all
+  dependency licenses are enterprise-approved (MIT, Apache-2.0, BSD-\*, ISC, 0BSD)
+  before writing package.json.
+  - TUI shows `⚠ pkg@version has N severity vulnerabilities` warnings
+  - TUI shows `⚠ pkg@version uses non-standard license: GPL-3.0` warnings
+  - Network failures degrade gracefully — audit is skipped with a notice
+  - `--skip-audit` flag bypasses the audit entirely (e.g. for offline/CI use)
+
+- 16dcde2: Add programmatic API export (`create-helix/api`) for CI/CD pipelines and build tools. Exports `scaffold()`, `listTemplates()`, `listPresets()`, `getTemplate()`, and `validate()` — all pure functions with no `process.exit` calls and no TUI output.
+- 35d8cd3: Add graceful degradation and offline mode support: detect offline state at startup, skip network checks in doctor, use cached registry data in upgrade, and add --offline flag.
+- 461532b: Add `wc-storybook` framework — a Lit 3 + Storybook 10 design system factory. Scaffolds a parameterized component library with `HelixElement`-extending base class, Track 1/Track 2 inheritance patterns, full design token pipeline (`tokens.json` → `tokens.css` via `build-tokens.ts`, plus `tokens:sync` for Figma REST integration), and production-ready Storybook setup with a11y, autodocs, themes, and Playwright story tests.
+
+  Two new CLI flags: `--ds-name` (design system codename, e.g. `bolt` → `bolt-button`, `BoltButton`) and `--token-prefix` (CSS custom property prefix, e.g. `--bolt` → `--bolt-color-primary-500`). Both prompt interactively when selecting the `wc-storybook` framework.
+
+- 461532b: Align `wc-storybook` template with Helix 3.0 and ship every `hx-*` component
+  in Storybook out of the box.
+  - Centralize Helix library/tokens version pins at the top of `src/templates.ts`
+    (`HELIX_LIBRARY_VERSION`, `HELIX_TOKENS_VERSION`) and bump wc-storybook to
+    `@helixui/library@^3.0.0` + `@helixui/tokens@^3.0.0`. Other 16 framework
+    templates intentionally remain on older Helix pins.
+  - Ship `src/stories/HelixCatalog.stories.ts` (runtime overview) and
+    `src/stories/_catalog-helpers.ts` (CEM walker, tier classifier, argTypes
+    derivation, HIPAA exclusion per Figma Build Spec §5) in every scaffold.
+  - Ship `scripts/generate-catalog.ts` and a `cem:catalog` package script that
+    reads `node_modules/@helixui/library/custom-elements.json` and emits one
+    `.stories.ts` file per non-excluded `hx-*` tag under `src/stories/catalog/`.
+    Wired to run automatically before `pnpm storybook` and `pnpm build-storybook`
+    so designers get the full component catalog from the first run.
+  - Fix the Helix 3.0 `size` → `hx-size` attribute rename in the
+    `${ds}-button` demo stories.
+  - Remove the `${ds}-card/` demo component from the scaffold. `${ds}-button`
+    remains as the single minimal extension example; every other Helix
+    component renders via the catalog without manual story authoring.
+  - Add `docs/figma-workstream.md` documenting the Separation-of-Concerns
+    decision to keep Figma integration in the `booked/figma-tokens` sandbox
+    until four promotion gates clear.
+
+  **Breaking for consumers who depended on:**
+  - `src/components/${ds}-card/` files existing in the scaffold output.
+  - `${ClassName}Card` / `${ClassName}CardStyles` exports from the scaffolded
+    `src/index.ts`.
+  - The literal `size="sm|md|lg"` attribute working on Helix button demo
+    stories (bind via `hx-size` in Helix 3.0).
+
+  Consumers should run `pnpm install && pnpm cem:catalog` after upgrade to
+  repopulate the catalog stories.
+
+- 461532b: `wc-storybook` factory — port helix's MDX editorial depth + React helpers
+  so a freshly scaffolded design system reaches ~277 sidebar entries on
+  first boot (up from ~242).
+
+  **New per-component conformance MDXes (`src/stories/components/`).** Seven
+  new pages — `{ds}-card`, `{ds}-checkbox`, `{ds}-dialog`, `{ds}-form`,
+  `{ds}-select`, `{ds}-tabs`, `{ds}-text-input` — parameterized by `dsName`
+  and `tokenPrefix` so the consumer's namespace lands everywhere (e.g.
+  `<aurora-card>` / `AuroraCard`). Each page composes the auto-injected
+  A11yStatusCard, APGPatternCard, and ConsumerObligations panels.
+
+  **New `Accessibility/*` namespace (`src/stories/accessibility/`).** Eight
+  narrative pages: Dashboard, AAA Story Template, Keyboard Contracts,
+  Success Criteria, Consumer Obligations, Focus Management, Contrast Deep
+  Dive, Forced Colors, plus a `_snippets.ts` constants module. Positioned
+  between Foundations and Patterns in `storySort`.
+
+  **New scenes + token deep-dives.** Four cross-domain-neutral scene
+  stories — `account-setup`, `team-dashboard`, `settings`, `Tokens`
+  playground — and two token MDXes (Borders, Shadows). All scene content
+  is generic SaaS/team-tool shaped (no domain-locked sample data).
+
+  **Seven new React helper components (`src/stories/_components/`).**
+  TokenSwatchGrid, ContrastMatrix, RatioCard, CodeBlock, CodeTabs,
+  useResolvedToken, contrast (APCA util), plus TokenRef transitively.
+  Shiki is added as a `devDependency` for syntax highlighting; consumers
+  can opt out by deleting the component if they don't want the bundle
+  weight.
+
+  **InlineAuditPanel now opt-in.** The component renders nothing by default;
+  consumers pass a `markdown` prop to surface AAA audit content. Replaces
+  the prior live emission whose `?raw` AAA-AUDIT.md sourcing depended on
+  monorepo-internal paths that don't survive a fresh scaffold install.
+
+  **`Foundations/Tokens/*` taxonomy nested.** `storySort` now distinguishes
+  `Foundations/<topic>.mdx` (Color, Typography, Spacing, Layout, Brand,
+  Accessibility) from `Foundations/Tokens/<topic>.mdx` (Borders, Shadows,
+  Playground) plus the existing token swatch stories.
+
+  **Fix:** the wc-storybook scaffold's `tokens.json` fallback copy was
+  bypassing the dry-run guard; routed through `safeCopyFile` so
+  `scaffold({ dryRun: true })` no longer writes to disk.
+
+  **Follow-up tracked at `docs/FOLLOW-UP-shared-storybook-kit.md`:** the
+  deferred `@helixui/storybook-kit` shared-package extraction that would
+  replace this hand-mirrored port pattern across helix/apps/storybook and
+  create-helix-app. Trigger conditions documented.
+
+  CI test matrix dropped Node 20 (Node 22 + 24 only); standalone jobs and
+  `engines` keep their existing pins.
+
+### Patch Changes
+
+- 7abd262: Add comprehensive unit tests for CLI command modules: `info`, `list`, `config-validate`, and `upgrade`. Tests cover command output (TUI and JSON modes), error cases (missing files, network failures), validation logic, and upgrade orchestration.
+- 069279e: Add comprehensive unit tests for validation, errors, and args modules
+- 5db0ec7: Add performance benchmarks using vitest bench mode for scaffold time (all 15 frameworks), template resolution, project name validation, and config file parsing; includes baseline tracking and CI regression detection (warn-only, >20% threshold)
+- e901a78: Deduplicate VALID_FRAMEWORKS and VALID_PRESETS arrays into single canonical definitions in src/validation.ts, eliminating drift risk between config-validator.ts and validation.ts.
+- c289222: Add 'Plugins & Hooks' section to --help output documenting hook lifecycle events, .helixrc.json hooks configuration, and helix-plugin-\* auto-discovery.
+- 4ae3724: Fix invalid preset error message in args.ts to include ecommerce as a valid preset, using VALID_PRESETS from the single source of truth
+- db5f043: Add 'ember' to VALID_FRAMEWORKS array in src/validation.ts to ensure --template ember is accepted by CLI validation.
+- 43bcaee: Improve error handling in config, doctor, upgrade, and config-validate to distinguish expected errors from unexpected ones
+- 68c4bda: Fix failing upgrade-registry tests by aligning test fixtures with implementation contract
+- 6f9f552: Remove vestigial barrel file src/presets/types.ts
+- 60f3a5b: Add comprehensive unit tests for `src/cli.ts` (78 tests, 90%+ coverage across all metrics). Removes `cli.ts` from vitest coverage exclusions.
+- 1d73ba6: Validate HELIX_TEMPLATE, HELIX_PRESET, and HELIX_BUNDLES environment variables against allowed values; invalid values log a warning and fall through to the interactive prompt.
+
 ## 0.4.0 (unreleased)
 
 ### Minor Changes
