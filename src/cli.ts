@@ -1139,6 +1139,21 @@ ${presetList}
         stdio: 'pipe',
       });
       if (!isQuiet) s.stop(pc.green('Dependencies installed'));
+      // wc-storybook ships scripts/generate-catalog.ts; run it now so the
+      // ~120 hx-* catalog stories are populated BEFORE the consumer boots
+      // Storybook for the first time. Without this, the sidebar shows
+      // only the 8 Phase 2 component pages on first boot, which is a
+      // confusing "where are the other components" UX (v0.6.0 Phase G).
+      if (options.framework === 'wc-storybook') {
+        if (!isQuiet) s.start('Generating component catalog (pnpm cem:catalog)...');
+        try {
+          execSync('pnpm cem:catalog', { cwd: options.directory, stdio: 'pipe' });
+          if (!isQuiet) s.stop(pc.green('Component catalog generated'));
+        } catch {
+          if (!isQuiet)
+            s.stop(pc.yellow('Catalog generation failed — run `pnpm cem:catalog` manually'));
+        }
+      }
     } catch {
       try {
         execSync('npm install', {
@@ -1146,6 +1161,16 @@ ${presetList}
           stdio: 'pipe',
         });
         if (!isQuiet) s.stop(pc.green('Dependencies installed (npm)'));
+        if (options.framework === 'wc-storybook') {
+          if (!isQuiet) s.start('Generating component catalog (npm run cem:catalog)...');
+          try {
+            execSync('npm run cem:catalog', { cwd: options.directory, stdio: 'pipe' });
+            if (!isQuiet) s.stop(pc.green('Component catalog generated'));
+          } catch {
+            if (!isQuiet)
+              s.stop(pc.yellow('Catalog generation failed — run `npm run cem:catalog` manually'));
+          }
+        }
       } catch {
         if (!isQuiet) s.stop(pc.yellow('Could not install dependencies — run manually'));
       }
@@ -1157,8 +1182,16 @@ ${presetList}
   // directory so the suggested `cd` command works as typed.
   const cdTarget =
     path.relative(process.cwd(), options.directory) || unscopeName(project.name as string);
+  // wc-storybook scaffolds emit scripts/generate-catalog.ts. When the
+  // consumer skipped --install-deps, surface an explicit cem:catalog
+  // step in the next-steps banner so the HELiX/* sidebar populates on
+  // first boot. When --install-deps ran, the catalog generation
+  // already happened in the post-install block above (Phase G).
+  const isWcStorybook = options.framework === 'wc-storybook';
+  const needsManualCatalog = isWcStorybook && !options.installDeps;
   const nextSteps = [
     `cd ${cdTarget}`,
+    ...(needsManualCatalog ? ['pnpm install', 'pnpm cem:catalog'] : []),
     options.framework === 'vanilla' ? 'open index.html' : 'npm run dev',
   ];
 
