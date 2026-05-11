@@ -8270,7 +8270,15 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   if (dsErr) {
     throw new HelixError(ErrorCode.PATH_TRAVERSAL, `Invalid dsName "${dsRaw}": ${dsErr}`);
   }
-  const tokenPrefixRaw = options.tokenPrefix ?? `--${dsRaw}`;
+  // Auto-derive token prefix from dsName. The one collision case:
+  // dsName='hx' would derive '--hx', which validateTokenPrefix rejects
+  // as reserved (it'd create a cyclic --hx-* ← --hx-* bridge). When the
+  // caller never explicitly opted into '--hx', re-derive as '--{ds}-ds'
+  // so scaffolding succeeds without forcing the user to discover and
+  // pass an explicit tokenPrefix flag.
+  const tokenPrefixDerived =
+    options.tokenPrefix ?? (dsRaw === 'hx' ? `--${dsRaw}-ds` : `--${dsRaw}`);
+  const tokenPrefixRaw = tokenPrefixDerived;
   const tokenPrefixErr = validateTokenPrefix(tokenPrefixRaw);
   if (tokenPrefixErr) {
     throw new HelixError(
@@ -12813,7 +12821,14 @@ if (process.argv.includes('--watch')) {
     // Ignore events that fire within SELF_WRITE_WINDOW_MS of our own
     // OUTPUT write — without this, fs.watch on macOS loops on its own
     // sibling write to tokens.css and rebuilds every ~3s.
-    if (Date.now() - lastWriteTime < SELF_WRITE_WINDOW_MS) return;
+    //
+    // Only apply the time guard when filename is the AMBIGUOUS null case.
+    // When the platform tells us the event is for inputFile specifically,
+    // we know it's a user edit (we never write the input from
+    // buildAndWrite), so a rapid second save within the window must
+    // still trigger a rebuild. Dropping it would leave tokens.css
+    // silently stale until the user saved a third time.
+    if (filename === null && Date.now() - lastWriteTime < SELF_WRITE_WINDOW_MS) return;
     // Debounce: editors often fire multiple events during save (atomic
     // replace = rename + change). 500ms covers the typical macOS burst
     // without making the watcher feel laggy.
