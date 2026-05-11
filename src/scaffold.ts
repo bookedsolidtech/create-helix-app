@@ -8296,7 +8296,9 @@ async function scaffoldWcStorybook(options: ProjectOptions): Promise<void> {
   // prefix gives every consumer a unique namespace by default while
   // still letting them pass `--token-prefix --hx` explicitly if they
   // really want to share Helix's prefix.
-  const prefix = options.tokenPrefix ?? `--${ds}`;
+  // Re-use the validated derived prefix (handles the dsName='hx' special
+  // case so we don't recreate '--hx' here — see tokenPrefixDerived above).
+  const prefix = tokenPrefixDerived;
   const ClassName = toPascalCase(ds);
   const BaseClass = `${ClassName}Element`;
   const dsTitle = ds

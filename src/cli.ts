@@ -376,7 +376,11 @@ export async function runJsonScaffold(
       if (opts.tokenPrefixFromArgs) return opts.tokenPrefixFromArgs;
       if (templateArg !== 'wc-storybook') return '--hx';
       const candidate = opts.dsNameFromArgs ?? unscopeName(name);
-      return validateDsName(candidate) === undefined ? `--${candidate}` : undefined;
+      if (validateDsName(candidate) !== undefined) return undefined;
+      // dsName='hx' would derive '--hx', which validateTokenPrefix rejects
+      // as reserved. Match the scaffolder's special-case fallback so
+      // `create-helix hx --json --template wc-storybook` succeeds.
+      return candidate === 'hx' ? `--${candidate}-ds` : `--${candidate}`;
     })(),
     // Brand-storytelling fields — wc-storybook factory only. Optional with
     // cross-domain neutral defaults so JSON / --yes flows don't break and
