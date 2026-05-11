@@ -3328,17 +3328,20 @@ export {};
  * Unlike SSR frameworks, Vite SPAs always run in the browser, so this import
  * is safe at module level — no window checks needed.
  */
-let initialized = false;
+// Static side-effect import: registers every hx-* custom element BEFORE
+// the first React paint. The previous async dynamic-import path let
+// React render the app before the registry was populated, so the
+// landing page briefly showed unresolved <hx-button>, <hx-theme>, etc.
+// as plain unknown tags and then "upgraded" them after the chunk
+// resolved — a visible flash on first load.
+import '@helixui/library';
 
+// initHelix remains for callers that previously awaited it; now a no-op
+// because the static import above already registered everything. Kept
+// to preserve the API contract.
 export async function initHelix(): Promise<void> {
-  if (initialized) return;
-  initialized = true;
-  await import('@helixui/library');
+  return;
 }
-
-// Side-effect import: register components immediately when this module loads.
-// This allows \`import './helix-setup'\` without calling initHelix() explicitly.
-void import('@helixui/library');
 `,
   );
 
@@ -3507,13 +3510,31 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   // App.tsx — Production landing page
   await safeWriteFile(
     path.join(srcDir, 'App.tsx'),
-    `import { useState, useCallback } from 'react';
+    `import { useState, useCallback, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import './index.css';
 
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [inputVal, setInputVal] = useState('');
+  const inputRef = useRef<HTMLElement | null>(null);
+
+  // Bind the hx-input listener ONCE per mount. The previous ref-callback
+  // pattern re-registered on every render — under React StrictMode that
+  // meant each keystroke accumulated listeners, and setInputVal was
+  // called N times per event.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const onHxInput = (e: Event) => {
+      const detail = (e as CustomEvent<{ value: string }>).detail;
+      if (detail && typeof detail.value === 'string') {
+        setInputVal(detail.value);
+      }
+    };
+    el.addEventListener('hx-input', onHxInput);
+    return () => el.removeEventListener('hx-input', onHxInput);
+  }, []);
 
   const toggleTheme = useCallback(() => {
     setTheme((t) => {
@@ -3616,23 +3637,15 @@ export default function App() {
 
             <hx-card>
               <div slot="header"><strong>Text Input</strong></div>
-              {/* hx-text-input fires a custom hx-input event, NOT
-                  React's native onInput. React's synthetic event system
-                  doesn't bridge custom events on web components, so use
-                  ref + native listener to catch it. */}
+              {/* hx-text-input fires a custom hx-input event (not
+                  React's native onInput). The useEffect above attaches
+                  the listener once via the ref; this element just
+                  registers the ref. */}
               <hx-text-input
+                ref={inputRef}
                 label="Your name"
                 placeholder="e.g. Jane Smith"
                 value={inputVal}
-                ref={(el: HTMLElement | null) => {
-                  if (!el) return;
-                  el.addEventListener('hx-input', (e: Event) => {
-                    const detail = (e as CustomEvent<{ value: string }>).detail;
-                    if (detail && typeof detail.value === 'string') {
-                      setInputVal(detail.value);
-                    }
-                  });
-                }}
               />
               {inputVal && (
                 <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
