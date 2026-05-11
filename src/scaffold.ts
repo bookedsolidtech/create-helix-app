@@ -3524,7 +3524,7 @@ export default function App() {
   }, []);
 
   return (
-    <hx-theme scheme={theme}>
+    <hx-theme theme={theme}>
       <Navbar theme={theme} onToggleTheme={toggleTheme} />
 
       {/* ── Hero ──────────────────────────────────────────────────────── */}
@@ -3616,11 +3616,23 @@ export default function App() {
 
             <hx-card>
               <div slot="header"><strong>Text Input</strong></div>
+              {/* hx-text-input fires a custom hx-input event, NOT
+                  React's native onInput. React's synthetic event system
+                  doesn't bridge custom events on web components, so use
+                  ref + native listener to catch it. */}
               <hx-text-input
                 label="Your name"
                 placeholder="e.g. Jane Smith"
                 value={inputVal}
-                onInput={(e: Event) => setInputVal((e.target as HTMLInputElement).value)}
+                ref={(el: HTMLElement | null) => {
+                  if (!el) return;
+                  el.addEventListener('hx-input', (e: Event) => {
+                    const detail = (e as CustomEvent<{ value: string }>).detail;
+                    if (detail && typeof detail.value === 'string') {
+                      setInputVal(detail.value);
+                    }
+                  });
+                }}
               />
               {inputVal && (
                 <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
