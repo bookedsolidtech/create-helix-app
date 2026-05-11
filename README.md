@@ -13,9 +13,11 @@
 
 </div>
 
-Scaffold a HELiX design system project in seconds. TUI-powered CLI with one production-tier template — `wc-storybook` — plus a slim curated set of app-framework starters. 13 additional experimental frameworks are available behind `--show-experimental`.
+Scaffold a HELiX design system project in seconds. TUI-powered CLI with a **two-step starter-kit picker** — first you tell it what the project builds (`wc-storybook` design system, `react-next` app, `react-vite` app, or `drupal-theme`), then it offers to bundle a shared `design-system` package alongside. 13 additional experimental frameworks are available behind `--show-experimental`.
 
-The flagship `wc-storybook` template is now the **default** interactive selection and ships a brand-storytelling Storybook experience out of the box — Cover narrative, foundations IA (including a v0.6.0 Iconography page wired to `@helixui/icons`), per-component AAA conformance pages with auto-injected accessibility status cards, and a token-driven manager chrome that follows your brand. See [WC-Storybook brand-storytelling experience](#wc-storybook-brand-storytelling-experience) below.
+**New in v0.7.0 — monorepo by default for app frameworks.** When you pick `react-next` or `react-vite` and keep the design system (the default Y at Q2), `create-helix` emits a **turbo + pnpm-workspaces monorepo** with `apps/web/` + `packages/{design-system,types,utils}/` — modeled on the shadcn `apps/web` + `packages/ui` precedent. Pass `--no-design-system` (or answer "n" at Q2) to keep the v0.6.x flat single-app shape. See [Monorepo by default](#monorepo-by-default-v070) and [`MIGRATING.md`](./MIGRATING.md).
+
+The flagship `wc-storybook` template remains the default interactive selection and ships a brand-storytelling Storybook experience out of the box — Cover narrative, foundations IA (including a v0.6.0 Iconography page wired to `@helixui/icons`), per-component AAA conformance pages with auto-injected accessibility status cards, and a token-driven manager chrome that follows your brand. See [WC-Storybook brand-storytelling experience](#wc-storybook-brand-storytelling-experience) below.
 
 ## Quick Start
 
@@ -56,6 +58,40 @@ Run `npx create-helix --show-experimental` (or set `HELIX_SHOW_EXPERIMENTAL=1`) 
 `remix`, `vue-nuxt`, `vue-vite`, `sveltekit`, `angular`, `astro`, `lit-vite`, `solid-vite`, `qwik-vite`, `preact-vite`, `stencil`, `ember`, `vanilla`
 
 These templates compile and emit a project skeleton, but their docs / examples / DX polish lag behind the curated three. They'll graduate out of `--show-experimental` as they reach the same bar.
+
+## Monorepo by default (v0.7.0)
+
+When you pick an app framework (`react-next` or `react-vite`) and keep the design system at the second prompt — the **default Y** — `create-helix` emits a turbo + pnpm-workspaces monorepo:
+
+```
+my-project/
+├── apps/
+│   └── web/                # Next.js or Vite app
+├── packages/
+│   ├── design-system/      # Lit web components + Storybook
+│   ├── types/              # Shared TS types + brand utilities
+│   └── utils/              # Shared helpers (cn, isPresent, …)
+├── pnpm-workspace.yaml
+├── turbo.json
+├── tsconfig.base.json
+└── package.json
+```
+
+`apps/web` declares the workspace packages via `workspace:*` deps. Next.js scaffolds carry `transpilePackages` + `experimental.externalDir`; Vite scaffolds carry `optimizeDeps.exclude` + `server.fs.allow: ['..', '../..']`. Running `pnpm dev` at the root boots both `apps/web` (port 3000) and `packages/design-system` Storybook (port 6006) concurrently via turbo.
+
+The shape mirrors the [shadcn `apps/web` + `packages/ui` monorepo precedent](https://github.com/shadcn-ui/ui/tree/main/apps/www) — proven at scale, familiar to consumers.
+
+### Opting out
+
+Three escape valves keep the v0.6.x flat single-app shape available:
+
+- **Interactive** — answer "n" at the "Include design-system package?" prompt.
+- **CLI flag** — pass `--no-design-system` (or `--monorepo=false`).
+- **API** — `scaffold({ framework: 'react-next', monorepoMode: false })`.
+
+`wc-storybook` always scaffolds flat — it is itself the design system, so wrapping it in a monorepo would duplicate the layer.
+
+**Existing v0.5.x / v0.6.x scaffolds are not broken.** Their flat shape is unchanged. A `create-helix migrate-to-monorepo` subcommand is deferred to v0.7.1; see [`MIGRATING.md`](./MIGRATING.md) for the manual recipe in the meantime.
 
 ## WC-Storybook brand-storytelling experience
 
@@ -123,8 +159,12 @@ When scaffolding a framework project, you can select which component bundles to 
 - **Dark Mode Support** -- automatic dark mode via `prefers-color-scheme`
 - **Example Pages** -- forms, dashboard, and settings page examples
 
-## Roadmap
+## Roadmap & Migration
 
+- **Migrating from v0.6.x → v0.7.0** — see [MIGRATING.md](./MIGRATING.md). Existing flat scaffolds keep working; the new monorepo shape is opt-in via the second prompt (or `--monorepo`). A manual flat → monorepo recipe is included for early adopters who want to convert.
+- **`create-helix migrate-to-monorepo` subcommand** — deferred to **v0.7.1**. Will automate the manual recipe in MIGRATING.md.
+- **Publishable design-system package** — deferred. v0.7.0 emits `packages/design-system` as a workspace-internal package only; publishing it standalone to npm needs additional wiring (build pipeline, narrowed peer deps).
+- **npm / yarn workspace support** — not on the v0.7.x roadmap. v0.7.0 is pnpm-only (`pnpm-workspace.yaml` + `workspace:*`).
 - **`@helixui/storybook-kit` shared package extraction** — deferred. See [docs/FOLLOW-UP-shared-storybook-kit.md](./docs/FOLLOW-UP-shared-storybook-kit.md) for trigger conditions and scope sketch. Today's wc-storybook factory ports helix's Storybook depth at scaffold time; a future iteration may consume a shared kit instead.
 
 ## Requirements
