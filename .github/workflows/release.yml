@@ -63,10 +63,14 @@ jobs:
           retention-days: 90
 
       - name: Notify Discord on release
-        if: steps.changesets.outputs.published == 'true' && secrets.DISCORD_WEBHOOK_URL != ''
+        if: steps.changesets.outputs.published == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL not set — skipping notification"
+            exit 0
+          fi
           curl -H "Content-Type: application/json" \
             -d '{
               "embeds": [{
