@@ -106,27 +106,27 @@ const renderSettings = () => html\`
       </p>
     </header>
 
-    <${ds}-tabs
+    <hx-tabs
       data-testid="settings-tabs"
       label="Settings sections"
       activation="manual"
       style="display: block;"
     >
-      <${ds}-tab slot="tab" panel="general" active data-testid="tab-general">General</${ds}-tab>
-      <${ds}-tab slot="tab" panel="notifications" data-testid="tab-notifications">Notifications</${ds}-tab>
-      <${ds}-tab slot="tab" panel="accessibility" data-testid="tab-accessibility">Accessibility</${ds}-tab>
+      <hx-tab slot="tab" panel="general" active data-testid="tab-general">General</hx-tab>
+      <hx-tab slot="tab" panel="notifications" data-testid="tab-notifications">Notifications</hx-tab>
+      <hx-tab slot="tab" panel="accessibility" data-testid="tab-accessibility">Accessibility</hx-tab>
 
-      <${ds}-tab-panel name="general">
-        <${ds}-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
+      <hx-tab-panel name="general">
+        <hx-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
           <span slot="heading">Account</span>
           <div style="display: grid; gap: 16px; padding: 8px 0;">
-            <${ds}-text-input
+            <hx-text-input
               data-testid="setting-display-name"
               label="Display name"
               name="displayName"
               value="Jordan Reyes"
-            ></${ds}-text-input>
-            <${ds}-select
+            ></hx-text-input>
+            <hx-select
               data-testid="setting-language"
               label="Language"
               name="language"
@@ -136,8 +136,8 @@ const renderSettings = () => html\`
               <option value="en-GB">English (United Kingdom)</option>
               <option value="es-MX">Español (México)</option>
               <option value="fr-CA">Français (Canada)</option>
-            </${ds}-select>
-            <${ds}-select
+            </hx-select>
+            <hx-select
               data-testid="setting-timezone"
               label="Timezone"
               name="timezone"
@@ -147,13 +147,13 @@ const renderSettings = () => html\`
               <option value="America/Chicago">Central Time (US & Canada)</option>
               <option value="America/Denver">Mountain Time (US & Canada)</option>
               <option value="America/Los_Angeles">Pacific Time (US & Canada)</option>
-            </${ds}-select>
+            </hx-select>
           </div>
-        </${ds}-card>
-      </${ds}-tab-panel>
+        </hx-card>
+      </hx-tab-panel>
 
-      <${ds}-tab-panel name="notifications">
-        <${ds}-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
+      <hx-tab-panel name="notifications">
+        <hx-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
           <span slot="heading">Email notifications</span>
           <div style="display: grid; gap: 16px; padding: 8px 0;">
             <label
@@ -165,8 +165,8 @@ const renderSettings = () => html\`
                   Email me when someone is invited to or joins my workspace.
                 </div>
               </div>
-              <${ds}-switch data-testid="setting-workspace-invites" name="workspaceInvites" checked
-                >On</${ds}-switch
+              <hx-switch data-testid="setting-workspace-invites" name="workspaceInvites" checked
+                >On</hx-switch
               >
             </label>
             <label
@@ -178,7 +178,7 @@ const renderSettings = () => html\`
                   Email me when a teammate @-mentions me or replies to a thread I started.
                 </div>
               </div>
-              <${ds}-switch data-testid="setting-mentions" name="mentions" checked>On</${ds}-switch>
+              <hx-switch data-testid="setting-mentions" name="mentions" checked>On</hx-switch>
             </label>
             <label
               style="display: flex; align-items: center; justify-content: space-between; gap: 16px;"
@@ -189,14 +189,14 @@ const renderSettings = () => html\`
                   Occasional product news and release-note highlights.
                 </div>
               </div>
-              <${ds}-switch data-testid="setting-marketing" name="marketing">Off</${ds}-switch>
+              <hx-switch data-testid="setting-marketing" name="marketing">Off</hx-switch>
             </label>
           </div>
-        </${ds}-card>
-      </${ds}-tab-panel>
+        </hx-card>
+      </hx-tab-panel>
 
-      <${ds}-tab-panel name="accessibility">
-        <${ds}-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
+      <hx-tab-panel name="accessibility">
+        <hx-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
           <span slot="heading">Display & motion</span>
           <div style="display: grid; gap: 16px; padding: 8px 0;">
             <label
@@ -208,7 +208,7 @@ const renderSettings = () => html\`
                   Increase contrast of borders, focus rings, and disabled states.
                 </div>
               </div>
-              <${ds}-switch data-testid="setting-high-contrast" name="highContrast">Off</${ds}-switch>
+              <hx-switch data-testid="setting-high-contrast" name="highContrast">Off</hx-switch>
             </label>
             <label
               style="display: flex; align-items: center; justify-content: space-between; gap: 16px;"
@@ -219,11 +219,11 @@ const renderSettings = () => html\`
                   Skip non-essential transitions and animations.
                 </div>
               </div>
-              <${ds}-switch data-testid="setting-reduced-motion" name="reducedMotion" checked
-                >On</${ds}-switch
+              <hx-switch data-testid="setting-reduced-motion" name="reducedMotion" checked
+                >On</hx-switch
               >
             </label>
-            <${ds}-select
+            <hx-select
               data-testid="setting-text-size"
               label="Text size"
               name="textSize"
@@ -234,11 +234,11 @@ const renderSettings = () => html\`
               <option value="medium">Medium (default)</option>
               <option value="large">Large</option>
               <option value="x-large">Extra large</option>
-            </${ds}-select>
+            </hx-select>
           </div>
-        </${ds}-card>
-      </${ds}-tab-panel>
-    </${ds}-tabs>
+        </hx-card>
+      </hx-tab-panel>
+    </hx-tabs>
 
     <div
       style="
@@ -283,14 +283,14 @@ export const RendersRealComponents: Story = {
     const canvas = within(canvasElement);
 
     const tabs = canvas.getByTestId('settings-tabs') as HTMLElement;
-    await expect(tabs.tagName.toLowerCase()).toBe('${ds}-tabs');
+    await expect(tabs.tagName.toLowerCase()).toBe('hx-tabs');
 
     const general = canvas.getByTestId('tab-general') as HTMLElement;
     const notifications = canvas.getByTestId('tab-notifications') as HTMLElement;
     const a11y = canvas.getByTestId('tab-accessibility') as HTMLElement;
-    await expect(general.tagName.toLowerCase()).toBe('${ds}-tab');
-    await expect(notifications.tagName.toLowerCase()).toBe('${ds}-tab');
-    await expect(a11y.tagName.toLowerCase()).toBe('${ds}-tab');
+    await expect(general.tagName.toLowerCase()).toBe('hx-tab');
+    await expect(notifications.tagName.toLowerCase()).toBe('hx-tab');
+    await expect(a11y.tagName.toLowerCase()).toBe('hx-tab');
 
     const save = canvas.getByTestId('settings-save') as HTMLElement;
     const cancel = canvas.getByTestId('settings-cancel') as HTMLElement;
@@ -315,7 +315,7 @@ export const SwitchToggle: Story = {
     const canvas = within(canvasElement);
 
     const sw = canvas.getByTestId('setting-marketing') as HTMLElement & { checked?: boolean };
-    await expect(sw.tagName.toLowerCase()).toBe('${ds}-switch');
+    await expect(sw.tagName.toLowerCase()).toBe('hx-switch');
     await expect(sw.checked).toBeFalsy();
 
     let lastDetail: { checked: boolean; value: string } | null = null;

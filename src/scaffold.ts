@@ -8524,6 +8524,13 @@ import '@helixui/library/components/hx-form';
 import '@helixui/library/components/hx-select';
 import '@helixui/library/components/hx-tabs';
 import '@helixui/library/components/hx-text-input';
+// Register the consumer's own \`${ds}-button\` wrapper class so the
+// scaffolded \`${ds}-button.mdx\` reference page renders the actual
+// element rather than an undefined custom element. The scaffolder emits
+// exactly one wrapper today (\`src/components/${ds}-button/${ds}-button.ts\`);
+// every other documented tag stays as the upstream \`hx-*\` registered
+// above.
+import '../src/components/${ds}-button/${ds}-button.js';
 import '../src/tokens/tokens.css';
 import consumerCem from '../custom-elements.json';
 // Helix's own custom-elements manifest ships every hx-* declaration

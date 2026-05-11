@@ -1540,7 +1540,19 @@ describe('wc-storybook Phase 4 — cross-domain-neutral scene stories', () => {
 });
 
 describe('wc-storybook Phase 4 — substitution + neutrality guarantees', () => {
-  it('all 4 scenes substitute hx-* → {ds}-* tags (dsName=aurora produces aurora-, zero literal <hx-)', async () => {
+  it('scenes keep hx-* literals for tags the scaffolder does NOT wrap; ${ds}-button is the only exception (dsName=aurora)', async () => {
+    // Codex P1 (round 16) — Phase 4 wholesale-substituted every literal
+    // hx-* tag in the scenes to ${ds}-*. That was correct for the MDXes
+    // (reverted in round 7), but the same revert was missed for scenes.
+    // Only `${ds}-button` is actually wrapped by the scaffolder; every
+    // other tag (`${ds}-card`, `${ds}-form`, `${ds}-text-input`, etc.)
+    // is undefined at runtime. Assert the post-revert shape:
+    //   - hx-card / hx-form / hx-text-input / etc. appear as literals
+    //     in scene bodies (registered via @helixui/library/components/*).
+    //   - aurora-button still appears (the one consumer wrapper).
+    //   - No NON-button aurora-* tag appears in scene HTML — the only
+    //     non-button "aurora-" mentions allowed are in prose / comments
+    //     ("aurora-* components").
     const opts = makeWcStorybookOptions({ name: 'phase4-sub' });
     await scaffoldProject(opts);
 
@@ -1554,20 +1566,94 @@ describe('wc-storybook Phase 4 — substitution + neutrality guarantees', () => 
     for (const rel of sceneFiles) {
       const src = await fs.readFile(path.join(opts.directory, rel), 'utf8');
 
-      // Tag substitution landed — aurora-* appears in body.
-      expect(src, `${rel} must contain aurora- tag references`).toMatch(/aurora-/);
+      // aurora-button (the wrapped consumer component) must appear in
+      // at least the 3 scenes that exercise buttons.
+      if (rel !== 'src/stories/patterns/scenes/settings.stories.ts') {
+        // settings.stories.ts also has buttons, so all 4 actually do
+      }
+      expect(src, `${rel} must reference the consumer's aurora-button wrapper`).toMatch(
+        /aurora-button/,
+      );
 
-      // No literal `<hx-*` opening tags in body. Strip out the
-      // `@helixui/library/components/hx-*` import lines (those stay
-      // literal — they're the upstream classes the consumer's tags
-      // extend) and the `--hx-` token name references (those stay
-      // literal — they're the published-package token names).
-      const bodyOnly = src
-        .split('\n')
-        .filter((line) => !line.includes("from '@helixui/library/components/hx-"))
-        .join('\n');
-      expect(bodyOnly, `${rel} must NOT contain literal <hx- tags`).not.toMatch(/<hx-/);
+      // No NON-button aurora-* HTML tag (`<aurora-card>`, `<aurora-form>`,
+      // etc.) — the wrapper doesn't exist for anything but button.
+      const nonButtonAuroraTag = src.match(/<aurora-(?!button[\s>/])[a-z-]+/);
+      expect(
+        nonButtonAuroraTag,
+        `${rel} must NOT contain non-button aurora-* HTML tags (found: ${nonButtonAuroraTag?.[0] ?? 'none'})`,
+      ).toBeNull();
     }
+  });
+
+  it('scenes contain hx-card / hx-form / hx-text-input literals (revert of Phase 4 over-substitution)', async () => {
+    // Per-scene targeted assertions: each scene must reference the
+    // upstream literal hx-* tag for the components it composes. The
+    // @helixui/library/components/hx-* side-effect imports register
+    // them with the browser; the templates render them as <hx-*>.
+    const opts = makeWcStorybookOptions({ name: 'phase4-revert' });
+    await scaffoldProject(opts);
+
+    const checks: Array<{ rel: string; mustContain: string[] }> = [
+      {
+        rel: 'src/stories/patterns/scenes/account-setup.stories.ts',
+        mustContain: [
+          '<hx-form',
+          '<hx-card',
+          '<hx-text-input',
+          '<hx-select',
+          '<hx-radio-group',
+          '<hx-checkbox',
+        ],
+      },
+      {
+        rel: 'src/stories/patterns/scenes/team-dashboard.stories.ts',
+        mustContain: ['<hx-card', '<hx-stat', '<hx-data-table'],
+      },
+      {
+        rel: 'src/stories/patterns/scenes/settings.stories.ts',
+        mustContain: [
+          '<hx-tabs',
+          '<hx-tab',
+          '<hx-card',
+          '<hx-switch',
+          '<hx-select',
+          '<hx-text-input',
+        ],
+      },
+      {
+        rel: 'src/stories/foundations/tokens/Tokens.stories.tsx',
+        mustContain: ['<hx-card', '<hx-text-input', '<hx-tag', '<hx-alert'],
+      },
+    ];
+
+    for (const { rel, mustContain } of checks) {
+      const src = await fs.readFile(path.join(opts.directory, rel), 'utf8');
+      for (const tag of mustContain) {
+        expect(src, `${rel} must contain literal ${tag} tag`).toContain(tag);
+      }
+    }
+  });
+
+  it('.storybook/preview.ts imports the consumer button wrapper class so ${ds}-button.mdx renders', async () => {
+    // Codex P1 (round 16) — preview.ts side-effect imports every
+    // @helixui/library/components/hx-* tag the MDXes reference, but
+    // it was missing an import of the consumer's own scaffolded
+    // `${ds}-button` class. Without it the existing
+    // `${ds}-button.mdx` reference page renders an undefined custom
+    // element. Assert the import line lands at scaffold-emit time.
+    const opts = makeWcStorybookOptions({ name: 'preview-consumer-import' });
+    await scaffoldProject(opts);
+
+    const previewSrc = await fs.readFile(
+      path.join(opts.directory, '.storybook', 'preview.ts'),
+      'utf8',
+    );
+
+    // dsName='aurora' (from makeWcStorybookOptions default). The
+    // import path must use the wrapped consumer class location.
+    expect(previewSrc, 'preview.ts must import the consumer aurora-button class').toContain(
+      "import '../src/components/aurora-button/aurora-button.js'",
+    );
   });
 
   it('forbidden healthcare strings: zero matches across all Phase 4 emissions', async () => {

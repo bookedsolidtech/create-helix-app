@@ -182,41 +182,41 @@ const renderDashboard = () => html\`
         margin-bottom: 20px;
       "
     >
-      <${ds}-card variant="default" elevation="flat" style="display: block;">
+      <hx-card variant="default" elevation="flat" style="display: block;">
         <div style="padding: 16px;">
-          <${ds}-stat label="Active members" value="24" trend="up"></${ds}-stat>
+          <hx-stat label="Active members" value="24" trend="up"></hx-stat>
         </div>
-      </${ds}-card>
-      <${ds}-card variant="default" elevation="flat" style="display: block;">
+      </hx-card>
+      <hx-card variant="default" elevation="flat" style="display: block;">
         <div style="padding: 16px;">
-          <${ds}-stat label="Pending invites" value="3" trend="down"></${ds}-stat>
+          <hx-stat label="Pending invites" value="3" trend="down"></hx-stat>
         </div>
-      </${ds}-card>
-      <${ds}-card variant="default" elevation="flat" style="display: block;">
+      </hx-card>
+      <hx-card variant="default" elevation="flat" style="display: block;">
         <div style="padding: 16px;">
-          <${ds}-stat label="Last activity" value="8m ago" trend="neutral"></${ds}-stat>
+          <hx-stat label="Last activity" value="8m ago" trend="neutral"></hx-stat>
         </div>
-      </${ds}-card>
-      <${ds}-card variant="default" elevation="flat" style="display: block;">
+      </hx-card>
+      <hx-card variant="default" elevation="flat" style="display: block;">
         <div style="padding: 16px;">
-          <${ds}-stat label="Open tasks" value="6" trend="up"></${ds}-stat>
+          <hx-stat label="Open tasks" value="6" trend="up"></hx-stat>
         </div>
-      </${ds}-card>
+      </hx-card>
     </div>
 
-    <${ds}-card variant="default" elevation="raised" style="display: block;">
+    <hx-card variant="default" elevation="raised" style="display: block;">
       <span slot="heading">Recent activity</span>
       <div style="padding: 4px 0;">
-        <${ds}-data-table
+        <hx-data-table
           data-testid="dashboard-activity"
           label="Recent member activity"
           .columns=\${ACTIVITY_COLUMNS}
           .rows=\${ACTIVITY_ROWS}
           sort-key="time"
           sort-direction="asc"
-        ></${ds}-data-table>
+        ></hx-data-table>
       </div>
-    </${ds}-card>
+    </hx-card>
 
     <h2
       style="
@@ -235,7 +235,7 @@ const renderDashboard = () => html\`
       data-testid="dashboard-cards"
       style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;"
     >
-      <${ds}-card variant="default" elevation="flat" style="display: block;">
+      <hx-card variant="default" elevation="flat" style="display: block;">
         <span slot="heading">Pull request · Workspace settings</span>
         <div style="padding: 12px 0; font-size: 13px; line-height: 1.5;">
           <p style="margin: 0 0 8px; color: var(--hx-color-text-secondary);">
@@ -245,8 +245,8 @@ const renderDashboard = () => html\`
             >Review</${ds}-button
           >
         </div>
-      </${ds}-card>
-      <${ds}-card variant="default" elevation="flat" style="display: block;">
+      </hx-card>
+      <hx-card variant="default" elevation="flat" style="display: block;">
         <span slot="heading">Invite · Riley Okafor</span>
         <div style="padding: 12px 0; font-size: 13px; line-height: 1.5;">
           <p style="margin: 0 0 8px; color: var(--hx-color-text-secondary);">
@@ -256,8 +256,8 @@ const renderDashboard = () => html\`
             >Resend</${ds}-button
           >
         </div>
-      </${ds}-card>
-      <${ds}-card variant="default" elevation="flat" style="display: block;">
+      </hx-card>
+      <hx-card variant="default" elevation="flat" style="display: block;">
         <span slot="heading">Billing · Seat upgrade</span>
         <div style="padding: 12px 0; font-size: 13px; line-height: 1.5;">
           <p style="margin: 0 0 8px; color: var(--hx-color-text-secondary);">
@@ -267,7 +267,7 @@ const renderDashboard = () => html\`
             >Upgrade</${ds}-button
           >
         </div>
-      </${ds}-card>
+      </hx-card>
     </div>
   </div>
 \`;
@@ -300,16 +300,16 @@ export const RendersRealComponents: Story = {
 
     // Stat tiles — 4 of them
     const statsRow = canvas.getByTestId('dashboard-stats');
-    const stats = statsRow.querySelectorAll('${ds}-stat');
+    const stats = statsRow.querySelectorAll('hx-stat');
     await expect(stats.length).toBe(4);
 
     // Recent activity table
     const activity = canvas.getByTestId('dashboard-activity') as HTMLElement;
-    await expect(activity.tagName.toLowerCase()).toBe('${ds}-data-table');
+    await expect(activity.tagName.toLowerCase()).toBe('hx-data-table');
 
     // Action cards — 3 of them
     const cardsRow = canvas.getByTestId('dashboard-cards');
-    const cards = cardsRow.querySelectorAll('${ds}-card');
+    const cards = cardsRow.querySelectorAll('hx-card');
     await expect(cards.length).toBe(3);
 
     // Header buttons
@@ -327,7 +327,7 @@ export const RendersRealComponents: Story = {
 /**
  * Clicks one of the action card buttons. Verifies the embedded
  * ${ds}-button dispatches \\\`hx-click\\\` even when nested inside
- * ${ds}-card slots — a common regression target for shadow-boundary
+ * hx-card slots — a common regression target for shadow-boundary
  * event composition.
  */
 export const ActionCardClick: Story = {

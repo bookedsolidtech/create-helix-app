@@ -234,10 +234,10 @@ const meta = {
           <div
             style="display: flex; gap: var(--hx-space-3, 12px); align-items: center; flex-wrap: wrap;"
           >
-            <${ds}-text-input value="acct-849172" placeholder="Account ID"></${ds}-text-input>
-            <${ds}-tag>Engineering</${ds}-tag>
-            <${ds}-tag>Editor</${ds}-tag>
-            <${ds}-tag>EU region</${ds}-tag>
+            <hx-text-input value="acct-849172" placeholder="Account ID"></hx-text-input>
+            <hx-tag>Engineering</hx-tag>
+            <hx-tag>Editor</hx-tag>
+            <hx-tag>EU region</hx-tag>
           </div>
         </section>
 
@@ -250,17 +250,17 @@ const meta = {
           <div
             style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--hx-space-4, 16px); align-items: start;"
           >
-            <${ds}-card>
+            <hx-card>
               <div slot="heading" style="font-weight: 600;">Jordan Reyes</div>
               <div style="font-size: 13px; color: var(--hx-color-text-secondary);">
                 acct-849172 · Editor · Engineering team
               </div>
               <${ds}-button slot="footer" variant="primary" hx-size="small">Open profile</${ds}-button>
-            </${ds}-card>
-            <${ds}-alert variant="info" open>
+            </hx-card>
+            <hx-alert variant="info" open>
               <strong slot="title">Two projects merged</strong>
               Reviewed by an admin · undo within 30s
-            </${ds}-alert>
+            </hx-alert>
           </div>
         </section>
 

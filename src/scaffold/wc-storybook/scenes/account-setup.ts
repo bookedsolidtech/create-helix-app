@@ -112,28 +112,28 @@ const renderAccountSetup = () => html\`
       </p>
     </header>
 
-    <${ds}-form id="account-form">
-      <${ds}-card variant="default" elevation="raised" style="display: block;">
+    <hx-form id="account-form">
+      <hx-card variant="default" elevation="raised" style="display: block;">
         <span slot="heading">Personal information</span>
 
         <div style="display: grid; gap: 16px; padding: 8px 0;">
-          <${ds}-text-input
+          <hx-text-input
             data-testid="account-first-name"
             label="First name"
             name="firstName"
             placeholder="Jordan"
             required
-          ></${ds}-text-input>
+          ></hx-text-input>
 
-          <${ds}-text-input
+          <hx-text-input
             data-testid="account-last-name"
             label="Last name"
             name="lastName"
             placeholder="Reyes"
             required
-          ></${ds}-text-input>
+          ></hx-text-input>
 
-          <${ds}-text-input
+          <hx-text-input
             data-testid="account-email"
             type="email"
             label="Work email"
@@ -141,31 +141,31 @@ const renderAccountSetup = () => html\`
             placeholder="you@example.com"
             help-text="We use this to verify your account and send sign-in links."
             required
-          ></${ds}-text-input>
+          ></hx-text-input>
 
-          <${ds}-text-input
+          <hx-text-input
             data-testid="account-phone"
             type="tel"
             label="Work phone (optional)"
             name="phone"
             placeholder="(555) 555-0123"
-          ></${ds}-text-input>
+          ></hx-text-input>
         </div>
-      </${ds}-card>
+      </hx-card>
 
-      <${ds}-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
+      <hx-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
         <span slot="heading">Workspace details</span>
 
         <div style="display: grid; gap: 16px; padding: 8px 0;">
-          <${ds}-text-input
+          <hx-text-input
             data-testid="account-organization"
             label="Organization name"
             name="organization"
             placeholder="Acme Inc"
             required
-          ></${ds}-text-input>
+          ></hx-text-input>
 
-          <${ds}-select
+          <hx-select
             data-testid="account-role"
             label="Your role"
             name="role"
@@ -178,44 +178,44 @@ const renderAccountSetup = () => html\`
             <option value="operations">Operations</option>
             <option value="marketing">Marketing</option>
             <option value="other">Other</option>
-          </${ds}-select>
+          </hx-select>
 
-          <${ds}-radio-group
+          <hx-radio-group
             data-testid="account-contact-pref"
             label="Preferred contact method"
             name="contactPreference"
             help-text="How should we reach you about your workspace?"
             value="email"
           >
-            <${ds}-radio value="email" label="Email"></${ds}-radio>
-            <${ds}-radio value="phone" label="Phone call"></${ds}-radio>
-            <${ds}-radio value="text" label="Text message"></${ds}-radio>
-            <${ds}-radio value="in-app" label="In-app notifications only"></${ds}-radio>
-          </${ds}-radio-group>
+            <hx-radio value="email" label="Email"></hx-radio>
+            <hx-radio value="phone" label="Phone call"></hx-radio>
+            <hx-radio value="text" label="Text message"></hx-radio>
+            <hx-radio value="in-app" label="In-app notifications only"></hx-radio>
+          </hx-radio-group>
 
-          <${ds}-checkbox name="firstWorkspace" data-testid="account-first-workspace">
+          <hx-checkbox name="firstWorkspace" data-testid="account-first-workspace">
             This is my first workspace on this product
-          </${ds}-checkbox>
+          </hx-checkbox>
         </div>
-      </${ds}-card>
+      </hx-card>
 
-      <${ds}-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
+      <hx-card variant="default" elevation="raised" style="display: block; margin-top: 16px;">
         <span slot="heading">Consent</span>
 
         <div style="display: grid; gap: 12px; padding: 8px 0;">
-          <${ds}-checkbox name="acceptTerms" data-testid="account-consent-terms" required>
+          <hx-checkbox name="acceptTerms" data-testid="account-consent-terms" required>
             I have read and agree to the
             <a
               href="#terms"
               style="color: var(--hx-color-text-link); text-decoration: underline;"
               >terms of service</a
             >.
-          </${ds}-checkbox>
-          <${ds}-checkbox name="acceptPrivacy" data-testid="account-consent-privacy" required>
+          </hx-checkbox>
+          <hx-checkbox name="acceptPrivacy" data-testid="account-consent-privacy" required>
             I acknowledge the privacy notice.
-          </${ds}-checkbox>
+          </hx-checkbox>
         </div>
-      </${ds}-card>
+      </hx-card>
 
       <div
         id="account-result"
@@ -238,7 +238,7 @@ const renderAccountSetup = () => html\`
           Create account
         </${ds}-button>
       </div>
-    </${ds}-form>
+    </hx-form>
   </div>
 \`;
 
@@ -262,7 +262,7 @@ export const Default: Story = {
 
 /**
  * Click submit on an empty form and verify the application-level
- * validation flow: \\\`${ds}-form\\\` runs its own \\\`checkValidity()\\\`
+ * validation flow: \\\`hx-form\\\` runs its own \\\`checkValidity()\\\`
  * against every named field, dispatches \\\`hx-invalid\\\` when required
  * fields are blank, and does not dispatch \\\`hx-submit\\\`. This is the
  * contract a consumer relies on — submission is blocked by HELiX
@@ -293,15 +293,15 @@ export const SubmitEmpty: Story = {
     ) as HTMLButtonElement | null;
     await expect(innerSubmit).toBeTruthy();
 
-    // ${ds}-form is a custom element, not a <form>. Clicking the inner
+    // hx-form is a custom element, not a <form>. Clicking the inner
     // button is a real-world entry point but the eventual signal is a
-    // \\\`submit\\\` event bubbled to ${ds}-form. Dispatch it directly so
+    // \\\`submit\\\` event bubbled to hx-form. Dispatch it directly so
     // the test verifies the validation contract independently of any
     // form-association gap.
     await userEvent.click(innerSubmit!);
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
-    // ${ds}-form's validation pass blocks submission and reports the
+    // hx-form's validation pass blocks submission and reports the
     // failure:
     //   - hx-submit MUST NOT fire (application logic prevents it)
     //   - hx-invalid MUST fire with at least one error (the contract a
@@ -320,7 +320,7 @@ export const SubmitEmpty: Story = {
 /**
  * Fills the form with realistic sample data. Asserts that every targeted
  * host element receives the value (the observable contract a consumer
- * can rely on). The submit dispatch is driven by ${ds}-form's internal
+ * can rely on). The submit dispatch is driven by hx-form's internal
  * validity check; this story verifies the scene is wired correctly
  * without depending on the submit-event payload shape (which is
  * exercised in the form-component test suite).
@@ -357,7 +357,7 @@ export const HappyPath: Story = {
     await expect(lastName.value).toBe('Reyes');
     await expect(email.value).toBe('jordan@example.com');
 
-    // Role <${ds}-select> — set host value directly.
+    // Role <hx-select> — set host value directly.
     const role = canvas.getByTestId('account-role') as HTMLElement & { value: string };
     role.value = 'engineering';
     role.dispatchEvent(new Event('change', { bubbles: true }));
