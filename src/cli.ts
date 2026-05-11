@@ -888,8 +888,13 @@ ${presetList}
         // produced cyclic self-references in the generated bridge layer
         // (--hx-button-bg: var(--hx-button-bg, ...)) and silently
         // dropped the entire override surface.
+        //
+        // Special-case dsName='hx' to match the JSON/API derivations: the
+        // literal '--hx' is reserved by validateTokenPrefix, so seeding
+        // it as the prompt's initialValue would make Enter on the default
+        // fail immediately.
         const dsResult = (ctx.results.dsName as string) ?? dsNameFromArgs ?? projectName ?? 'my-ds';
-        const defaultPrefix = `--${dsResult}`;
+        const defaultPrefix = dsResult === 'hx' ? `--${dsResult}-ds` : `--${dsResult}`;
         return p.text({
           message: 'CSS token prefix',
           placeholder: defaultPrefix,

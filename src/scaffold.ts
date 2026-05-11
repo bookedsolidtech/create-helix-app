@@ -11399,34 +11399,46 @@ const meta: Meta = {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     const slot = escapeHtml((args as Record<string, unknown>).content ?? '');
-    // Some Helix tags are CHILD components — they only render inside a
-    // specific parent (e.g. hx-carousel-item inside hx-carousel,
-    // hx-tab/hx-tab-panel inside hx-tabs). Rendered standalone they
-    // appear empty or unstructured. Wrap the child in its expected
-    // parent so the catalog story shows a meaningful preview.
-    const PARENT_WRAPPERS: Record<string, string> = {
-      'hx-accordion-item': 'hx-accordion',
-      'hx-breadcrumb-item': 'hx-breadcrumb',
-      'hx-carousel-item': 'hx-carousel',
-      'hx-list-item': 'hx-list',
-      'hx-menu-item': 'hx-menu',
-      'hx-menu-divider': 'hx-menu',
-      'hx-nav-item': 'hx-nav',
-      'hx-tab': 'hx-tabs',
-      'hx-tab-panel': 'hx-tabs',
-      'hx-tree-item': 'hx-tree-view',
-      'hx-step': 'hx-steps',
-      'hx-tr': 'hx-table',
-      'hx-th': 'hx-table',
-      'hx-td': 'hx-table',
-      'hx-thead': 'hx-table',
-      'hx-tbody': 'hx-table',
-      'hx-tfoot': 'hx-table',
-      'hx-structured-list-row': 'hx-structured-list',
+    // Some Helix tags are CHILD components — they only render meaningfully
+    // inside a specific parent hierarchy (e.g. hx-carousel-item inside
+    // hx-carousel, hx-tab/hx-tab-panel inside hx-tabs). For the table
+    // family the hierarchy is multi-level: th/td → tr → thead/tbody →
+    // table. A bare <hx-table><hx-th /></hx-table> renders blank because
+    // the intermediate tr/tbody are missing.
+    //
+    // PARENT_CHAIN[tag] is the ordered list of outer-most → inner-most
+    // ancestors the child needs to render under. Empty list = no wrapper.
+    const PARENT_CHAIN: Record<string, string[]> = {
+      'hx-accordion-item': ['hx-accordion'],
+      'hx-breadcrumb-item': ['hx-breadcrumb'],
+      'hx-carousel-item': ['hx-carousel'],
+      'hx-list-item': ['hx-list'],
+      'hx-menu-item': ['hx-menu'],
+      'hx-menu-divider': ['hx-menu'],
+      'hx-nav-item': ['hx-nav'],
+      'hx-tab': ['hx-tabs'],
+      'hx-tab-panel': ['hx-tabs'],
+      'hx-tree-item': ['hx-tree-view'],
+      'hx-step': ['hx-steps'],
+      // Table family — full row/section hierarchy so th/td actually
+      // render their content. hx-tr nests directly under tbody; hx-th
+      // and hx-td nest under a tr within tbody.
+      'hx-thead': ['hx-table'],
+      'hx-tbody': ['hx-table'],
+      'hx-tfoot': ['hx-table'],
+      'hx-tr': ['hx-table', 'hx-tbody'],
+      'hx-th': ['hx-table', 'hx-thead', 'hx-tr'],
+      'hx-td': ['hx-table', 'hx-tbody', 'hx-tr'],
+      'hx-structured-list-row': ['hx-structured-list'],
     };
     const inner = \\\`<\${tag}\\\${attrs ? ' ' + attrs : ''}>\\\${slot}</\${tag}>\\\`;
-    const wrapper = PARENT_WRAPPERS['\${tag}'];
-    const markup = wrapper ? \\\`<\\\${wrapper}>\\\${inner}</\\\${wrapper}>\\\` : inner;
+    const chain = PARENT_CHAIN['\${tag}'] ?? [];
+    const markup = chain.length === 0
+      ? inner
+      : chain.reduceRight(
+          (acc, parent) => \\\`<\\\${parent}>\\\${acc}</\\\${parent}>\\\`,
+          inner,
+        );
     return html\\\`\\\${unsafeHTML(markup)}\\\`;
   },
 };
