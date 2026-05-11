@@ -539,7 +539,11 @@ describe('wc-storybook integration', () => {
     // real source file) instead of an inline `node -e` one-liner that
     // crashed with ERR_INVALID_ARG_VALUE because `node -e` evaluates
     // __filename to the literal "[eval]" and breaks createRequire.
-    expect(pkg.scripts['tokens:refresh-platform']).toBe('tsx scripts/refresh-tokens.ts');
+    // Chained build-tokens so the on-disk tokens.css doesn't stay stale
+    // relative to the just-reset tokens.json — same rationale as tokens:sync.
+    expect(pkg.scripts['tokens:refresh-platform']).toBe(
+      'tsx scripts/refresh-tokens.ts && tsx scripts/build-tokens.ts',
+    );
     // refresh-tokens.ts itself resolves @helixui/tokens at runtime.
     const refreshScript = await readText(o.directory, 'scripts/refresh-tokens.ts');
     expect(refreshScript).toContain("'@helixui/tokens/tokens.json'");

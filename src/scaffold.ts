@@ -787,7 +787,11 @@ function getScripts(options: ProjectOptions): Record<string, string> {
         // which throws ERR_INVALID_ARG_VALUE under `node -e` because
         // __filename evaluates to "[eval]". Delegating to a real file
         // (scripts/refresh-tokens.ts) avoids that runtime error class.
-        'tokens:refresh-platform': 'tsx scripts/refresh-tokens.ts',
+        // Resets tokens.json from the upstream platform shape AND
+        // immediately rebuilds tokens.css — same rationale as
+        // tokens:sync. Without the build-tokens chain, the on-disk
+        // tokens.css stays stale relative to the just-reset JSON.
+        'tokens:refresh-platform': 'tsx scripts/refresh-tokens.ts && tsx scripts/build-tokens.ts',
       };
     case 'vanilla':
       return {
@@ -9278,7 +9282,14 @@ export const ${ClassName}ButtonStyles = css\`
 
   await safeWriteFile(
     path.join(buttonDir, `${ds}-button.ts`),
-    `import { HelixButton } from '@helixui/library';
+    `// Import HelixButton from the component entrypoint, NOT the
+// @helixui/library root barrel. The root re-exports every hx-*
+// class and the package.json marks every component subpath as
+// side-effecting, so importing the root would eagerly register
+// the entire HELiX catalog when a consumer app does
+// \`import './components/${ds}-button';\`. The component entrypoint
+// keeps tree-shaking honest.
+import { HelixButton } from '@helixui/library/components/hx-button';
 import { ${ClassName}ButtonStyles } from './${ds}-button.styles.js';
 
 /**
@@ -12840,6 +12851,12 @@ function build(): { vars: number; output: string } {
   const cssVars: CssVar[] = [];
   for (const [topKey, node] of Object.entries(tokens)) {
     if (SKIP_ROOT.has(topKey)) continue;
+    // THEME_BRANCHES are walked separately below into scoped
+    // :root[data-theme="..."] blocks. Including them in the default
+    // :root walk too would emit duplicate vars like
+    // --{prefix}-dark-color-* in the base block on top of the scoped
+    // override block.
+    if (THEME_BRANCHES.includes(topKey)) continue;
     walk(node, [topKey], cssVars);
   }
 
