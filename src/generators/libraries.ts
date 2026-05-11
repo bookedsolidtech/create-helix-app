@@ -28,12 +28,16 @@ helix-overrides:
 # helix-tokens must declare a responsive mode. The CSS is loaded via @import
 # from style.css, but registering it as a library lets you override or
 # replace it with a custom breakpoint scheme without touching style.css.
+#
+# Intentionally has NO dependency on 'global' — depending on 'global' would
+# (a) load this stylesheet twice (global already @imports it from
+# style.css) and (b) prevent consumers from swapping in a replacement
+# responsive library without also detaching global, which defeats the
+# documented "swap me out" extension point.
 helix-responsive:
   version: VERSION
   css:
     theme:
       css/helix-responsive.css: {}
-  dependencies:
-    - ${themeName}/global
 `;
 }

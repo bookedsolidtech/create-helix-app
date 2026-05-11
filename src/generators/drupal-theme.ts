@@ -98,8 +98,12 @@ export function generateStyleCss(): string {
  * Global theme stylesheet.
  * Component-scoped styles live in components/{group}/{name}/{name}.css
  */
-@import url("helix-overrides.css");
+/* helix-responsive.css ships responsive token defaults; helix-overrides.css
+ * is where consumers reshape them. Load responsive FIRST so override values
+ * win the cascade — the reverse order silently reset overrides back to the
+ * scaffold defaults on every page render. */
 @import url("helix-responsive.css");
+@import url("helix-overrides.css");
 
 *,
 *::before,
