@@ -11450,8 +11450,13 @@ const meta: Meta = {
       'hx-menu-item': ['hx-menu'],
       'hx-menu-divider': ['hx-menu'],
       'hx-nav-item': ['hx-nav'],
-      'hx-tab': ['hx-tabs'],
-      'hx-tab-panel': ['hx-tabs'],
+      // hx-tab / hx-tab-panel intentionally omitted from this map.
+      // They need slot="tab" + panel="<id>" attributes on the tab and a
+      // matching name="<id>" on the panel for the WAI-ARIA tabs pattern
+      // to bind, which the generic wrapper-chain renderer can't supply.
+      // Bare-render here; consumers wanting a working tabs example
+      // author their own .stories.ts with hand-wired attributes (see
+      // settings.stories.ts for the reference shape).
       'hx-tree-item': ['hx-tree-view'],
       'hx-step': ['hx-steps'],
       // Table family — full row/section hierarchy so th/td actually

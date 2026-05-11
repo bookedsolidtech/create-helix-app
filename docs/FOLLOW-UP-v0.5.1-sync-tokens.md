@@ -56,3 +56,27 @@ collection per-mode.
 Land in v0.5.1 (patch) within 1-2 weeks of v0.5.0, before consumer
 Figma-sync usage scales beyond the early adopters who can patch around
 it manually.
+
+---
+
+## Finding 3 — Yarn Berry / PnP package resolution
+
+**File:** `src/scaffold.ts` (generate-catalog.ts emit) — hardcoded
+`node_modules/@helixui/library/custom-elements.json` path.
+
+Yarn Berry (zero-installs / PnP) doesn't lay out a physical
+`node_modules/` tree; packages live inside `.yarn/cache/*.zip` and are
+resolved via the PnP loader. The scaffolded `generate-catalog.ts`
+crashes on `yarn storybook` because the hardcoded path doesn't exist.
+
+**Fix sketch:** use `import.meta.resolve('@helixui/library/...')` or
+`createRequire(import.meta.url).resolve(...)` (the pattern
+`refresh-tokens.ts` already uses) instead of `path.join(ROOT,
+'node_modules/...')`. Keep npm/pnpm cases working — those resolvers
+return the same on-disk path.
+
+## Trigger 3
+
+Land alongside Findings 1+2 in v0.5.1. Lower priority than sync-tokens
+findings (Yarn Berry isn't a documented support target, but
+zero-friction Yarn support is a small ergonomics win).
