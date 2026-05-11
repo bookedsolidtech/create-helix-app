@@ -56,6 +56,7 @@ vi.mock('../../src/security/dep-audit.js', () => ({
 
 vi.mock('../../src/version-check.js', () => ({
   checkForUpdate: vi.fn(),
+  getCachedLatestVersion: vi.fn(() => null),
 }));
 
 vi.mock('../../src/args.js', () => ({

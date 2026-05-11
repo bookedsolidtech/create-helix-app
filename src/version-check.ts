@@ -170,6 +170,21 @@ export async function checkForUpdate(options: CheckForUpdateOptions = {}): Promi
   return `Update available: ${current} → ${latest}. Run: npm install -g create-helix`;
 }
 
+/**
+ * Synchronously read the cached latest version, if available and fresh.
+ *
+ * Used by the banner helper to decide whether to render the "Update
+ * available" footer line. Returns null when the cache is missing, stale,
+ * malformed, or unreadable — never throws.
+ *
+ * Note: this does NOT trigger a fetch; it only consults the on-disk cache
+ * that `checkForUpdate` populates as a side effect of background calls.
+ */
+export function getCachedLatestVersion(): string | null {
+  const cached = readCache();
+  return cached === null ? null : cached.latestVersion;
+}
+
 /** Resolve the current package version at runtime. */
 async function getCurrentVersion(): Promise<string | null> {
   try {

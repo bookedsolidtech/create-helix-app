@@ -22,48 +22,35 @@ import {
 import { parseArgs } from './args.js';
 import { loadConfig, listProfiles, readEnvVars } from './config.js';
 import { auditDependencies } from './security/dep-audit.js';
-import { checkForUpdate } from './version-check.js';
+import { checkForUpdate, getCachedLatestVersion } from './version-check.js';
 import { logger } from './logger.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
+import { helixBanner } from './cli/banner.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
 const HELIX_VERSION = pkg.version;
 
-function banner(): void {
-  console.log();
-  console.log(pc.bold(pc.cyan('  ╭─────────────────────────────────────╮')));
-  console.log(pc.bold(pc.cyan('  │                                     │')));
-  console.log(
-    pc.bold(
-      pc.cyan('  │') +
-        '   ' +
-        pc.white('H E L i X') +
-        '  ' +
-        pc.dim('create') +
-        '              ' +
-        pc.cyan('│'),
-    ),
-  );
-  console.log(
-    pc.bold(pc.cyan('  │') + pc.dim('   Enterprise Web Components           ') + pc.cyan('│')),
-  );
-  console.log(
-    pc.bold(
-      pc.cyan('  │') +
-        pc.dim(`   v${HELIX_VERSION}`) +
-        '                              ' +
-        pc.cyan('│'),
-    ),
-  );
-  console.log(pc.bold(pc.cyan('  │                                     │')));
-  console.log(pc.bold(pc.cyan('  ╰─────────────────────────────────────╯')));
-  console.log();
+/**
+ * Render the create-helix banner via the extracted helixBanner() helper
+ * (v0.6.0 Phase D). Suppression contract is enforced inside the helper:
+ * returns [] under --quiet, --json, or non-TTY pipes.
+ */
+function banner(
+  opts: {
+    asJson?: boolean;
+    suppressed?: boolean;
+    latestNpmVersion?: string;
+  } = {},
+): void {
+  helixBanner(opts).forEach((line) => {
+    console.log(line);
+  });
 }
 
 async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise<void> {
-  if (!isQuiet) banner();
+  banner({ suppressed: isQuiet, latestNpmVersion: getCachedLatestVersion() ?? undefined });
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix — Drupal theme ')));
 
@@ -809,7 +796,11 @@ ${presetList}
     return;
   }
 
-  if (!isQuiet) banner();
+  banner({
+    asJson: isJson,
+    suppressed: isQuiet,
+    latestNpmVersion: getCachedLatestVersion() ?? undefined,
+  });
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix ')));
 
