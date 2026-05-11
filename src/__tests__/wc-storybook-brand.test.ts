@@ -797,6 +797,61 @@ describe('wc-storybook Phase 4 — narrative MDX emitters', () => {
     expect(src).not.toContain("borderRadius: '999px'");
   });
 
+  // ─── v0.6.0 Phase H regression: empty / undefined verticals ─────────────
+  //
+  // User reported seeing "Fintech / Wellness" chips on a scaffold where
+  // they didn't enter any verticals. The scaffold defaults are CORRECT
+  // (empty array / undefined → no chips), so the report was either
+  // user-entered values or stale Aurora-demo state. Pin the contract so
+  // any future regression is caught at test time.
+
+  it('v0.6.0 Phase H — brandVerticals:[] emits ZERO hx-narrative-chip elements', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase6h-verticals-empty-array',
+      brandVerticals: [],
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    const chipMatches = src.match(/className="hx-narrative-chip"/g) ?? [];
+    expect(chipMatches).toHaveLength(0);
+    expect(src).not.toContain('className="hx-narrative-chip-row"');
+  });
+
+  it('v0.6.0 Phase H — brandVerticals:undefined produces the same chip-free Cover', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase6h-verticals-undefined',
+    });
+    delete (opts as { brandVerticals?: string[] }).brandVerticals;
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    const chipMatches = src.match(/className="hx-narrative-chip"/g) ?? [];
+    expect(chipMatches).toHaveLength(0);
+    expect(src).not.toContain('className="hx-narrative-chip-row"');
+  });
+
+  it('v0.6.0 Phase H — no hardcoded fintech/wellness leaks into Cover.mdx when verticals is empty', async () => {
+    const opts = makeWcStorybookOptions({
+      name: 'phase6h-no-default-verticals',
+      brandVerticals: [],
+    });
+    await scaffoldProject(opts);
+    const src = await fs.readFile(
+      path.join(opts.directory, 'src', 'stories', 'Cover.mdx'),
+      'utf-8',
+    );
+    // Allow lowercase tokens in code blocks / comments; check chip-shaped
+    // emissions only (>fintech< or >wellness< would indicate a literal
+    // chip text node leak per the user-reported issue).
+    expect(src).not.toMatch(/>fintech</i);
+    expect(src).not.toMatch(/>wellness</i);
+  });
+
   it('emits Overview.mdx explaining the three-tier cascade', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase4-overview' });
     await scaffoldProject(opts);
