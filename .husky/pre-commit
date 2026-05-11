@@ -15,13 +15,13 @@ case "$GIT_COMMON_DIR" in
 esac
 
 # ── Secret scanning with gitleaks ────────────────────────────────────────────
-if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks protect --staged --config "$MAIN_ROOT/.gitleaks.toml" --redact --exit-code 1
-else
-  echo "⚠️  gitleaks not installed — skipping local secret scan."
-  echo "   Install it to enable pre-commit secret scanning:"
-  echo "   https://github.com/gitleaks/gitleaks#installing"
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "ERROR: gitleaks not installed — pre-commit secret scan is mandatory." >&2
+  echo "  macOS:  brew install gitleaks" >&2
+  echo "  Linux:  download from https://github.com/gitleaks/gitleaks/releases" >&2
+  exit 1
 fi
+gitleaks protect --staged --config "$MAIN_ROOT/.gitleaks.toml" --redact --exit-code 1
 
 # ── Run lint-staged (from commit root so staged files are correctly resolved) ──
 # pnpm exec resolves the binary through the workspace even in worktrees.
