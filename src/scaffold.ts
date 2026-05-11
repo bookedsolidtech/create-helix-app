@@ -3466,7 +3466,6 @@ export function Navbar({ theme, onToggleTheme }: NavbarProps) {
 
         <nav className="navbar-links" aria-label="Main navigation">
           <a href="#components">Components</a>
-          <a href="#ecosystem">Ecosystem</a>
           <a
             href="https://github.com/bookedsolidtech/helix"
             target="_blank"
