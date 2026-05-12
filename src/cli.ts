@@ -860,7 +860,9 @@ ${presetList}
                           ? 'Next.js app'
                           : t.id === 'react-vite'
                             ? 'Vite SPA'
-                            : t.hint,
+                            : t.id === 'astro'
+                              ? 'Astro (web-components-native, static-first)'
+                              : t.hint,
                   })),
                   initialValue: 'wc-storybook' as Framework,
                 })) as Framework);
@@ -888,7 +890,7 @@ ${presetList}
       // monorepo emitter yet in v0.7.0).
       includeDesignSystem: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
         const fw = (ctx.results.framework as Framework | undefined) ?? null;
-        const isAppFramework = fw === 'react-next' || fw === 'react-vite';
+        const isAppFramework = fw === 'react-next' || fw === 'react-vite' || fw === 'astro';
         if (!isAppFramework) {
           return Promise.resolve(false);
         }
