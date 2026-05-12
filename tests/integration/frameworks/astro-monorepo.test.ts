@@ -115,8 +115,21 @@ describe('astro monorepo integration (Phase C)', () => {
     const o = opts('astro-layout');
     await scaffoldProject(o);
     const layout = await readText(o.directory, 'apps/web/src/layouts/Layout.astro');
+
+    // Runtime loader — the inline <script>import '@helixui/library'</script>
+    // block. Astro processes <script> tags + Vite bundles the import;
+    // runs in the browser and calls customElements.define() once.
     expect(layout).toContain("import '@helixui/library'");
+    expect(layout).toMatch(/<script>\s*\n\s*import '@helixui\/library';\s*\n\s*<\/script>/);
+
+    // View transitions — Astro 5's ClientRouter (renamed from
+    // <ViewTransitions /> in v4). Pin both the import source AND the
+    // component reference so a copy edit can't drop one and pass.
     expect(layout).toContain('ClientRouter');
+    expect(layout).toContain("import { ClientRouter } from 'astro:transitions'");
+
+    // Tokens import targets the DS package's './tokens' export when
+    // includeDesignSystem is true (the default for this opts() helper).
     expect(layout).toContain("import '@astro-layout/design-system/tokens'");
   });
 

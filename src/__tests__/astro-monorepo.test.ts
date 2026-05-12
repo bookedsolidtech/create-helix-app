@@ -235,6 +235,33 @@ describe('v0.8.0 Phase C — astro monorepo emits the full apps/web tree', () =>
     expect(index.toLowerCase()).not.toContain('lorem ipsum');
   });
 
+  it('index.astro feature cards use the FA-free icon names that actually exist (Phase D follow-up)', async () => {
+    // Phase D first emitted `library="helix" name="shield-check"` /
+    // similar — the names DON'T exist in the helix icon set, so the
+    // browser rendered zero-size SVGs in the feature grid. The fix
+    // swapped them to FA-free names. This test pins the FA-free names
+    // so a future copy edit can't silently revert the regression
+    // (Playwright catches it visually too, but unit-level pin trips
+    // first + with a clearer message).
+    const dir = path.join(TEST_ROOT, 'icons');
+    await scaffoldAstroMr({ dir });
+
+    const index = await fs.readFile(
+      path.join(dir, 'apps', 'web', 'src', 'pages', 'index.astro'),
+      'utf8',
+    );
+
+    // Positive — the three feature-card icons are FA-free.
+    expect(index).toMatch(/library="fa-free"\s+name="shield-halved"/);
+    expect(index).toMatch(/library="fa-free"\s+name="palette"/);
+    expect(index).toMatch(/library="fa-free"\s+name="rocket"/);
+
+    // Negative — none of the stale helix-library names slip back in.
+    expect(index).not.toMatch(/library="helix"\s+name="shield-check"/);
+    expect(index).not.toMatch(/library="helix"\s+name="palette"/);
+    expect(index).not.toMatch(/library="helix"\s+name="rocket"/);
+  });
+
   it('components.astro renders the second route with real component examples', async () => {
     const dir = path.join(TEST_ROOT, 'components');
     await scaffoldAstroMr({ dir });
