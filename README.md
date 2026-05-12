@@ -15,7 +15,9 @@
 
 Scaffold a HELiX design system project in seconds. TUI-powered CLI with a **two-step starter-kit picker** — first you tell it what the project builds (`wc-storybook` design system, `react-next` app, `react-vite` app, or `drupal-theme`), then it offers to bundle a shared `design-system` package alongside. 13 additional experimental frameworks are available behind `--show-experimental`.
 
-**New in v0.7.0 — monorepo by default for app frameworks.** When you pick `react-next` or `react-vite` and keep the design system (the default Y at Q2), `create-helix` emits a **turbo + pnpm-workspaces monorepo** with `apps/web/` + `packages/{design-system,types,utils}/` — modeled on the shadcn `apps/web` + `packages/ui` precedent. Pass `--no-design-system` (or answer "n" at Q2) to keep the v0.6.x flat single-app shape. See [Monorepo by default](#monorepo-by-default-v070) and [`MIGRATING.md`](./MIGRATING.md).
+**New in v0.8.0 — Astro joins the production-tier starter kits.** The Q1 picker now offers four production-tier targets: `wc-storybook`, `react-next`, `react-vite`, and **`astro`**. The Astro starter ships a real Astro 5 landing page (hero, features, view transitions, theme toggle, two routed pages) and consumes the design system as `<hx-*>` web components natively — no React-wrapper indirection. The flat Astro path stays reachable via `--no-design-system` for back-compat, but the monorepo is the supported shipping target going forward. First Playwright visual baselines in the project ship under [`tests/e2e/screenshots/astro/`](./tests/e2e/screenshots/astro/).
+
+**v0.7.0 introduced monorepo by default for app frameworks.** When you pick `react-next`, `react-vite`, or now `astro` and keep the design system (the default Y at Q2), `create-helix` emits a **turbo + pnpm-workspaces monorepo** with `apps/web/` + `packages/{design-system,types,utils}/` — modeled on the shadcn `apps/web` + `packages/ui` precedent. Pass `--no-design-system` (or answer "n" at Q2) to keep the v0.6.x flat single-app shape. See [Monorepo by default](#monorepo-by-default-v070) and [`MIGRATING.md`](./MIGRATING.md).
 
 The flagship `wc-storybook` template remains the default interactive selection and ships a brand-storytelling Storybook experience out of the box — Cover narrative, foundations IA (including a v0.6.0 Iconography page wired to `@helixui/icons`), per-component AAA conformance pages with auto-injected accessibility status cards, and a token-driven manager chrome that follows your brand. See [WC-Storybook brand-storytelling experience](#wc-storybook-brand-storytelling-experience) below.
 
@@ -43,30 +45,31 @@ npx create-helix --drupal --preset healthcare
 
 ## Supported Frameworks
 
-The interactive prompt shows a curated slim list by default — the flagship `wc-storybook` factory plus the two production-tier app starters that have shipped beyond stub quality. The remaining 13 framework templates exist but are gated behind `--show-experimental` until they reach the same bar.
+The interactive prompt shows a curated slim list by default — the flagship `wc-storybook` factory plus the three production-tier app starters that have shipped beyond stub quality. The remaining 12 framework templates exist but are gated behind `--show-experimental` until they reach the same bar.
 
 | Framework                  | Command Hint                     | Features                                                                                                  |
 | -------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | **WC Storybook (factory)** | default — design system factory  | Lit 3, Storybook 10, brand-storytelling docs, AAA cards, Iconography page, auto-catalog ~99 hx-\* entries |
 | **React + Next.js 16**     | recommended for new app projects | SSR, App Router, React wrappers                                                                           |
 | **React + Vite**           | best DX for SPAs                 | Hot reload, React wrappers, production landing page                                                       |
+| **Astro 5** _(new v0.8.0)_ | islands + native web components  | Landing page, view transitions, theme toggle, native `<hx-*>` consumption, Playwright visual baseline     |
 
 ### Experimental templates
 
 Run `npx create-helix --show-experimental` (or set `HELIX_SHOW_EXPERIMENTAL=1`) to surface these in the prompt, the `list` subcommand, and as valid `--template <name>` values:
 
-`remix`, `vue-nuxt`, `vue-vite`, `sveltekit`, `angular`, `astro`, `lit-vite`, `solid-vite`, `qwik-vite`, `preact-vite`, `stencil`, `ember`, `vanilla`
+`remix`, `vue-nuxt`, `vue-vite`, `sveltekit`, `angular`, `lit-vite`, `solid-vite`, `qwik-vite`, `preact-vite`, `stencil`, `ember`, `vanilla`
 
-These templates compile and emit a project skeleton, but their docs / examples / DX polish lag behind the curated three. They'll graduate out of `--show-experimental` as they reach the same bar.
+These templates compile and emit a project skeleton, but their docs / examples / DX polish lag behind the curated four. They'll graduate out of `--show-experimental` as they reach the same bar.
 
-## Monorepo by default (v0.7.0)
+## Monorepo by default (v0.7.0+)
 
-When you pick an app framework (`react-next` or `react-vite`) and keep the design system at the second prompt — the **default Y** — `create-helix` emits a turbo + pnpm-workspaces monorepo:
+When you pick an app framework (`react-next`, `react-vite`, or **`astro`** as of v0.8.0) and keep the design system at the second prompt — the **default Y** — `create-helix` emits a turbo + pnpm-workspaces monorepo:
 
 ```
 my-project/
 ├── apps/
-│   └── web/                # Next.js or Vite app
+│   └── web/                # Next.js, Vite, or Astro app
 ├── packages/
 │   ├── design-system/      # Lit web components + Storybook
 │   ├── types/              # Shared TS types + brand utilities
@@ -77,9 +80,24 @@ my-project/
 └── package.json
 ```
 
-`apps/web` declares the workspace packages via `workspace:*` deps. Next.js scaffolds carry `transpilePackages` + `experimental.externalDir`; Vite scaffolds carry `optimizeDeps.exclude` + `server.fs.allow: ['..', '../..']`. Running `pnpm dev` at the root boots both `apps/web` (port 3000) and `packages/design-system` Storybook (port 6006) concurrently via turbo.
+`apps/web` declares the workspace packages via `workspace:*` deps. The framework-specific wiring per starter kit:
+
+- **Next.js** carries `transpilePackages` + `experimental.externalDir`; the design system is consumed via generated React wrappers from `packages/design-system/src/react.ts`.
+- **Vite** carries `optimizeDeps.exclude` + `server.fs.allow: ['..', '../..']`; React wrappers as with Next.
+- **Astro (v0.8.0)** consumes the design system as **`<hx-*>` web components natively** — no React wrappers, no `createComponent` indirection — because Astro's island architecture is web-component-first.
+
+Running `pnpm dev` at the root runs `turbo run dev`, which boots both `apps/web` and `packages/design-system` Storybook (port 6006) concurrently. Default app ports: **Next.js 3000**, **Vite 5173**, **Astro 4321**.
 
 The shape mirrors the [shadcn `apps/web` + `packages/ui` monorepo precedent](https://github.com/shadcn-ui/ui/tree/main/apps/www) — proven at scale, familiar to consumers.
+
+### Available starter-kit combinations
+
+After Q1 (what does this project build?) and Q2 (include design system?), the supported combinations are:
+
+- **Design system** (`wc-storybook`, flat — always flat, it _is_ the design system)
+- **Next.js + design system** (monorepo, default for Next pick)
+- **Vite + design system** (monorepo, default for Vite pick)
+- **Astro + design system** _(new v0.8.0)_ — monorepo, default for Astro pick
 
 ### Opting out
 
@@ -87,11 +105,13 @@ Three escape valves keep the v0.6.x flat single-app shape available:
 
 - **Interactive** — answer "n" at the "Include design-system package?" prompt.
 - **CLI flag** — pass `--no-design-system` (or `--monorepo=false`).
-- **API** — `scaffold({ framework: 'react-next', monorepoMode: false })`.
+- **API** — `scaffold({ framework: 'react-next' | 'react-vite' | 'astro', monorepoMode: false })`.
 
 `wc-storybook` always scaffolds flat — it is itself the design system, so wrapping it in a monorepo would duplicate the layer.
 
-**Existing v0.5.x / v0.6.x scaffolds are not broken.** Their flat shape is unchanged. A `create-helix migrate-to-monorepo` subcommand is deferred to v0.7.1; see [`MIGRATING.md`](./MIGRATING.md) for the manual recipe in the meantime.
+**The flat Astro path is deprecated as of v0.8.0** — still reachable via the API + `--no-design-system` for back-compat, but the monorepo is now the supported shipping target. New Astro investment lands in the monorepo emit. See [`MIGRATING.md`](./MIGRATING.md) v0.7 → v0.8 section.
+
+**Existing v0.5.x / v0.6.x / v0.7.x scaffolds are not broken.** Their shape on disk is unchanged. A `create-helix migrate-to-monorepo` subcommand is deferred; see [`MIGRATING.md`](./MIGRATING.md) for the manual recipe (which covers Next/Vite/Astro alike — they share the same workspace shape).
 
 ## WC-Storybook brand-storytelling experience
 

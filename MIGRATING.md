@@ -1,8 +1,112 @@
-# Migrating to create-helix v0.7.0
+# Migrating to create-helix
 
 This guide is for consumers who already run `create-helix` and notice the
-prompt looks different in v0.7.0. **Your existing scaffolds are not broken.**
-The new monorepo shape only applies to **new** scaffolds where you opt in.
+prompt looks different across v0.7.0 and v0.8.0. **Your existing scaffolds
+are not broken.** The monorepo shape only applies to **new** scaffolds where
+you opt in.
+
+- [v0.7 → v0.8 — Astro is now a production-tier starter kit](#v07--v08--astro-is-now-a-production-tier-starter-kit)
+- [v0.6 → v0.7 — Two-step prompt + monorepo by default](#what-changed-in-v070)
+
+---
+
+## v0.7 → v0.8 — Astro is now a production-tier starter kit
+
+### What changed in v0.8.0
+
+The Q1 starter-kit picker grows from four entries to five. Astro graduates
+out of `--show-experimental` and becomes the **fourth production-tier app
+target** alongside `wc-storybook`, `react-next`, and `react-vite`.
+
+When you pick **`astro`** at Q1 and keep the design system at Q2 (the
+default Y), `create-helix` emits a turbo + pnpm-workspaces monorepo with the
+**same workspace shape** v0.7.0 introduced for Next/Vite:
+
+```
+my-project/
+├── apps/
+│   └── web/                  # Astro 5 — landing page, view transitions,
+│                             # theme toggle, /about + /docs routes,
+│                             # native <hx-*> consumption
+├── packages/
+│   ├── design-system/        # Lit web components + Storybook
+│   ├── types/                # Shared TS types + brand utilities
+│   └── utils/                # Shared helpers (cn, isPresent, …)
+├── pnpm-workspace.yaml
+├── turbo.json
+├── tsconfig.base.json
+└── package.json
+```
+
+Running `pnpm dev` at the root runs `turbo run dev`, which boots **Astro at
+port 4321** (not 3000 — Astro's default) and **Storybook at port 6006**
+concurrently.
+
+### What's different about the Astro monorepo vs. Next/Vite
+
+Two things, both deliberate:
+
+1. **WC-native consumption.** Next and Vite consume the design system
+   through generated React wrappers at `packages/design-system/src/react.ts`
+   (because React + custom elements need `createComponent` from `@lit/react`
+   to lift web component events into React's synthetic-event model). Astro
+   doesn't need that — Astro's island architecture renders web components
+   natively. So `apps/web` for Astro consumes `<hx-button>`, `<hx-card>`,
+   etc. **directly** as web components. No wrapper barrel imported, no
+   React indirection.
+2. **Dev port is 4321, not 3000.** Astro's default. `turbo run dev` reports
+   both ports in its concurrent log.
+
+Everything else — the workspace layout, the `workspace:*` deps, the
+`tsconfig.base.json` extends pattern, the `packages/{design-system,types,utils}/`
+triad — is identical to the Next/Vite monorepo flavor.
+
+### Flat Astro is deprecated (but not removed)
+
+If you were using flat Astro in v0.7.x:
+
+```bash
+npx create-helix --template astro --no-design-system
+# or
+scaffold({ framework: 'astro', monorepoMode: false })
+```
+
+**Your existing scaffolds keep working.** The flat scaffolder still emits
+the same v0.7.x flat output. No breaking change.
+
+**But future Astro investment lands in the monorepo path.** The flat
+scaffolder is now in maintenance-only mode — bugs that affect it will still
+be fixed, but new Astro features (and the visual gate baselines committed
+in v0.8.0) target the monorepo emit.
+
+**Recommendation.** New Astro scaffolds should use the monorepo default
+(no flag needed):
+
+```bash
+npx create-helix --template astro
+# or interactively, hit Enter through Q2 (default Y)
+```
+
+There is no automated `migrate-to-monorepo` for Astro — the manual recipe
+below (originally for v0.6 → v0.7 Next/Vite migration) covers Astro too,
+because the workspace shape is identical. Just substitute `astro` for
+`react-next` and use Astro-specific app config in step 6.
+
+### Visual baselines
+
+v0.8.0 ships the first committed Playwright visual baselines in the
+project at `tests/e2e/screenshots/astro/`. If you're curious what the Astro
+starter looks like before you scaffold, browse those PNGs in the repo.
+
+### Opt-out paths (preserve flat Astro behavior)
+
+Three escape valves, same as Next/Vite:
+
+| How                 | Where                                                   |
+| ------------------- | ------------------------------------------------------- |
+| Interactive         | Answer **"n"** at Q2 ("Include design-system package?") |
+| Non-interactive CLI | Pass **`--no-design-system`**                           |
+| Programmatic API    | `scaffold({ framework: 'astro', monorepoMode: false })` |
 
 ---
 
