@@ -490,7 +490,12 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
         await scaffoldVanilla(options);
         break;
       case 'astro':
-        await scaffoldAstro(options);
+        if (options.monorepoMode) {
+          const { scaffoldAstroMonorepo } = await import('./scaffold/astro/monorepo.js');
+          await scaffoldAstroMonorepo(options);
+        } else {
+          await scaffoldAstro(options);
+        }
         break;
       case 'svelte-kit':
         await scaffoldSvelteKit(options);
@@ -4599,7 +4604,7 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
   );
 }
 
-async function scaffoldAstro(options: ProjectOptions): Promise<void> {
+export async function scaffoldAstro(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const pagesDir = path.join(srcDir, 'pages');
   const layoutsDir = path.join(srcDir, 'layouts');

@@ -233,7 +233,10 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
   //  - other frameworks: respected as-is (no monorepo emitter yet, so a
   //    truthy value will fall through dispatch and the flat scaffolder
   //    runs — the unbuilt frameworks see no behavior change in Phase B).
-  const isAppFramework = options.framework === 'react-next' || options.framework === 'react-vite';
+  const isAppFramework =
+    options.framework === 'react-next' ||
+    options.framework === 'react-vite' ||
+    options.framework === 'astro';
   const resolvedMonorepoMode = wcStorybookForce
     ? false
     : isAppFramework

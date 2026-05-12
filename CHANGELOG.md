@@ -1,5 +1,39 @@
 # create-helix
 
+## 0.8.0
+
+### Minor Changes
+
+- v0.8.0 — **Astro joins the production-tier starter kits as a turbo monorepo.** The Q1 starter-kit picker now offers four production-tier targets: `wc-storybook`, `react-next`, `react-vite`, and **`astro`**. When the consumer picks Astro and keeps the design system at Q2 (the default Y), `create-helix` emits a turbo + pnpm-workspaces monorepo with `apps/web/` (a real Astro 5 landing page — view transitions, theme toggle, two routed pages, native `<hx-*>` web component consumption) plus the same `packages/{design-system,types,utils}/` triad shipped in v0.7.0.
+
+  **Astro monorepo support (new).** `src/scaffolders/astro/monorepo.ts` emits `apps/web/` with `name: "@{scope}/web"`, `workspace:*` deps on the workspace packages, an Astro 5 config wired for the workspace setup, and `tsconfig.json` extending `tsconfig.base.json`. The landing page ships a hero + features + tech-stack stack, a theme toggle that respects `prefers-color-scheme`, view transitions across navigation, and two routed pages (`/about`, `/docs`). The design system is consumed natively as `<hx-*>` tags — no React-wrapper indirection, because Astro's island architecture is web-component-first. The shared workspace shape (`pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `packages/{design-system,types,utils}/`) is the same one v0.7.0 introduced for Next/Vite, so the dev lifecycle (`turbo run dev` boots Astro at 4321 and Storybook at 6006 concurrently) is consistent across all three app frameworks.
+
+  **Playwright visual gate (new).** `tests/e2e/astro-monorepo-visual.test.ts` is the first visual-regression baseline in this project. Gated on `E2E=1`, it scaffolds → `pnpm install` → `pnpm type-check` → boots the Astro dev server → uses Playwright to render the home / about / docs routes → asserts every `hx-*` element on the page has upgraded → snapshots three PNGs committed under `tests/e2e/screenshots/astro/`. Combined with the three v0.7.0 monorepo install gates, the v0.8.0 release ships **four E2E gates green** end-to-end.
+
+  **Flat Astro deprecated.** The flat Astro scaffolder is still reachable via the API (`scaffold({ framework: 'astro', monorepoMode: false })`) and the `--no-design-system` CLI opt-out for back-compat — same escape valves as Next/Vite. But it is no longer the supported shipping target: future Astro investment lands in the monorepo path. New scaffolds should use the monorepo default; existing flat scaffolds keep working unchanged. See [`MIGRATING.md`](./MIGRATING.md) v0.7 → v0.8 section.
+
+  **Phases shipped this minor:**
+  - **Phase A — scaffolder fork (`eff1a90`).** `src/scaffolders/astro.ts` forked into `astro/{flat,monorepo,_shared}.ts`. Flat emit preserved byte-for-byte from v0.7.x.
+  - **Phase B — dispatch wiring (`eff1a90`).** Astro added to the starter-kit Q1 picker; the `monorepoMode` / `includeDesignSystem` flags route through the same normalizer Next/Vite already use.
+  - **Phase C — Astro monorepo emit (`03fd7c8`).** `apps/web/` with serious landing page (hero + features + tech stack), view transitions, theme toggle, two routed pages.
+  - **Phase C-fix (`c2bba01`).** Scrubbed literal `<script>` tokens from `Layout.astro` JSDoc/comments that broke Vite esbuild parse.
+  - **Phase D — Playwright visual gate (`e470c54`).** `tests/e2e/astro-monorepo-visual.test.ts` + 3 committed PNG baselines under `tests/e2e/screenshots/astro/`.
+  - **Phase D-fix (`47e6b34`).** Use FA-free icon names that actually exist (`shield-halved`, `palette`, `rocket`) instead of names that resolved to placeholders.
+  - **Phase E — golden snapshot + integration coverage (`85d3aa5`).** New `astro-monorepo` golden under `tests/golden/` plus integration tests pinning the dispatcher and workspace layout.
+  - **Phase F — docs + changeset (this entry).** Final preflight, MIGRATING.md v0.7 → v0.8 section, README rework, and the live smoke that boots Astro 4321 + Storybook 6006 concurrently via `turbo run dev`.
+
+  **Visible UX changes consumers will notice immediately:**
+  - _Astro in Q1._ BEFORE (v0.7.x): the curated Q1 list was `wc-storybook`, `react-next`, `react-vite`, `drupal-theme`; Astro lived under `--show-experimental` alongside 12 other stubs. AFTER (v0.8.0): the curated Q1 list grows to five entries with Astro added. The same monorepo orchestration that backs Next/Vite now backs Astro.
+  - _WC-native consumption pattern._ Unlike Next/Vite (which consume the design system via generated React wrappers at `packages/design-system/src/react.ts`), the Astro monorepo consumes `<hx-*>` web components directly. Astro's island architecture is web-component-first — no wrapper indirection needed.
+  - _First visual baseline._ `tests/e2e/screenshots/astro/` is the project's first committed Playwright visual baseline. Consumers can preview what the Astro starter looks like before they scaffold.
+
+  **Opt-out paths (preserve flat Astro behavior):**
+  - Interactive: answer "n" at Q2.
+  - CLI: `--no-design-system`.
+  - API: `scaffold({ framework: 'astro', monorepoMode: false })`.
+
+  **NOT breaking.** Existing v0.7.x scaffolds are unaffected. v0.6.x and v0.5.x scaffolds (flat) are unaffected. New scaffolds default to the monorepo shape for `react-next`, `react-vite`, and now `astro`.
+
 ## 0.7.0
 
 ### Minor Changes
