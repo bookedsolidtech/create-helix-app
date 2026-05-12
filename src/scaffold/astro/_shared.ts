@@ -325,7 +325,7 @@ export async function writeAppsWebLayout(args: {
  * Frontmatter runs at BUILD time only — don't try to import
  * @helixui/library here (it would try to register custom elements in
  * a Node context with no \`window\`). The runtime loader lives in the
- * <script> block below the slot; Astro / Vite handles the bundling
+ * \`script\` block below the slot; Astro / Vite handles the bundling
  * so the import resolves in the browser.
  */
 import { ClientRouter } from 'astro:transitions';
@@ -367,12 +367,12 @@ const {
     <slot />
 
     {/* HELiX runtime loader.
-        Astro processes <script> tags inside .astro files and bundles
+        Astro processes script tags inside .astro files and bundles
         them via Vite. The bare-import resolves at runtime; the library
-        calls customElements.define() once when loaded; all <hx-*>
-        elements on the page upgrade.
+        calls customElements.define() once when loaded; all hx-* tags
+        on the page upgrade.
 
-        Runs once per full page load. With <ClientRouter /> enabled
+        Runs once per full page load. With ClientRouter enabled
         (view-transitions), client-side route changes do NOT re-evaluate
         this script — the already-registered custom elements survive the
         morph. */}
