@@ -565,7 +565,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
       <div class="features-grid">
         <hx-card>
           <div slot="header" class="card-header">
-            <hx-icon library="helix" name="shield-check" aria-hidden="true"></hx-icon>
+            <hx-icon library="fa-free" name="shield-halved" aria-hidden="true"></hx-icon>
             <h3>Accessible by default</h3>
           </div>
           <p>
@@ -576,7 +576,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
 
         <hx-card>
           <div slot="header" class="card-header">
-            <hx-icon library="helix" name="palette" aria-hidden="true"></hx-icon>
+            <hx-icon library="fa-free" name="palette" aria-hidden="true"></hx-icon>
             <h3>Theme everything</h3>
           </div>
           <p>
@@ -587,7 +587,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
 
         <hx-card>
           <div slot="header" class="card-header">
-            <hx-icon library="helix" name="rocket" aria-hidden="true"></hx-icon>
+            <hx-icon library="fa-free" name="rocket" aria-hidden="true"></hx-icon>
             <h3>Framework agnostic</h3>
           </div>
           <p>

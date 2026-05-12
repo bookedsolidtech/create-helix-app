@@ -9,8 +9,16 @@
       "command": "npx",
       "args": ["-y", "obsidian-mcp"],
       "env": {
-        "OBSIDIAN_VAULT_PATH": "/Volumes/Development/booked/data/bst"
+        "OBSIDIAN_VAULT_PATH": "/Volumes/Development/booked/data/bst-cto-kb"
       }
+    },
+    "framelink": {
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -a && . /Volumes/Development/booked/figma-tokens/.env && set +a && exec npx -y figma-developer-mcp --figma-api-key=\"$FIGMA_TOKEN\" --stdio"
+      ]
     }
   }
 }
