@@ -1722,9 +1722,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
-        <HelixProvider>
-          <main>{children}</main>
-        </HelixProvider>
+        <HelixProvider>{children}</HelixProvider>
       </body>
     </html>
   );
@@ -2344,6 +2342,12 @@ export default function Home() {
     <hx-theme theme="auto">
       <Navbar />
 
+      {/* v0.9.1: <main> wraps content between Navbar and Footer so the
+          page has exactly one main landmark + a top-level contentinfo
+          landmark (the footer). Doing this in RootLayout would wrap
+          Navbar + Footer too AND collide with examples/* pages that
+          ship their own <main>. */}
+      <main>
       {/* Hero */}
       <section className="hero">
         <div className="container">
@@ -2662,6 +2666,7 @@ import { HxButton } from '@/components/helix/wrappers';
           </hx-card>
         </div>
       </section>
+      </main>
 
       <Footer />
     </hx-theme>
@@ -2684,6 +2689,7 @@ export default function ComponentsPage() {
   return (
     <hx-theme theme="auto">
       <Navbar />
+      <main>
       <section className="hero" style={{ padding: '3rem 2rem' }}>
         <div className="container">
           <h1>Component Library</h1>
@@ -2859,6 +2865,7 @@ export default function ComponentsPage() {
           </hx-card>
         </div>
       </section>
+      </main>
 
       <Footer />
     </hx-theme>
@@ -2881,6 +2888,7 @@ export default function DocsPage() {
   return (
     <hx-theme theme="auto">
       <Navbar />
+      <main>
       <section className="hero" style={{ padding: '3rem 2rem' }}>
         <div className="container">
           <h1>Documentation</h1>
@@ -3032,6 +3040,7 @@ import { HxButton } from
           </hx-card>
         </div>
       </section>
+      </main>
 
       <Footer />
     </hx-theme>
