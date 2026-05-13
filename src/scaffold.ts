@@ -1833,6 +1833,61 @@ pre {
   margin: 0 auto 2rem;
 }
 
+/* v0.9.1: button-styled <a> classes for hero CTAs. These mirror
+   hx-button's visual language via shared design tokens so the hero
+   looks visually consistent — but the underlying element is a real
+   <a>, which works before HELiX upgrades and with JS disabled.
+   Reserve <hx-button> for interactive controls (form submit, action
+   triggers); use these for navigation. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.button:focus-visible {
+  outline: 2px solid var(--hx-color-focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+.button--lg {
+  padding: 0.85rem 1.6rem;
+  font-size: 1.05rem;
+}
+.button--primary {
+  background: var(--hx-color-action-primary, #2563eb);
+  color: var(--hx-color-text-on-primary, #ffffff);
+}
+.button--primary:hover {
+  background: var(--hx-color-action-primary-hover, #1d4ed8);
+}
+.button--secondary {
+  background: var(--hx-color-action-secondary, #f1f5f9);
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--secondary:hover {
+  background: var(--hx-color-action-secondary-hover, #e2e8f0);
+}
+.button--outline {
+  background: transparent;
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--outline:hover {
+  background: var(--hx-color-surface, transparent);
+}
+
 .section {
   padding: 4rem 0;
 }
@@ -2410,19 +2465,21 @@ export default function Home() {
             75+ accessible, themeable components with Shadow DOM encapsulation.
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {/* v0.9.1: hx-button supports href natively — drop the <Link> wrapper
-                that nests an <a> inside the inner <button> and breaks
-                axe-core's nested-interactive rule. The browser still does
-                client-side navigation for same-origin links thanks to
-                Next's Link prefetch on the surrounding nav; for these
-                CTAs the cost of a synthetic-click roundtrip is negligible
-                and the markup is correct. */}
-            <hx-button variant="primary" size="lg" href="/examples/forms">
+            {/* v0.9.1: hero CTAs use plain styled <Link>s (NOT
+                <hx-button>). The .button-* classes match the visual
+                language of hx-button via shared design tokens, but
+                the element is a real <a> — works before HELiX
+                upgrades, with JS disabled, and passes both
+                nested-interactive AND link-name a11y guards. Use
+                <hx-button> for interactive controls (form submit,
+                actions); use styled <a> for navigation. (codex
+                round-4 P2 fix) */}
+            <Link href="/examples/forms" className="button button--primary button--lg">
               See Forms Demo
-            </hx-button>
-            <hx-button variant="secondary" size="lg" href="/examples/dashboard">
+            </Link>
+            <Link href="/examples/dashboard" className="button button--secondary button--lg">
               See Dashboard Demo
-            </hx-button>
+            </Link>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
             <hx-tag>Lit 3</hx-tag>
@@ -3824,21 +3881,24 @@ export default function App() {
             Type-safe, accessible, and themeable out of the box.
           </p>
           <div className="hero-actions">
-            {/* hx-button supports href / target natively; nesting <a><hx-button>
-                produces invalid interactive-in-interactive markup and breaks
-                keyboard focus semantics. */}
-            <hx-button
-              variant="primary"
-              size="lg"
+            {/* v0.9.1: hero CTAs are styled <a> elements (NOT
+                <hx-button>). The .button-* classes match hx-button's
+                visual language via shared design tokens, but the
+                underlying element is a real <a> — works before HELiX
+                upgrades and with JS disabled. Use <hx-button> for
+                interactive controls (form submit, action triggers);
+                use styled <a> for navigation. (codex round-4 P2 fix) */}
+            <a
               href="https://github.com/bookedsolidtech/helix#getting-started"
               target="_blank"
               rel="noopener noreferrer"
+              className="button button--primary button--lg"
             >
               Get Started
-            </hx-button>
-            <hx-button variant="outline" size="lg" href="#components">
+            </a>
+            <a href="#components" className="button button--outline button--lg">
               View Components
-            </hx-button>
+            </a>
           </div>
         </div>
       </section>
@@ -5032,6 +5092,61 @@ pre {
   color: var(--hx-page-text-secondary);
   max-width: 600px;
   margin: 0 auto 2rem;
+}
+
+/* v0.9.1: button-styled <a> classes for hero CTAs. These mirror
+   hx-button's visual language via shared design tokens so the hero
+   looks visually consistent — but the underlying element is a real
+   <a>, which works before HELiX upgrades and with JS disabled.
+   Reserve <hx-button> for interactive controls (form submit, action
+   triggers); use these for navigation. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.button:focus-visible {
+  outline: 2px solid var(--hx-color-focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+.button--lg {
+  padding: 0.85rem 1.6rem;
+  font-size: 1.05rem;
+}
+.button--primary {
+  background: var(--hx-color-action-primary, #2563eb);
+  color: var(--hx-color-text-on-primary, #ffffff);
+}
+.button--primary:hover {
+  background: var(--hx-color-action-primary-hover, #1d4ed8);
+}
+.button--secondary {
+  background: var(--hx-color-action-secondary, #f1f5f9);
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--secondary:hover {
+  background: var(--hx-color-action-secondary-hover, #e2e8f0);
+}
+.button--outline {
+  background: transparent;
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--outline:hover {
+  background: var(--hx-color-surface, transparent);
 }
 
 .section {
@@ -6532,6 +6647,61 @@ pre {
   color: var(--hx-page-text-secondary);
   max-width: 600px;
   margin: 0 auto 2rem;
+}
+
+/* v0.9.1: button-styled <a> classes for hero CTAs. These mirror
+   hx-button's visual language via shared design tokens so the hero
+   looks visually consistent — but the underlying element is a real
+   <a>, which works before HELiX upgrades and with JS disabled.
+   Reserve <hx-button> for interactive controls (form submit, action
+   triggers); use these for navigation. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.button:focus-visible {
+  outline: 2px solid var(--hx-color-focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+.button--lg {
+  padding: 0.85rem 1.6rem;
+  font-size: 1.05rem;
+}
+.button--primary {
+  background: var(--hx-color-action-primary, #2563eb);
+  color: var(--hx-color-text-on-primary, #ffffff);
+}
+.button--primary:hover {
+  background: var(--hx-color-action-primary-hover, #1d4ed8);
+}
+.button--secondary {
+  background: var(--hx-color-action-secondary, #f1f5f9);
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--secondary:hover {
+  background: var(--hx-color-action-secondary-hover, #e2e8f0);
+}
+.button--outline {
+  background: transparent;
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--outline:hover {
+  background: var(--hx-color-surface, transparent);
 }
 
 .section {
@@ -14179,6 +14349,61 @@ pre {
   color: var(--hx-page-text-secondary);
   max-width: 600px;
   margin: 0 auto 2rem;
+}
+
+/* v0.9.1: button-styled <a> classes for hero CTAs. These mirror
+   hx-button's visual language via shared design tokens so the hero
+   looks visually consistent — but the underlying element is a real
+   <a>, which works before HELiX upgrades and with JS disabled.
+   Reserve <hx-button> for interactive controls (form submit, action
+   triggers); use these for navigation. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.button:focus-visible {
+  outline: 2px solid var(--hx-color-focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+.button--lg {
+  padding: 0.85rem 1.6rem;
+  font-size: 1.05rem;
+}
+.button--primary {
+  background: var(--hx-color-action-primary, #2563eb);
+  color: var(--hx-color-text-on-primary, #ffffff);
+}
+.button--primary:hover {
+  background: var(--hx-color-action-primary-hover, #1d4ed8);
+}
+.button--secondary {
+  background: var(--hx-color-action-secondary, #f1f5f9);
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--secondary:hover {
+  background: var(--hx-color-action-secondary-hover, #e2e8f0);
+}
+.button--outline {
+  background: transparent;
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-page-border, #cbd5e1);
+}
+.button--outline:hover {
+  background: var(--hx-color-surface, transparent);
 }
 
 .section {

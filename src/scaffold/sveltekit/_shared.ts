@@ -672,21 +672,24 @@ export async function writeAppsWebIndexPage(args: {
         box, framework-agnostic by construction. Drop them anywhere HTML runs.
       </p>
       <div class="hero-ctas">
-        <!-- v0.9.1 cross-kit audit fix: hx-button supports href + target
-             natively. Wrapping in <a> produced nested-interactive
-             violations (axe-core: focusable descendants). -->
-        <hx-button variant="primary" size="lg" href="/components">
+        <!-- v0.9.1 cross-kit audit: hero CTAs are styled <a>
+             elements (NOT <hx-button>). The .button-* classes match
+             hx-button's visual language via shared design tokens,
+             but the underlying element is a real <a> — works in the
+             SvelteKit SSR window, with JS disabled, and before HELiX
+             upgrades. Use <hx-button> for interactive controls; use
+             styled <a> for navigation. -->
+        <a href="/components" class="button button--primary button--lg">
           Browse components
-        </hx-button>
-        <hx-button
-          variant="ghost"
-          size="lg"
+        </a>
+        <a
           href="${githubLink}"
           target="_blank"
           rel="noopener"
+          class="button button--outline button--lg"
         >
           View on GitHub
-        </hx-button>
+        </a>
       </div>
     </div>
   </section>
@@ -875,6 +878,51 @@ export async function writeAppsWebIndexPage(args: {
     gap: 1rem;
     justify-content: center;
     flex-wrap: wrap;
+  }
+
+  /* v0.9.1: button-styled <a> classes for hero CTAs. Mirrors
+     hx-button's visual language via shared design tokens but the
+     underlying element is a real <a> — works before HELiX upgrades
+     and survives the SvelteKit SSR window without JS. */
+  .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    font: inherit;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+  .button:focus-visible {
+    outline: 2px solid var(--hx-color-focus-ring, #2563eb);
+    outline-offset: 2px;
+  }
+  .button--lg {
+    padding: 0.85rem 1.6rem;
+    font-size: 1.05rem;
+  }
+  .button--primary {
+    background: var(--hx-color-action-primary, #2563eb);
+    color: var(--hx-color-text-on-primary, #ffffff);
+  }
+  .button--primary:hover {
+    background: var(--hx-color-action-primary-hover, #1d4ed8);
+  }
+  .button--outline {
+    background: transparent;
+    color: var(--hx-color-text, #0f172a);
+    border-color: var(--hx-page-border, #cbd5e1);
+  }
+  .button--outline:hover {
+    background: var(--hx-color-surface, transparent);
   }
 
   /* Features */
