@@ -1,5 +1,51 @@
 # create-helix
 
+## 0.9.0
+
+### Minor Changes
+
+- 8982616: feat(v0.9.0): SvelteKit joins the production tier
+
+  The Q1 picker now offers **five** production-tier targets: `wc-storybook`,
+  `react-next`, `react-vite`, `astro`, and **`svelte-kit`**. Selecting
+  `svelte-kit` and keeping the design system (default Y at Q2) emits a real
+  **SvelteKit 2 + Svelte 5** monorepo on `adapter-static`:
+  - A serious landing page (`apps/web/src/routes/+page.svelte`) with hero,
+    feature cards, and a live component showcase — uses `<hx-button>`,
+    `<hx-card>`, `<hx-icon>`, `<hx-text-input>`, `<hx-checkbox>`, `<hx-tabs>`
+    natively. Svelte 5's compiler treats unknown lowercase-with-dash tags as
+    DOM elements first-class — no React-wrapper indirection, no
+    `isCustomElement` config required.
+  - Browser-native **View Transitions API** integration via SvelteKit's
+    `onNavigate` hook (the canonical pattern from the official docs).
+    Routes morph GPU-accelerated; falls back silently on Firefox <127 /
+    older Safari.
+  - `+layout.svelte` carries an `onMount`-gated dynamic
+    `import('@helixui/library')` so the HELiX runtime loader runs once on
+    hydration in the browser without contaminating the SSR/prerender bundle.
+  - A second routed page (`/components`) demonstrates the view-transition
+    morph and exercises the same `<hx-*>` registry across navigations.
+  - A light/dark `ThemeToggle.svelte` flips `<html data-theme>` and
+    persists to `localStorage` (with a sync inline boot script in
+    `app.html` to avoid flash-of-incorrect-theme).
+  - Visual baselines under `tests/e2e/screenshots/sveltekit/` (3 PNGs:
+    home-light, components-light, home-dark) gated behind `E2E_VISUAL=1`,
+    same Playwright pattern as v0.8.0 Astro.
+
+  The flat SvelteKit path stays reachable via `--no-design-system` for
+  back-compat. The monorepo is the supported shipping target going forward.
+
+  **Counts**: 5 production / 11 experimental / 16 total framework targets.
+
+  **Drive-by fix**: cleared a stale `experimental: true` flag on the
+  `astro` template in `src/templates.ts` (left over from the v0.8.0
+  elevation — visible only via the `--show-experimental` listing).
+
+  **`@sveltejs/vite-plugin-svelte` bumped to `^6.0.0`** — the v4 line
+  peer-requires Vite 5; the repo runs Vite 7. Without this bump, consumer
+  `pnpm install` printed `ERR_PNPM_PEER_DEP_ISSUES` and the dev server's
+  HMR layer could silently break.
+
 ## 0.8.0
 
 ### Minor Changes
