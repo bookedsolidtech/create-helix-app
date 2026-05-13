@@ -4206,6 +4206,63 @@ a:hover {
   flex-wrap: wrap;
 }
 
+/* v0.9.1: button-styled <a> classes for hero CTAs. Mirrors hx-button's
+   visual language via shared design tokens so the hero stays visually
+   consistent — but the underlying element is a real <a>, which works
+   before HELiX upgrades and with JS disabled.
+   (codex push-gate round-10 fix: was missing in react-vite's
+   index.css; the cross-kit replace_all in round-4 only matched the
+   .hero-p+.section structure other kits use, not react-vite's
+   .hero-title+.hero-subtitle shape.) */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.button:focus-visible {
+  outline: 2px solid var(--hx-color-focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+.button--lg {
+  padding: 0.85rem 1.6rem;
+  font-size: 1.05rem;
+}
+.button--primary {
+  background: var(--hx-color-action-primary, #2563eb);
+  color: var(--hx-color-text-on-primary, #ffffff);
+}
+.button--primary:hover {
+  background: var(--hx-color-action-primary-hover, #1d4ed8);
+}
+.button--secondary {
+  background: var(--hx-color-action-secondary, #f1f5f9);
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-color-border, #cbd5e1);
+}
+.button--secondary:hover {
+  background: var(--hx-color-action-secondary-hover, #e2e8f0);
+}
+.button--outline {
+  background: transparent;
+  color: var(--hx-color-text, #0f172a);
+  border-color: var(--hx-color-border, #cbd5e1);
+}
+.button--outline:hover {
+  background: var(--hx-color-surface, transparent);
+}
+
 /* ── Sections ────────────────────────────────────────────────────────── */
 .section {
   padding: 4rem 0;
