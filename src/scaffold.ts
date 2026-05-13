@@ -1690,9 +1690,25 @@ ${options.designTokens ? "import '../../helix-tokens.css';" : ''}
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '${sanitizeForHtml(options.name)} — Built with HELiX',
+  title: '${sanitizeForHtml(options.name)} — built with create-helix',
   description: 'Enterprise web components for React and Next.js',
 };
+
+/**
+ * Pre-hydration theme boot script.
+ *
+ * v0.9.1 cross-kit audit fix: a flash of unstyled (light) content was
+ * visible on cold load for users whose preference was \`dark\`. The React
+ * tree mounts AFTER paint, so any client-side useEffect that flips
+ * data-theme runs too late. This inline script runs BEFORE React
+ * hydrates, reads the same localStorage key the runtime ThemeToggle
+ * uses (\`helix-theme\`), and sets data-theme on <html> synchronously.
+ *
+ * The string is intentionally minified-by-hand to fit on one line — Next
+ * dangerouslySetInnerHTML doesn't auto-minify, and a multi-line script
+ * shows up as visible whitespace in View Source on production.
+ */
+const themeBootScript = \`(function(){try{var t=localStorage.getItem('helix-theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-theme',d?'dark':'light');}catch(e){}})();\`;
 
 export default function RootLayout({
   children,
@@ -1701,9 +1717,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* v0.9.1: inline theme boot — must run before React hydrates */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body>
         <HelixProvider>
-          {children}
+          <main>{children}</main>
         </HelixProvider>
       </body>
     </html>
@@ -2049,6 +2069,15 @@ hx-card::part(header) {
 .footer-bottom p {
   margin: 0;
 }
+
+/* v0.9.1: underline inline links in body text so they're distinguishable
+   without relying on color. Required by axe-core's link-in-text-block
+   rule and WCAG 1.4.1 Use of Color. */
+.footer-bottom a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.0625em;
+  text-underline-offset: 0.2em;
+}
 `,
   );
 
@@ -2057,53 +2086,76 @@ hx-card::part(header) {
     path.join(srcDir, 'components', 'theme-toggle.tsx'),
     `'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Dark mode toggle using hx-switch.
+ * Dark mode toggle — native <button> with aria-label.
  *
- * Two-layer approach:
- * 1. Sets data-theme on <html> for page-level CSS (globals.css vars)
- * 2. Updates all hx-theme elements' theme property for component tokens
+ * v0.9.1 cross-kit audit fix: was <hx-switch> previously. Native
+ * <button> matches the astro/svelte-kit toggle pattern AND passes
+ * axe-core's button-name rule (hx-switch's internal role="switch"
+ * button lacks an accessible name unless you pipe one in via slot —
+ * brittle vs. just using a real <button>). The toggle still drives
+ * the same <html data-theme> + hx-theme.theme cascade.
+ *
+ * The inline boot script in app/layout.tsx applies the saved theme
+ * BEFORE React hydrates, so this component's first render matches the
+ * persisted choice without a flash of unstyled content.
  */
 export function ThemeToggle() {
-  const switchRef = useRef<HTMLElement>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
-  const applyTheme = useCallback((theme: 'light' | 'dark') => {
-    document.documentElement.setAttribute('data-theme', theme);
+  const applyTheme = useCallback((next: 'light' | 'dark') => {
+    document.documentElement.setAttribute('data-theme', next);
     document.querySelectorAll('hx-theme').forEach((el) => {
-      (el as HTMLElement & { theme: string }).theme = theme;
+      (el as HTMLElement & { theme: string }).theme = next;
     });
   }, []);
 
+  // Initial sync: read what the boot script already applied to <html>.
   useEffect(() => {
-    const saved = localStorage.getItem('helix-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = saved ? saved === 'dark' : prefersDark;
-    applyTheme(isDark ? 'dark' : 'light');
-    if (switchRef.current) {
-      (switchRef.current as HTMLInputElement).checked = isDark;
+    const current = (document.documentElement.getAttribute('data-theme') as
+      | 'light'
+      | 'dark'
+      | null) ?? 'light';
+    setTheme(current);
+    applyTheme(current);
+  }, [applyTheme]);
+
+  const handleClick = useCallback(() => {
+    const next: 'light' | 'dark' = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    applyTheme(next);
+    try {
+      localStorage.setItem('helix-theme', next);
+    } catch {
+      /* localStorage disabled — best-effort persistence */
     }
-  }, [applyTheme]);
+  }, [theme, applyTheme]);
 
-  const handleChange = useCallback((e: Event) => {
-    const checked = (e as CustomEvent).detail?.checked ?? false;
-    const theme = checked ? 'dark' : 'light';
-    applyTheme(theme);
-    localStorage.setItem('helix-theme', theme);
-  }, [applyTheme]);
-
-  useEffect(() => {
-    const el = switchRef.current;
-    el?.addEventListener('hx-change', handleChange);
-    return () => el?.removeEventListener('hx-change', handleChange);
-  }, [handleChange]);
-
+  const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-      <span style={{ fontSize: '0.8rem' }}>Dark</span>
-      <hx-switch ref={switchRef} size="sm" />
-    </div>
+    <button
+      type="button"
+      onClick={handleClick}
+      aria-label={label}
+      title={label}
+      style={{
+        background: 'transparent',
+        border: '1px solid var(--hx-page-border)',
+        borderRadius: '6px',
+        padding: '0.4rem 0.7rem',
+        cursor: 'pointer',
+        font: 'inherit',
+        color: 'inherit',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.4rem',
+      }}
+    >
+      <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+      <span style={{ fontSize: '0.85rem' }}>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+    </button>
   );
 }
 `,
@@ -2196,7 +2248,7 @@ export function Footer() {
             </p>
           </div>
           <div>
-            <h4 className="footer-heading">Product</h4>
+            <h3 className="footer-heading">Product</h3>
             <ul className="footer-links">
               <li><Link href="/components">Components</Link></li>
               <li><Link href="/examples/forms">Forms</Link></li>
@@ -2205,7 +2257,7 @@ export function Footer() {
             </ul>
           </div>
           <div>
-            <h4 className="footer-heading">Ecosystem</h4>
+            <h3 className="footer-heading">Ecosystem</h3>
             <ul className="footer-links">
               <li><a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI</a></li>
               <li><a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">HELiXiR</a></li>
@@ -2214,7 +2266,7 @@ export function Footer() {
             </ul>
           </div>
           <div>
-            <h4 className="footer-heading">Legal</h4>
+            <h3 className="footer-heading">Legal</h3>
             <ul className="footer-links">
               <li><a href="https://bookedsolid.tech/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></li>
               <li><a href="https://bookedsolid.tech/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a></li>
@@ -2295,21 +2347,25 @@ export default function Home() {
       {/* Hero */}
       <section className="hero">
         <div className="container">
-          <h1>HELiX + Next.js 16</h1>
+          {/* v0.9.1 cross-kit harmonization: same hero h1 as astro + svelte-kit. */}
+          <h1>Build interfaces on web standards.</h1>
           <p>
             Enterprise-grade web components running natively in React.
             75+ accessible, themeable components with Shadow DOM encapsulation.
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <hx-button variant="primary" size="lg">
-              <Link href="/examples/forms" style={{ color: 'inherit', textDecoration: 'none' }}>
-                See Forms Demo
-              </Link>
+            {/* v0.9.1: hx-button supports href natively — drop the <Link> wrapper
+                that nests an <a> inside the inner <button> and breaks
+                axe-core's nested-interactive rule. The browser still does
+                client-side navigation for same-origin links thanks to
+                Next's Link prefetch on the surrounding nav; for these
+                CTAs the cost of a synthetic-click roundtrip is negligible
+                and the markup is correct. */}
+            <hx-button variant="primary" size="lg" href="/examples/forms">
+              See Forms Demo
             </hx-button>
-            <hx-button variant="secondary" size="lg">
-              <Link href="/examples/dashboard" style={{ color: 'inherit', textDecoration: 'none' }}>
-                See Dashboard Demo
-              </Link>
+            <hx-button variant="secondary" size="lg" href="/examples/dashboard">
+              See Dashboard Demo
             </hx-button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
@@ -2382,7 +2438,11 @@ export default function Home() {
                 <span>Build Status</span>
                 <hx-badge variant="success">Passing</hx-badge>
               </div>
-              <hx-progress-bar value={87} max={100}></hx-progress-bar>
+              {/* v0.9.1: aria-label required — hx-progress-bar renders an
+                  inner role="progressbar" element that axe-core flags as
+                  needing a name. The label here describes the metric the
+                  bar is showing. */}
+              <hx-progress-bar value={87} max={100} label="Build status: 87% passing"></hx-progress-bar>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <hx-tag>v1.1.2</hx-tag>
                 <hx-tag>stable</hx-tag>
@@ -2755,15 +2815,15 @@ export default function ComponentsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Upload</span>
-                <hx-progress-bar value={72} max={100}></hx-progress-bar>
+                <hx-progress-bar value={72} max={100} label="Upload progress: 72%"></hx-progress-bar>
               </div>
               <div>
                 <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Build</span>
-                <hx-progress-bar value={100} max={100}></hx-progress-bar>
+                <hx-progress-bar value={100} max={100} label="Build progress: complete"></hx-progress-bar>
               </div>
               <div>
                 <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Deploy</span>
-                <hx-progress-bar value={45} max={100}></hx-progress-bar>
+                <hx-progress-bar value={45} max={100} label="Deploy progress: 45%"></hx-progress-bar>
               </div>
             </div>
           </hx-card>
@@ -3139,7 +3199,7 @@ export default function DashboardExample() {
           <hx-card>
             <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Uptime</h3></div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>99.9%</div>
-            <hx-progress-bar value={99.9} max={100} style={{ marginTop: '0.5rem' }}></hx-progress-bar>
+            <hx-progress-bar value={99.9} max={100} label="Uptime: 99.9%" style={{ marginTop: '0.5rem' }}></hx-progress-bar>
           </hx-card>
           <hx-card>
             <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Response Time</h3></div>
@@ -3179,19 +3239,19 @@ export default function DashboardExample() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                   <span>CPU</span><span>67%</span>
                 </div>
-                <hx-progress-bar value={67} max={100}></hx-progress-bar>
+                <hx-progress-bar value={67} max={100} label="CPU usage: 67%"></hx-progress-bar>
               </div>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                   <span>Memory</span><span>4.2 / 8 GB</span>
                 </div>
-                <hx-progress-bar value={52} max={100}></hx-progress-bar>
+                <hx-progress-bar value={52} max={100} label="Memory usage: 52%"></hx-progress-bar>
               </div>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                   <span>Storage</span><span>180 / 500 GB</span>
                 </div>
-                <hx-progress-bar value={36} max={100}></hx-progress-bar>
+                <hx-progress-bar value={36} max={100} label="Storage usage: 36%"></hx-progress-bar>
               </div>
               <hx-divider></hx-divider>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -3287,16 +3347,57 @@ export default defineConfig({
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     ${CSP_META}
-    <title>${sanitizeForHtml(options.name)}</title>
+    <title>${sanitizeForHtml(options.name)} — built with create-helix</title>
     <meta property="og:title" content="${sanitizeForHtml(options.name)}" />
     <meta property="og:description" content="Built with HELiX enterprise web components and React + Vite" />
     <meta property="og:image" content="/og/bs-hx-square.png" />
+    <!-- v0.9.1: pre-hydration theme boot. The script lives at
+         /theme-boot.js (in public/) so the CSP \`script-src 'self'\`
+         policy resolves it as a same-origin asset — inline <script>
+         would be blocked. Runs synchronously before React mounts so
+         users whose preference is 'dark' never see a flash of light
+         content. -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+`,
+  );
+
+  // public/theme-boot.js — pre-hydration theme applicator.
+  // Loaded from <head> as a same-origin asset (CSP \`script-src 'self'\`
+  // compliant). Mirrors the inline boot scripts used by astro + svelte-kit;
+  // we use an external file here because Vite's index.html is shipped
+  // statically and we don't want to relax CSP just to embed it.
+  const publicDir = path.join(options.directory, 'public');
+  await safeEnsureDir(publicDir);
+  await safeWriteFile(
+    path.join(publicDir, 'theme-boot.js'),
+    `/**
+ * Pre-hydration theme boot.
+ *
+ * Reads localStorage.helix-theme (or prefers-color-scheme) and applies
+ * data-theme to <html> BEFORE React mounts. This eliminates the flash
+ * of light content for users whose preference is dark.
+ *
+ * Generated by create-helix v0.9.1. Edit freely — this file is yours.
+ * The runtime ThemeToggle in App.tsx reads and writes the same
+ * localStorage key, so the two stay in sync.
+ */
+(function () {
+  try {
+    var t = localStorage.getItem('helix-theme');
+    var d =
+      t === 'dark' ||
+      (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
+  } catch (e) {
+    /* localStorage disabled — default light */
+  }
+})();
 `,
   );
 
@@ -3491,9 +3592,7 @@ export const HxAlert = createComponent({
   // src/components/Navbar.tsx — responsive navbar with dark mode toggle
   await safeWriteFile(
     path.join(srcDir, 'components', 'Navbar.tsx'),
-    `import { useEffect, useRef } from 'react';
-
-interface NavbarProps {
+    `interface NavbarProps {
   /** Current colour scheme applied to <html data-theme> */
   theme: 'light' | 'dark';
   /** Toggle callback — parent owns the state */
@@ -3503,20 +3602,15 @@ interface NavbarProps {
 /**
  * Navbar — top navigation bar with HELiX branding and dark-mode toggle.
  *
- * Uses HELiX icon-button for the theme toggle so the component stays
- * consistent with the design system.
+ * v0.9.1 cross-kit audit fix: theme toggle is now a native <button>
+ * (was <hx-icon-button> previously). Native <button>'s native click event
+ * is what React listens for naturally, avoiding the hx-click event
+ * plumbing that broke under headless Playwright .click() (the
+ * hx-icon-button only re-emits hx-click on real user click events, not
+ * synthetic ones). Matches astro + svelte-kit toggle pattern.
  */
 export function Navbar({ theme, onToggleTheme }: NavbarProps) {
-  const toggleRef = useRef<HTMLElement>(null);
-
-  // HELiX emits 'hx-click' — wire it up once
-  useEffect(() => {
-    const el = toggleRef.current;
-    const handler = () => onToggleTheme();
-    el?.addEventListener('hx-click', handler);
-    return () => el?.removeEventListener('hx-click', handler);
-  }, [onToggleTheme]);
-
+  const label = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
   return (
     <header className="navbar">
       <div className="navbar-inner">
@@ -3540,13 +3634,16 @@ export function Navbar({ theme, onToggleTheme }: NavbarProps) {
           </a>
         </nav>
 
-        <hx-icon-button
-          ref={toggleRef}
-          aria-label={\`Switch to \${theme === 'light' ? 'dark' : 'light'} mode\`}
-          title={\`Switch to \${theme === 'light' ? 'dark' : 'light'} mode\`}
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          aria-label={label}
+          title={label}
+          className="theme-toggle"
         >
-          {theme === 'light' ? '🌙' : '☀️'}
-        </hx-icon-button>
+          <span aria-hidden="true">{theme === 'light' ? '🌙' : '☀️'}</span>
+          <span style={{ fontSize: '0.85rem' }}>{theme === 'light' ? 'Dark' : 'Light'}</span>
+        </button>
       </div>
     </header>
   );
@@ -3585,7 +3682,11 @@ import './index.css';
 function resolveInitialTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'light';
   try {
-    const stored = window.localStorage.getItem('helix:theme');
+    // v0.9.1 cross-kit: storage key is 'helix-theme' (matches react-next +
+    // svelte-kit + astro). Was 'helix:theme' pre-v0.9.1 — the colon broke
+    // cross-kit grep-ability and made consumer theme-switching code
+    // diverge unnecessarily.
+    const stored = window.localStorage.getItem('helix-theme');
     if (stored === 'light' || stored === 'dark') return stored;
   } catch {
     /* localStorage disabled */
@@ -3607,7 +3708,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     try {
-      window.localStorage.setItem('helix:theme', theme);
+      window.localStorage.setItem('helix-theme', theme);
     } catch {
       /* localStorage disabled */
     }
@@ -3642,15 +3743,20 @@ export default function App() {
     <hx-theme theme={theme}>
       <Navbar theme={theme} onToggleTheme={toggleTheme} />
 
+      {/* v0.9.1: <main> landmark wraps every content section so axe-core's
+          landmark-one-main + region rules pass. The footer stays outside
+          <main> because it's a contentinfo landmark, not main content. */}
+      <main>
       {/* ── Hero ──────────────────────────────────────────────────────── */}
       <section className="hero">
         <div className="container">
           <hx-badge variant="brand" size="sm" style={{ marginBottom: '1rem' }}>
             React + Vite
           </hx-badge>
+          {/* v0.9.1 cross-kit harmonization: shared headline copy. */}
           <h1 className="hero-title">
-            Build faster with{' '}
-            <span className="hero-accent">HELiX</span>
+            Build interfaces on{' '}
+            <span className="hero-accent">web standards.</span>
           </h1>
           <p className="hero-subtitle">
             Enterprise-grade web components that work with any framework.
@@ -3761,6 +3867,8 @@ export default function App() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────────────────── */}
+      </main>
+
       <footer className="footer">
         <div className="container">
           <p>
@@ -3879,6 +3987,30 @@ a:hover {
   text-decoration: none;
 }
 
+/* v0.9.1: theme toggle is a native <button> with aria-label.
+   Subtle outline, matches the rest of the design language. */
+.theme-toggle {
+  background: transparent;
+  border: 1px solid var(--hx-color-border, var(--hx-page-border, #e5e7eb));
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.theme-toggle:hover {
+  border-color: var(--hx-color-text-secondary, #888);
+  background: var(--hx-color-surface, transparent);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--hx-color-focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+
 /* ── Hero ────────────────────────────────────────────────────────────── */
 .hero {
   padding: 5rem 0 4rem;
@@ -3956,6 +4088,15 @@ a:hover {
   text-align: center;
   color: var(--hx-color-text-secondary, #666);
   font-size: 0.875rem;
+}
+
+/* v0.9.1: underline inline links in body text so they're distinguishable
+   without relying on color. Required by axe-core's link-in-text-block
+   rule and WCAG 1.4.1 Use of Color. */
+.footer a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.0625em;
+  text-underline-offset: 0.2em;
 }
 
 /* ── Dark mode ───────────────────────────────────────────────────────── */
@@ -5026,6 +5167,15 @@ hx-card::part(header) {
 .footer-bottom p {
   margin: 0;
 }
+
+/* v0.9.1: underline inline links in body text so they're distinguishable
+   without relying on color. Required by axe-core's link-in-text-block
+   rule and WCAG 1.4.1 Use of Color. */
+.footer-bottom a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.0625em;
+  text-underline-offset: 0.2em;
+}
 `,
   );
 
@@ -5111,14 +5261,14 @@ const {
               </p>
             </div>
             <div>
-              <h4 class="footer-heading">Product</h4>
+              <h3 class="footer-heading">Product</h3>
               <ul class="footer-links">
                 <li><a href="/components">Components</a></li>
                 <li><a href="/docs">Documentation</a></li>
               </ul>
             </div>
             <div>
-              <h4 class="footer-heading">Ecosystem</h4>
+              <h3 class="footer-heading">Ecosystem</h3>
               <ul class="footer-links">
                 <li><a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">HELiX UI</a></li>
                 <li><a href="https://bookedsolid.tech/helixir" target="_blank" rel="noopener noreferrer">HELiXiR</a></li>
@@ -5126,7 +5276,7 @@ const {
               </ul>
             </div>
             <div>
-              <h4 class="footer-heading">Legal</h4>
+              <h3 class="footer-heading">Legal</h3>
               <ul class="footer-links">
                 <li><a href="https://bookedsolid.tech/privacy" target="_blank" rel="noopener noreferrer">Privacy</a></li>
                 <li><a href="https://bookedsolid.tech/terms" target="_blank" rel="noopener noreferrer">Terms</a></li>
@@ -14165,6 +14315,15 @@ hx-card::part(header) {
 
 .footer-bottom p {
   margin: 0;
+}
+
+/* v0.9.1: underline inline links in body text so they're distinguishable
+   without relying on color. Required by axe-core's link-in-text-block
+   rule and WCAG 1.4.1 Use of Color. */
+.footer-bottom a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.0625em;
+  text-underline-offset: 0.2em;
 }
 `,
   );

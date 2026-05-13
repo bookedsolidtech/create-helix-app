@@ -84,6 +84,11 @@ const VITE_VERSION = '^7.0.0';
 const HELIX_LIBRARY_VERSION = '^1.0.0';
 const HELIX_TOKENS_VERSION = '^0.3.0';
 const TYPESCRIPT_VERSION = '^5.7.0';
+// @types/node — required by the SvelteKit-generated .svelte-kit/tsconfig.json,
+// which compiles with `types: ["node"]`. Without this devDep, `svelte-check`
+// emits a "Cannot find type definition file for 'node'" warning on every
+// type-check / build pass. v0.9.1 cross-kit audit fix.
+const TYPES_NODE_VERSION = '^22.0.0';
 
 /**
  * apps/web/package.json — the SvelteKit workspace app's manifest.
@@ -149,6 +154,7 @@ export async function writeAppsWebPackageJson(args: {
       '@sveltejs/adapter-static': ADAPTER_STATIC_VERSION,
       '@sveltejs/kit': SVELTEKIT_VERSION,
       '@sveltejs/vite-plugin-svelte': VITE_PLUGIN_SVELTE_VERSION,
+      '@types/node': TYPES_NODE_VERSION,
       svelte: SVELTE_VERSION,
       'svelte-check': SVELTE_CHECK_VERSION,
       typescript: TYPESCRIPT_VERSION,
@@ -666,16 +672,20 @@ export async function writeAppsWebIndexPage(args: {
         box, framework-agnostic by construction. Drop them anywhere HTML runs.
       </p>
       <div class="hero-ctas">
-        <hx-button variant="primary" size="lg">
-          <a href="/components" style="color: inherit; text-decoration: none;">Browse components</a>
+        <!-- v0.9.1 cross-kit audit fix: hx-button supports href + target
+             natively. Wrapping in <a> produced nested-interactive
+             violations (axe-core: focusable descendants). -->
+        <hx-button variant="primary" size="lg" href="/components">
+          Browse components
         </hx-button>
-        <hx-button variant="ghost" size="lg">
-          <a
-            href="${githubLink}"
-            target="_blank"
-            rel="noopener"
-            style="color: inherit; text-decoration: none;">View on GitHub</a
-          >
+        <hx-button
+          variant="ghost"
+          size="lg"
+          href="${githubLink}"
+          target="_blank"
+          rel="noopener"
+        >
+          View on GitHub
         </hx-button>
       </div>
     </div>

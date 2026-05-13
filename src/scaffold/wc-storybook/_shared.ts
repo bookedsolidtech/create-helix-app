@@ -157,16 +157,31 @@ export async function writeDesignSystemPackageJson(args: {
     version: '0.0.0',
     private: true,
     type: 'module',
-    // exports — the contract apps/web depends on. './' resolves the
-    // React-wrappers barrel built into dist/index.js (compiled from
-    // src/index.ts via tsconfig.build.json); './tokens' streams the
-    // raw CSS file (apps import this once at root to define
-    // --{prefix}-* + --hx-* variables); './styles' is the optional
-    // compiled stylesheet bucket the build chain copies to dist/.
+    // exports — the contract apps/web depends on.
+    //
+    // v0.9.1 cross-kit audit fix: './' resolves the React-wrappers
+    // barrel directly from src/index.ts (NOT dist/index.js). This is
+    // the Turborepo "internal packages" recipe — apps with bundler
+    // transpilation (Next.js's transpilePackages, Vite's
+    // optimizeDeps.exclude + server.fs.allow) compile the workspace
+    // package's source on demand, so we don't need pre-built dist
+    // artifacts at type-check or dev-server time. Pre-v0.9.1 this
+    // pointed at './dist/index.d.ts' / './dist/index.js' which broke
+    // a fresh `pnpm install && pnpm --filter=@scope/web type-check`
+    // for react-next and react-vite: dist/ doesn't exist until the
+    // DS is explicitly built, and pnpm-filter bypasses Turbo's
+    // dependency graph. Pointing at src eliminates the build
+    // ordering trap entirely.
+    //
+    // './tokens' streams the raw CSS file (apps import this once at
+    // root to define --{prefix}-* + --hx-* variables); './styles'
+    // remains pointed at dist/ because the compiled stylesheet only
+    // exists post-build — it's an OPTIONAL artifact, not part of
+    // the always-on consumer contract.
     exports: {
       '.': {
-        types: './dist/index.d.ts',
-        import: './dist/index.js',
+        types: './src/index.ts',
+        import: './src/index.ts',
       },
       './tokens': './src/tokens/tokens.css',
       './styles': './dist/styles.css',

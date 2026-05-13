@@ -80,11 +80,25 @@ describe('v0.7.0 Phase F — wc-storybook monorepo emits packages/design-system'
 
     // Exports field is the contract apps/web's `@aurora-app/design-system`
     // import resolves against.
+    //
+    // v0.9.1 cross-kit audit: './' resolves to src/index.ts (not
+    // dist/index.{d.ts,js}) — the Turborepo "internal packages" recipe.
+    // Apps with bundler transpilation (Next.js transpilePackages, Vite
+    // optimizeDeps.exclude + server.fs.allow) compile the workspace
+    // package's source on demand, so we don't need pre-built dist
+    // artifacts at type-check or dev-server time. The earlier dist/-
+    // pointing exports broke `pnpm install && pnpm --filter=@scope/web
+    // type-check` cold-start because dist/ doesn't exist until the DS
+    // is explicitly built first, and pnpm-filter bypasses Turbo's
+    // dependency graph.
     expect(pkg.exports['.']).toEqual({
-      types: './dist/index.d.ts',
-      import: './dist/index.js',
+      types: './src/index.ts',
+      import: './src/index.ts',
     });
     expect(pkg.exports['./tokens']).toBe('./src/tokens/tokens.css');
+    // './styles' remains pointed at dist/ because the compiled stylesheet
+    // only exists post-build — it's an OPTIONAL artifact, not part of
+    // the always-on consumer contract.
     expect(pkg.exports['./styles']).toBe('./dist/styles.css');
 
     // The publishable-library identity surface is NOT carried over from

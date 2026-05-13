@@ -542,18 +542,21 @@ import ThemeToggle from '../components/ThemeToggle.astro';
           Drop them anywhere HTML runs.
         </p>
         <div class="hero-ctas">
-          <hx-button variant="primary" size="lg">
-            <a href="/components" style="color: inherit; text-decoration: none;"
-              >Browse components</a
-            >
+          <!-- v0.9.1 cross-kit audit fix: hx-button supports href + target
+               natively. Wrapping in <a> produced nested-interactive
+               violations (axe-core: focusable descendants). Drop the
+               wrapper, pass href to hx-button instead. -->
+          <hx-button variant="primary" size="lg" href="/components">
+            Browse components
           </hx-button>
-          <hx-button variant="ghost" size="lg">
-            <a
-              href="https://github.com/booked-solid-tech/helix"
-              target="_blank"
-              rel="noopener"
-              style="color: inherit; text-decoration: none;">View on GitHub</a
-            >
+          <hx-button
+            variant="ghost"
+            size="lg"
+            href="https://github.com/booked-solid-tech/helix"
+            target="_blank"
+            rel="noopener"
+          >
+            View on GitHub
           </hx-button>
         </div>
       </div>

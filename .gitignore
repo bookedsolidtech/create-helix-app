@@ -60,3 +60,6 @@ test-scaffold.ts
 
 # Local-only Figma screenshots from MCP probes (figgy debugging)
 tmp-screenshots/
+
+# Local-only cross-kit audit fixtures (v0.9.1 audit sweep)
+tmp-audits/

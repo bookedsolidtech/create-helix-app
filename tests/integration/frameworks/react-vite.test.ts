@@ -95,9 +95,13 @@ describe('react-vite integration', () => {
     const o = opts('rv-navbar');
     await scaffoldProject(o);
     const content = await readText(o.directory, 'src/components/Navbar.tsx');
-    expect(content).toContain('hx-icon-button');
+    // v0.9.1 cross-kit audit: theme toggle is now a native <button> with
+    // aria-label (was hx-icon-button + hx-click event listener). Matches
+    // astro + svelte-kit toggle pattern; passes axe-core's button-name
+    // rule out of the box.
+    expect(content).toContain('theme-toggle');
     expect(content).toContain('onToggleTheme');
-    expect(content).toContain('hx-click');
+    expect(content).toContain('aria-label');
   });
 
   it('index.html has OG meta tags', async () => {

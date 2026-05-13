@@ -97,9 +97,13 @@ describe('wc-storybook monorepo integration (Phase F)', () => {
     expect(pkg.name).toBe('@wcs-pkg/design-system');
     expect(pkg.private).toBe(true);
     expect(pkg.type).toBe('module');
+    // v0.9.1 cross-kit audit: './' resolves to src/index.ts (not dist/)
+    // so apps/web type-checks against the workspace package without
+    // first building it. See writeDesignSystemPackageJson for full
+    // rationale (the Turborepo "internal packages" recipe).
     expect(pkg.exports['.']).toEqual({
-      types: './dist/index.d.ts',
-      import: './dist/index.js',
+      types: './src/index.ts',
+      import: './src/index.ts',
     });
     expect(pkg.exports['./tokens']).toBe('./src/tokens/tokens.css');
     expect(pkg.exports['./styles']).toBe('./dist/styles.css');
