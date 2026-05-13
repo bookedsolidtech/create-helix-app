@@ -319,7 +319,9 @@ describe('v0.9.0 Phase E — sveltekit monorepo emits the full apps/web tree', (
     );
 
     expect(toggle).toContain("setAttribute('data-theme'");
-    expect(toggle).toContain("localStorage.setItem('theme'");
+    // v0.9.1 cross-kit audit: storage key is 'helix-theme' (was 'theme';
+    // standardized across all 4 kits).
+    expect(toggle).toContain("localStorage.setItem('helix-theme'");
     expect(toggle).toContain('aria-label="Toggle color theme"');
 
     // Marked with the class the Phase D E2E gate clicks.
@@ -338,7 +340,8 @@ describe('v0.9.0 Phase E — sveltekit monorepo emits the full apps/web tree', (
 
     // Inline boot script restores user choice from localStorage
     // before paint (sync, head, no module).
-    expect(appHtml).toContain("localStorage.getItem('theme')");
+    // v0.9.1 cross-kit audit: storage key is 'helix-theme'.
+    expect(appHtml).toContain("localStorage.getItem('helix-theme')");
   });
 });
 

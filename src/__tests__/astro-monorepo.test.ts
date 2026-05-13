@@ -191,7 +191,9 @@ describe('v0.8.0 Phase C — astro monorepo emits the full apps/web tree', () =>
 
     // Theme-restore boot script (is:inline so it fires before paint).
     expect(layout).toContain('is:inline');
-    expect(layout).toContain("localStorage.getItem('theme')");
+    // v0.9.1 cross-kit audit: storage key is 'helix-theme' (was 'theme';
+    // standardized across all 4 kits).
+    expect(layout).toContain("localStorage.getItem('helix-theme')");
 
     // Reduced-motion respect.
     expect(layout).toContain('prefers-reduced-motion');
@@ -295,7 +297,8 @@ describe('v0.8.0 Phase C — astro monorepo emits the full apps/web tree', () =>
     );
 
     expect(toggle).toContain("setAttribute('data-theme'");
-    expect(toggle).toContain("localStorage.setItem('theme'");
+    // v0.9.1 cross-kit audit: storage key is 'helix-theme' (was 'theme').
+    expect(toggle).toContain("localStorage.setItem('helix-theme'");
     expect(toggle).toContain('aria-label="Toggle color theme"');
 
     // Re-binds on view-transition navigation.

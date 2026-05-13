@@ -378,17 +378,29 @@ export async function writeAppsWebAppHtml(args: { rootDir: string }): Promise<vo
     <script>
       // FOUC prevention — runs before paint to restore saved theme.
       // Mirrors the inline boot block in v0.8.0 Astro's Layout.astro.
+      //
+      // v0.9.1 cross-kit audit:
+      //  - storage key is 'helix-theme' (matches react-next + react-vite
+      //    + astro)
+      //  - storage failure (privacy mode / sandbox) still honors
+      //    prefers-color-scheme — the try wraps the read ONLY,
+      //    matchMedia + setAttribute always run
       (function () {
+        var t = null;
         try {
-          var stored = localStorage.getItem('theme');
-          if (stored === 'dark' || stored === 'light') {
-            document.documentElement.setAttribute('data-theme', stored);
-          } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-          }
+          t = localStorage.getItem('helix-theme');
         } catch (e) {
-          // localStorage can throw in sandboxed iframes / Safari private mode.
-          // Safe to ignore — default light theme stands.
+          /* storage disabled — fall through to prefers-color-scheme */
+        }
+        if (t === 'dark' || t === 'light') {
+          document.documentElement.setAttribute('data-theme', t);
+        } else if (
+          window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches
+        ) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
         }
       })();
     </script>
@@ -1286,7 +1298,9 @@ export async function writeAppsWebThemeToggle(args: { rootDir: string }): Promis
     theme = next;
     document.documentElement.setAttribute('data-theme', next);
     try {
-      localStorage.setItem('theme', next);
+      // v0.9.1 cross-kit audit: storage key is 'helix-theme' (matches
+      // react-next + react-vite + astro).
+      localStorage.setItem('helix-theme', next);
     } catch {
       // localStorage can throw in sandboxed contexts. Swallow — the
       // <html> attribute still flips for the current session.

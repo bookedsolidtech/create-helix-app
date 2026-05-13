@@ -382,14 +382,31 @@ const {
 
     {/* Theme persistence — runs inline (is:inline) so it fires BEFORE
         the body paints, avoiding the dark-mode flash on cold load.
-        The ThemeToggle button below later flips this same attribute. */}
+        The ThemeToggle button below later flips this same attribute.
+
+        v0.9.1 cross-kit audit: storage key is 'helix-theme' (matches
+        react-next + react-vite + svelte-kit). The try/catch keeps
+        storage failures (privacy mode, disabled cookies) from breaking
+        the rest of the boot — matchMedia fallback still runs. */}
     <script is:inline>
-      const stored = localStorage.getItem('theme');
-      if (stored === 'dark' || stored === 'light') {
-        document.documentElement.setAttribute('data-theme', stored);
-      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      }
+      (function () {
+        var t = null;
+        try {
+          t = localStorage.getItem('helix-theme');
+        } catch (e) {
+          /* storage disabled — fall through to prefers-color-scheme */
+        }
+        if (t === 'dark' || t === 'light') {
+          document.documentElement.setAttribute('data-theme', t);
+        } else if (
+          window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches
+        ) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
     </script>
   </body>
 </html>
@@ -1184,7 +1201,15 @@ export async function writeAppsWebThemeToggle(args: { rootDir: string }): Promis
       const current = document.documentElement.getAttribute('data-theme') ?? 'light';
       const next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
+      // v0.9.1 cross-kit audit: storage key is 'helix-theme' (matches
+      // react-next + react-vite + svelte-kit). try/catch in case
+      // storage is unavailable — the data-theme attribute still flips
+      // so the user sees the change in the current session.
+      try {
+        localStorage.setItem('helix-theme', next);
+      } catch {
+        /* storage disabled — persistence is best-effort */
+      }
     });
   }
 
