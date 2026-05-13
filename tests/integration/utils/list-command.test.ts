@@ -33,16 +33,18 @@ describe('list command', () => {
     }
   });
 
-  it('default (no --show-experimental) outputs only the 3 production templates + footer hint', () => {
+  it('default (no --show-experimental) outputs only the 5 production templates + footer hint', () => {
     runListCommand(false);
 
     const output = logs.join('\n');
-    // Production triad — order tracked by the templates.ts registry.
+    // Production set — order tracked by the templates.ts registry.
     expect(output).toContain('react-next');
     expect(output).toContain('react-vite');
     expect(output).toContain('wc-storybook');
+    expect(output).toContain('astro');
+    expect(output).toContain('svelte-kit');
     // Footer (DXA Q3 triple-discoverability point #1) — count + flag name.
-    expect(output).toMatch(/13 experimental templates hidden/);
+    expect(output).toMatch(/11 experimental templates hidden/);
     expect(output).toContain('--show-experimental');
   });
 
@@ -67,9 +69,10 @@ describe('list command', () => {
 
     expect(Array.isArray(parsed.templates)).toBe(true);
     expect(Array.isArray(parsed.presets)).toBe(true);
-    // 3 production templates by default; experimentalHidden reports the count.
-    expect(parsed.templates).toHaveLength(3);
-    expect(parsed.experimentalHidden).toBe(13);
+    // v0.9.0: 5 production templates (wc-storybook + react-next + react-vite
+    // + astro + svelte-kit). experimentalHidden reports the rest.
+    expect(parsed.templates).toHaveLength(5);
+    expect(parsed.experimentalHidden).toBe(11);
     expect(parsed.presets).toHaveLength(5);
   });
 

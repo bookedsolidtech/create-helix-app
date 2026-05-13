@@ -15,22 +15,23 @@ import type { Framework } from '../types.js';
 // ---------------------------------------------------------------------------
 
 describe('CLI framework prompt — experimental filter', () => {
-  it('production templates are the 3 non-experimental entries (wc-storybook, react-next, react-vite)', () => {
+  it('production templates are the 5 non-experimental entries (wc-storybook, react-next, react-vite, svelte-kit, astro)', () => {
     const production = TEMPLATES.filter((t) => !t.experimental).map((t) => t.id);
     // Order matters — wc-storybook is intentionally first per the v0.6.0
-    // default-swap (Phase E). Hitting Enter through the prompt lands on
-    // wc-storybook, not react-next.
-    expect(production).toEqual(['wc-storybook', 'react-next', 'react-vite']);
+    // default-swap. Hitting Enter through the prompt lands on
+    // wc-storybook. v0.8.0 added astro; v0.9.0 added svelte-kit (and
+    // dropped astro's lingering experimental flag).
+    expect(production).toEqual(['wc-storybook', 'react-next', 'react-vite', 'svelte-kit', 'astro']);
   });
 
-  it('exactly 13 templates are flagged experimental', () => {
+  it('exactly 11 templates are flagged experimental', () => {
     const experimental = TEMPLATES.filter((t) => t.experimental === true);
-    expect(experimental).toHaveLength(13);
+    expect(experimental).toHaveLength(11);
   });
 
-  it('experimental list contains the 13 stub-quality framework ids the plan calls out', () => {
+  it('experimental list contains the 11 stub-quality framework ids the plan calls out', () => {
+    // v0.9.0: svelte-kit + astro promoted out of experimental.
     const expected: Framework[] = [
-      'svelte-kit',
       'ember',
       'qwik-vite',
       'lit-vite',
@@ -40,7 +41,6 @@ describe('CLI framework prompt — experimental filter', () => {
       'vue-nuxt',
       'vue-vite',
       'remix',
-      'astro',
       'solid-vite',
       'vanilla',
     ];
@@ -54,18 +54,20 @@ describe('CLI framework prompt — experimental filter', () => {
     expect(production.length + experimental.length).toBe(TEMPLATES.length);
   });
 
-  it('mirrors the prompt-options shape the CLI would build by default (3 entries)', () => {
+  it('mirrors the prompt-options shape the CLI would build by default (5 entries)', () => {
     // Same filter the cli.ts framework prompt applies when showExperimental === false.
     const defaultOptions = TEMPLATES.filter((t) => !t.experimental).map((t) => ({
       value: t.id as Framework,
       label: t.name,
       hint: t.hint,
     }));
-    expect(defaultOptions).toHaveLength(3);
+    expect(defaultOptions).toHaveLength(5);
     expect(defaultOptions.map((o) => o.value)).toEqual([
       'wc-storybook',
       'react-next',
       'react-vite',
+      'svelte-kit',
+      'astro',
     ]);
   });
 
@@ -75,7 +77,7 @@ describe('CLI framework prompt — experimental filter', () => {
       label: t.name,
       hint: t.hint,
     }));
-    // 3 production + 13 experimental = 16 (the TEMPLATES registry has no
+    // 5 production + 11 experimental = 16 (the TEMPLATES registry has no
     // 'drupal-theme' entry — Drupal is a separate flow at runDrupalCLI).
     expect(fullOptions).toHaveLength(16);
   });

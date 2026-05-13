@@ -9,27 +9,27 @@ import { parseArgs } from '../args.js';
 // ---------------------------------------------------------------------------
 
 describe('parseArgs — --template with hidden experimental template', () => {
-  it('throws a friendly error including --show-experimental for svelte-kit', () => {
-    expect(() => parseArgs(['--template', 'svelte-kit'])).toThrow(/--show-experimental/);
+  it('throws a friendly error including --show-experimental for ember', () => {
+    expect(() => parseArgs(['--template', 'ember'])).toThrow(/--show-experimental/);
   });
 
   it('error message names the experimental template id explicitly', () => {
-    expect(() => parseArgs(['--template', 'svelte-kit'])).toThrow(/svelte-kit/);
     expect(() => parseArgs(['--template', 'ember'])).toThrow(/ember/);
     expect(() => parseArgs(['--template', 'stencil'])).toThrow(/stencil/);
+    expect(() => parseArgs(['--template', 'qwik-vite'])).toThrow(/qwik-vite/);
   });
 
   it('error message lists the production fallback templates', () => {
-    // The friendly redirect spells out the 3 production options inline so
+    // The friendly redirect spells out the production options inline so
     // the consumer can pick one without re-running `create-helix list`.
-    expect(() => parseArgs(['--template', 'svelte-kit'])).toThrow(/wc-storybook/);
-    expect(() => parseArgs(['--template', 'svelte-kit'])).toThrow(/react-next/);
-    expect(() => parseArgs(['--template', 'svelte-kit'])).toThrow(/react-vite/);
+    expect(() => parseArgs(['--template', 'ember'])).toThrow(/wc-storybook/);
+    expect(() => parseArgs(['--template', 'ember'])).toThrow(/react-next/);
+    expect(() => parseArgs(['--template', 'react-vite'])).not.toThrow(); // production now
   });
 
   it('every experimental template trips the friendly error path', () => {
+    // v0.9.0: astro and svelte-kit promoted to production; removed from list.
     const experimentalIds = [
-      'svelte-kit',
       'ember',
       'qwik-vite',
       'lit-vite',
@@ -39,7 +39,6 @@ describe('parseArgs — --template with hidden experimental template', () => {
       'vue-nuxt',
       'vue-vite',
       'remix',
-      'astro',
       'solid-vite',
       'vanilla',
     ];
@@ -49,22 +48,24 @@ describe('parseArgs — --template with hidden experimental template', () => {
   });
 
   it('uses "experimental" (not just "hidden") so the term shows up in error logs', () => {
-    expect(() => parseArgs(['--template', 'astro'])).toThrow(/experimental/);
+    expect(() => parseArgs(['--template', 'ember'])).toThrow(/experimental/);
   });
 
   it('production templates still parse cleanly (no false-positive error)', () => {
     expect(parseArgs(['--template', 'wc-storybook']).template).toBe('wc-storybook');
     expect(parseArgs(['--template', 'react-next']).template).toBe('react-next');
     expect(parseArgs(['--template', 'react-vite']).template).toBe('react-vite');
+    // v0.8.0: astro promoted (was incorrectly experimental at v0.8.0 ship).
+    expect(parseArgs(['--template', 'astro']).template).toBe('astro');
+    // v0.9.0: svelte-kit promoted.
+    expect(parseArgs(['--template', 'svelte-kit']).template).toBe('svelte-kit');
   });
 
   it('experimental template + --show-experimental flag parses cleanly', () => {
     // The flag is the documented escape valve. With it on, parseArgs must
     // accept the hidden template without the friendly redirect kicking in.
-    expect(parseArgs(['--show-experimental', '--template', 'svelte-kit']).template).toBe(
-      'svelte-kit',
-    );
     expect(parseArgs(['--show-experimental', '--template', 'ember']).template).toBe('ember');
+    expect(parseArgs(['--show-experimental', '--template', 'stencil']).template).toBe('stencil');
   });
 
   it('totally-bogus template ids still produce the legacy "Invalid template" error', () => {

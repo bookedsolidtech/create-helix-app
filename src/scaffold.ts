@@ -498,7 +498,12 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
         }
         break;
       case 'svelte-kit':
-        await scaffoldSvelteKit(options);
+        if (options.monorepoMode) {
+          const { scaffoldSvelteKitMonorepo } = await import('./scaffold/sveltekit/monorepo.js');
+          await scaffoldSvelteKitMonorepo(options);
+        } else {
+          await scaffoldSvelteKit(options);
+        }
         break;
       case 'vue-nuxt':
         await scaffoldVueNuxt(options);
@@ -5662,24 +5667,32 @@ import Layout from '../layouts/Layout.astro';
 `,
   );
 }
-async function scaffoldSvelteKit(options: ProjectOptions): Promise<void> {
+export async function scaffoldSvelteKit(options: ProjectOptions): Promise<void> {
   const srcDir = path.join(options.directory, 'src');
   const routesDir = path.join(srcDir, 'routes');
   const libDir = path.join(srcDir, 'lib');
   await safeEnsureDir(routesDir);
   await safeEnsureDir(libDir);
 
-  // svelte.config.js — includes vitePreprocess for TypeScript/CSS preprocessing
+  // svelte.config.js — adapter-static + vitePreprocess. v0.9.0 aligned
+  // the flat scaffolder to adapter-static (was adapter-auto) so the
+  // dep set in templates.ts matches the import. Flat path stays on the
+  // same adapter the monorepo path uses, simplifying the deprecation.
   await safeWriteFile(
     path.join(options.directory, 'svelte.config.js'),
-    `import adapter from '@sveltejs/adapter-auto';
+    `import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter(),
+    adapter: adapter({
+      fallback: 'index.html',
+      pages: 'build',
+      assets: 'build',
+      strict: true,
+    }),
   },
 };
 

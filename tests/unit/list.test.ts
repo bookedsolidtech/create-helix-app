@@ -20,9 +20,9 @@ describe('list command', () => {
 
   describe('normal (TUI) mode', () => {
     it('outputs all 16 framework templates with --show-experimental', () => {
-      // v0.6.0 Phase C — default mode filters to 3 production templates.
-      // The every-template sweep now opts in via the showExperimental
-      // escape valve to stay meaningful without enumerating each id.
+      // v0.6.0 Phase C — default mode filters to production templates.
+      // The every-template sweep opts in via the showExperimental escape
+      // valve to stay meaningful without enumerating each id.
       listAll(false, true);
       const output = logs.join('\n');
       expect(TEMPLATES).toHaveLength(16);
@@ -31,13 +31,15 @@ describe('list command', () => {
       }
     });
 
-    it('default mode outputs only the 3 production templates + footer hint', () => {
+    it('default mode outputs only the 5 production templates + footer hint', () => {
       listAll(false);
       const output = logs.join('\n');
       expect(output).toContain('react-next');
       expect(output).toContain('react-vite');
       expect(output).toContain('wc-storybook');
-      expect(output).toMatch(/13 experimental templates hidden/);
+      expect(output).toContain('astro');
+      expect(output).toContain('svelte-kit');
+      expect(output).toMatch(/11 experimental templates hidden/);
       expect(output).toContain('--show-experimental');
     });
 
@@ -106,14 +108,15 @@ describe('list command', () => {
       expect(parsed.frameworks).toHaveLength(TEMPLATES.length);
     });
 
-    it('default JSON contains only the 3 production templates + experimentalHidden field', () => {
+    it('default JSON contains only the 5 production templates + experimentalHidden field', () => {
       listAll(true);
       const parsed = JSON.parse(logs[0]) as {
         frameworks: { id: string }[];
         experimentalHidden?: number;
       };
-      expect(parsed.frameworks).toHaveLength(3);
-      expect(parsed.experimentalHidden).toBe(13);
+      // v0.9.0: wc-storybook + react-next + react-vite + astro + svelte-kit.
+      expect(parsed.frameworks).toHaveLength(5);
+      expect(parsed.experimentalHidden).toBe(11);
     });
 
     it('JSON presets array contains all 5 Drupal presets', () => {

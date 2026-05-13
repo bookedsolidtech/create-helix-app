@@ -6,18 +6,19 @@
 
 [![npm version](https://img.shields.io/npm/v/create-helix)](https://www.npmjs.com/package/create-helix)
 [![CI](https://img.shields.io/github/actions/workflow/status/bookedsolidtech/create-helix-app/ci.yml?branch=main&label=CI&logo=github)](https://github.com/bookedsolidtech/create-helix-app/actions)
-[![Coverage](https://img.shields.io/badge/coverage-70%25-brightgreen)](https://github.com/bookedsolidtech/create-helix-app/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node 20+](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
+[![Node 22+](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?logo=typescript)](tsconfig.json)
 
 </div>
 
-Scaffold a HELiX design system project in seconds. TUI-powered CLI with a **two-step starter-kit picker** — first you tell it what the project builds (`wc-storybook` design system, `react-next` app, `react-vite` app, or `drupal-theme`), then it offers to bundle a shared `design-system` package alongside. 13 additional experimental frameworks are available behind `--show-experimental`.
+Scaffold a HELiX design system project in seconds. TUI-powered CLI with a **two-step starter-kit picker** — first you tell it what the project builds (`wc-storybook` design system, `react-next` app, `react-vite` app, or `drupal-theme`), then it offers to bundle a shared `design-system` package alongside. 11 additional experimental frameworks are available behind `--show-experimental`.
 
-**New in v0.8.0 — Astro joins the production-tier starter kits.** The Q1 picker now offers four production-tier targets: `wc-storybook`, `react-next`, `react-vite`, and **`astro`**. The Astro starter ships a real Astro 5 landing page (hero, features, view transitions, theme toggle, two routed pages) and consumes the design system as `<hx-*>` web components natively — no React-wrapper indirection. The flat Astro path stays reachable via `--no-design-system` for back-compat, but the monorepo is the supported shipping target going forward. First Playwright visual baselines in the project ship under [`tests/e2e/screenshots/astro/`](./tests/e2e/screenshots/astro/).
+**New in v0.9.0 — SvelteKit joins the production-tier starter kits.** The Q1 picker now offers five production-tier targets: `wc-storybook`, `react-next`, `react-vite`, `astro`, and **`svelte-kit`**. The SvelteKit starter ships a real SvelteKit 2 + Svelte 5 landing page on `adapter-static` (hero, features, showcase, browser-native View Transitions via `onNavigate`, theme toggle, two routed pages) and consumes the design system as `<hx-*>` web components natively — Svelte 5's compiler treats unknown lowercase-with-dash tags as DOM elements first-class, no `isCustomElement` config needed. Visual baselines ship under [`tests/e2e/screenshots/sveltekit/`](./tests/e2e/screenshots/sveltekit/).
 
-**v0.7.0 introduced monorepo by default for app frameworks.** When you pick `react-next`, `react-vite`, or now `astro` and keep the design system (the default Y at Q2), `create-helix` emits a **turbo + pnpm-workspaces monorepo** with `apps/web/` + `packages/{design-system,types,utils}/` — modeled on the shadcn `apps/web` + `packages/ui` precedent. Pass `--no-design-system` (or answer "n" at Q2) to keep the v0.6.x flat single-app shape. See [Monorepo by default](#monorepo-by-default-v070) and [`MIGRATING.md`](./MIGRATING.md).
+**v0.8.0 — Astro joined the production tier** with a real Astro 5 landing page (hero, features, view transitions, theme toggle, two routed pages) consuming the design system as `<hx-*>` web components natively. Baselines under [`tests/e2e/screenshots/astro/`](./tests/e2e/screenshots/astro/).
+
+**v0.7.0 introduced monorepo by default for app frameworks.** When you pick `react-next`, `react-vite`, `astro`, or `svelte-kit` and keep the design system (the default Y at Q2), `create-helix` emits a **turbo + pnpm-workspaces monorepo** with `apps/web/` + `packages/{design-system,types,utils}/` — modeled on the shadcn `apps/web` + `packages/ui` precedent. Pass `--no-design-system` (or answer "n" at Q2) to keep the v0.6.x flat single-app shape. See [Monorepo by default](#monorepo-by-default-v070) and [`MIGRATING.md`](./MIGRATING.md).
 
 The flagship `wc-storybook` template remains the default interactive selection and ships a brand-storytelling Storybook experience out of the box — Cover narrative, foundations IA (including a v0.6.0 Iconography page wired to `@helixui/icons`), per-component AAA conformance pages with auto-injected accessibility status cards, and a token-driven manager chrome that follows your brand. See [WC-Storybook brand-storytelling experience](#wc-storybook-brand-storytelling-experience) below.
 
@@ -45,31 +46,32 @@ npx create-helix --drupal --preset healthcare
 
 ## Supported Frameworks
 
-The interactive prompt shows a curated slim list by default — the flagship `wc-storybook` factory plus the three production-tier app starters that have shipped beyond stub quality. The remaining 12 framework templates exist but are gated behind `--show-experimental` until they reach the same bar.
+The interactive prompt shows a curated slim list by default — the flagship `wc-storybook` factory plus the four production-tier app starters that have shipped beyond stub quality. The remaining 11 framework templates exist but are gated behind `--show-experimental` until they reach the same bar.
 
-| Framework                  | Command Hint                     | Features                                                                                                  |
-| -------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **WC Storybook (factory)** | default — design system factory  | Lit 3, Storybook 10, brand-storytelling docs, AAA cards, Iconography page, auto-catalog ~99 hx-\* entries |
-| **React + Next.js 16**     | recommended for new app projects | SSR, App Router, React wrappers                                                                           |
-| **React + Vite**           | best DX for SPAs                 | Hot reload, React wrappers, production landing page                                                       |
-| **Astro 5** _(new v0.8.0)_ | islands + native web components  | Landing page, view transitions, theme toggle, native `<hx-*>` consumption, Playwright visual baseline     |
+| Framework                      | Command Hint                        | Features                                                                                                          |
+| ------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **WC Storybook (factory)**     | default — design system factory     | Lit 3, Storybook 10, brand-storytelling docs, AAA cards, Iconography page, auto-catalog ~99 hx-\* entries         |
+| **React + Next.js 16**         | recommended for new app projects    | SSR, App Router, React wrappers                                                                                   |
+| **React + Vite**               | best DX for SPAs                    | Hot reload, React wrappers, production landing page                                                               |
+| **Astro 5**                    | islands + native web components     | Landing page, view transitions, theme toggle, native `<hx-*>` consumption, Playwright visual baseline             |
+| **SvelteKit 2** _(new v0.9.0)_ | static-site + native web components | Landing page, browser-native View Transitions API, theme toggle, native `<hx-*>` consumption, Playwright baseline |
 
 ### Experimental templates
 
 Run `npx create-helix --show-experimental` (or set `HELIX_SHOW_EXPERIMENTAL=1`) to surface these in the prompt, the `list` subcommand, and as valid `--template <name>` values:
 
-`remix`, `vue-nuxt`, `vue-vite`, `sveltekit`, `angular`, `lit-vite`, `solid-vite`, `qwik-vite`, `preact-vite`, `stencil`, `ember`, `vanilla`
+`remix`, `vue-nuxt`, `vue-vite`, `angular`, `lit-vite`, `solid-vite`, `qwik-vite`, `preact-vite`, `stencil`, `ember`, `vanilla`
 
-These templates compile and emit a project skeleton, but their docs / examples / DX polish lag behind the curated four. They'll graduate out of `--show-experimental` as they reach the same bar.
+These templates compile and emit a project skeleton, but their docs / examples / DX polish lag behind the curated five. They'll graduate out of `--show-experimental` as they reach the same bar.
 
 ## Monorepo by default (v0.7.0+)
 
-When you pick an app framework (`react-next`, `react-vite`, or **`astro`** as of v0.8.0) and keep the design system at the second prompt — the **default Y** — `create-helix` emits a turbo + pnpm-workspaces monorepo:
+When you pick an app framework (`react-next`, `react-vite`, `astro`, or **`svelte-kit`** as of v0.9.0) and keep the design system at the second prompt — the **default Y** — `create-helix` emits a turbo + pnpm-workspaces monorepo:
 
 ```
 my-project/
 ├── apps/
-│   └── web/                # Next.js, Vite, or Astro app
+│   └── web/                # Next.js, Vite, Astro, or SvelteKit app
 ├── packages/
 │   ├── design-system/      # Lit web components + Storybook
 │   ├── types/              # Shared TS types + brand utilities
@@ -85,8 +87,9 @@ my-project/
 - **Next.js** carries `transpilePackages` + `experimental.externalDir`; the design system is consumed via generated React wrappers from `packages/design-system/src/react.ts`.
 - **Vite** carries `optimizeDeps.exclude` + `server.fs.allow: ['..', '../..']`; React wrappers as with Next.
 - **Astro (v0.8.0)** consumes the design system as **`<hx-*>` web components natively** — no React wrappers, no `createComponent` indirection — because Astro's island architecture is web-component-first.
+- **SvelteKit (v0.9.0)** also consumes the design system as **`<hx-*>` web components natively** — Svelte 5's compiler treats unknown lowercase-with-dash tags as DOM elements first-class (no `isCustomElement` config required). `adapter-static` output; browser-native View Transitions wired via `onNavigate`; `apps/web/vite.config.ts` carries the same `optimizeDeps.exclude` + `server.fs.allow` wiring.
 
-Running `pnpm dev` at the root runs `turbo run dev`, which boots both `apps/web` and `packages/design-system` Storybook (port 6006) concurrently. Default app ports: **Next.js 3000**, **Vite 5173**, **Astro 4321**.
+Running `pnpm dev` at the root runs `turbo run dev`, which boots both `apps/web` and `packages/design-system` Storybook (port 6006) concurrently. Default app ports: **Next.js 3000**, **Vite 5173**, **Astro 4321**, **SvelteKit 5173**.
 
 The shape mirrors the [shadcn `apps/web` + `packages/ui` monorepo precedent](https://github.com/shadcn-ui/ui/tree/main/apps/www) — proven at scale, familiar to consumers.
 
@@ -97,7 +100,8 @@ After Q1 (what does this project build?) and Q2 (include design system?), the su
 - **Design system** (`wc-storybook`, flat — always flat, it _is_ the design system)
 - **Next.js + design system** (monorepo, default for Next pick)
 - **Vite + design system** (monorepo, default for Vite pick)
-- **Astro + design system** _(new v0.8.0)_ — monorepo, default for Astro pick
+- **Astro + design system** _(v0.8.0)_ — monorepo, default for Astro pick
+- **SvelteKit + design system** _(new v0.9.0)_ — monorepo, default for SvelteKit pick
 
 ### Opting out
 
@@ -189,7 +193,7 @@ When scaffolding a framework project, you can select which component bundles to 
 
 ## Requirements
 
-- Node.js >= 20.0.0
+- Node.js >= 22.0.0
 
 ## Development
 

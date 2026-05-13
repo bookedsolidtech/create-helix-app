@@ -298,12 +298,13 @@ describe('checkExperimentalConfig', () => {
   });
 
   it('warns when config selects an experimental template (top-level field)', () => {
+    // v0.9.0: svelte-kit promoted; using ember as the canonical experimental fixture.
     writeJson(path.join(tmp, '.helixrc.json'), {
-      framework: 'svelte-kit',
+      framework: 'ember',
     });
     const result = checkExperimentalConfig(tmp);
     expect(result.status).toBe('warn');
-    expect(result.message).toMatch(/experimental template 'svelte-kit'/);
+    expect(result.message).toMatch(/experimental template 'ember'/);
     expect(result.message).toMatch(/--show-experimental/);
   });
 

@@ -862,7 +862,9 @@ ${presetList}
                             ? 'Vite SPA'
                             : t.id === 'astro'
                               ? 'Astro (web-components-native, static-first)'
-                              : t.hint,
+                              : t.id === 'svelte-kit'
+                                ? 'SvelteKit (web-components-native, runes + adapter-static)'
+                                : t.hint,
                   })),
                   initialValue: 'wc-storybook' as Framework,
                 })) as Framework);
@@ -890,7 +892,8 @@ ${presetList}
       // monorepo emitter yet in v0.7.0).
       includeDesignSystem: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
         const fw = (ctx.results.framework as Framework | undefined) ?? null;
-        const isAppFramework = fw === 'react-next' || fw === 'react-vite' || fw === 'astro';
+        const isAppFramework =
+          fw === 'react-next' || fw === 'react-vite' || fw === 'astro' || fw === 'svelte-kit';
         if (!isAppFramework) {
           return Promise.resolve(false);
         }
