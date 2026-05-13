@@ -2101,27 +2101,31 @@ import { useCallback, useEffect, useState } from 'react';
  * persisted choice without a flash of unstyled content.
  */
 /**
- * Lazy initializer for ThemeToggle's React state.
+ * Theme toggle — hydration-safe.
  *
  * The boot script in RootLayout runs synchronously before hydration and
- * sets data-theme on <html>. This initializer reads that same attribute
- * so the toggle's first React render already matches the persisted
- * theme — no stale-state race where a fast first click would flip
- * dark→dark instead of dark→light, and no wrong label/icon on cold
- * load. (codex round-2 P2 fix)
+ * sets data-theme on <html>. This component handles the two-phase
+ * render carefully:
  *
- * SSR-safe: in the Next App Router prerender phase document is
- * undefined; default to 'light' (the boot script will correct on
- * hydration). The component is 'use client' so the first paint
- * happens client-side regardless.
+ *   1. SSR + first client render: render a hydration-neutral button
+ *      (no theme-derived label/icon). Both server and client produce
+ *      identical HTML — React passes hydration with zero warnings.
+ *   2. After first useEffect (post-hydration): read the booted theme
+ *      from data-theme on <html>, set state, and re-render with the
+ *      correct label / icon.
+ *
+ * The previous lazy-init approach (codex round-2 P2 fix) put the
+ * persisted theme into React state at render time — but on the server
+ * document is undefined so SSR used 'light', then the client re-read
+ * data-theme and flipped to 'dark' for dark-mode users, producing a
+ * hydration mismatch and toggle replacement on every cold load.
+ * (codex round-3 P2 fix)
  */
-function readBootedTheme(): 'light' | 'dark' {
-  if (typeof document === 'undefined') return 'light';
-  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-}
-
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(readBootedTheme);
+  // 'theme' is null until we've read it client-side post-hydration.
+  // The null state lets us render an identical button on server and
+  // first client paint, then upgrade after useEffect runs.
+  const [theme, setTheme] = useState<'light' | 'dark' | null>(null);
 
   const applyTheme = useCallback((next: 'light' | 'dark') => {
     document.documentElement.setAttribute('data-theme', next);
@@ -2130,21 +2134,25 @@ export function ThemeToggle() {
     });
   }, []);
 
-  // On mount, re-read data-theme in case React server-rendered with
-  // 'light' (SSR default) but the boot script already applied 'dark'
-  // by the time hydration runs. The early-exit makes the dep on theme
-  // harmless (setTheme is a no-op when value matches).
   useEffect(() => {
     const current = (document.documentElement.getAttribute('data-theme') as
       | 'light'
       | 'dark'
       | null) ?? 'light';
-    if (current !== theme) setTheme(current);
+    setTheme(current);
     applyTheme(current);
-  }, [applyTheme, theme]);
+  }, [applyTheme]);
 
   const handleClick = useCallback(() => {
-    const next: 'light' | 'dark' = theme === 'dark' ? 'light' : 'dark';
+    // Pre-hydration safety: if click somehow lands before our effect
+    // runs (vanishingly rare but possible), read data-theme directly.
+    const current: 'light' | 'dark' =
+      theme ??
+      ((document.documentElement.getAttribute('data-theme') as
+        | 'light'
+        | 'dark'
+        | null) ?? 'light');
+    const next: 'light' | 'dark' = current === 'dark' ? 'light' : 'dark';
     setTheme(next);
     applyTheme(next);
     try {
@@ -2154,13 +2162,30 @@ export function ThemeToggle() {
     }
   }, [theme, applyTheme]);
 
-  const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  // Pre-hydration neutral rendering: same markup server-side and
+  // first-client-render. aria-label is generic until we know the
+  // theme; the boot script already painted the correct page colors,
+  // so the toggle's visual mismatch is invisible (the icon + word
+  // appear as placeholders, fade to correct state after hydration).
+  const label =
+    theme === null
+      ? 'Toggle color theme'
+      : theme === 'dark'
+        ? 'Switch to light mode'
+        : 'Switch to dark mode';
+  const icon = theme === 'dark' ? '☀️' : '🌙';
+  const word = theme === 'dark' ? 'Light' : 'Dark';
+
   return (
     <button
       type="button"
       onClick={handleClick}
       aria-label={label}
       title={label}
+      // suppressHydrationWarning needed because data-theme is read from
+      // <html> client-side ONLY (theme starts as null on server), so
+      // the icon + word swap on first paint without a hydration warning.
+      suppressHydrationWarning
       style={{
         background: 'transparent',
         border: '1px solid var(--hx-page-border)',
@@ -2174,8 +2199,12 @@ export function ThemeToggle() {
         gap: '0.4rem',
       }}
     >
-      <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
-      <span style={{ fontSize: '0.85rem' }}>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+      <span aria-hidden="true" suppressHydrationWarning>
+        {icon}
+      </span>
+      <span style={{ fontSize: '0.85rem' }} suppressHydrationWarning>
+        {word}
+      </span>
     </button>
   );
 }
