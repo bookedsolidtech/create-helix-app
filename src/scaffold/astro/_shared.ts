@@ -570,7 +570,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
             Browse components
           </a>
           <a
-            href="https://github.com/booked-solid-tech/helix"
+            href="https://github.com/bookedsolidtech/helix"
             target="_blank"
             rel="noopener"
             class="button button--outline button--lg"
@@ -680,7 +680,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
         >create-helix</a
       >. Built on
       <a href="https://astro.build" target="_blank" rel="noopener">Astro</a> +
-      <a href="https://github.com/booked-solid-tech/helix" target="_blank" rel="noopener"
+      <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener"
         >HELiX</a
       >.
     </p>

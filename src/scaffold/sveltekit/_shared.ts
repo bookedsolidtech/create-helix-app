@@ -643,7 +643,7 @@ export async function writeAppsWebIndexPage(args: {
 }): Promise<void> {
   const { rootDir, scope, dsTitle } = args;
 
-  const githubLink = 'https://github.com/booked-solid-tech/helix';
+  const githubLink = 'https://github.com/bookedsolidtech/helix';
 
   const content = `<script lang="ts">
   /**
