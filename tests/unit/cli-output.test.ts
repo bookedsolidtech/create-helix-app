@@ -39,10 +39,12 @@ describe('--help flag', () => {
   // every-framework assertion has a target.
   helpOutputWithExperimental = runCLI('--help --show-experimental');
 
-  it('includes the 3 production framework names by default', () => {
+  it('includes the 5 production framework names by default', () => {
     expect(helpOutput).toContain('react-next');
     expect(helpOutput).toContain('react-vite');
     expect(helpOutput).toContain('wc-storybook');
+    expect(helpOutput).toContain('astro');
+    expect(helpOutput).toContain('svelte-kit');
   });
 
   it('default --help mentions --show-experimental for the hidden frameworks', () => {

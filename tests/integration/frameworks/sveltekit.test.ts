@@ -99,11 +99,11 @@ describe('svelte-kit integration', () => {
     expect(content).toContain('$derived');
   });
 
-  it('svelte.config.js uses @sveltejs/adapter-auto', async () => {
+  it('svelte.config.js uses @sveltejs/adapter-static (v0.9.0+)', async () => {
     const o = opts('sk-adapter');
     await scaffoldProject(o);
     const config = await readText(o.directory, 'svelte.config.js');
-    expect(config).toContain('@sveltejs/adapter-auto');
+    expect(config).toContain('@sveltejs/adapter-static');
   });
 
   it('svelte.config.js includes vitePreprocess', async () => {

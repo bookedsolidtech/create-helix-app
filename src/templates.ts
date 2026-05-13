@@ -298,23 +298,23 @@ export const TEMPLATES: TemplateConfig[] = [
   {
     id: 'svelte-kit',
     name: 'SvelteKit',
-    description: 'Svelte 5 + SvelteKit, native custom element support',
-    hint: 'beta — template under review',
+    description: 'Svelte 5 runes + SvelteKit 2 + adapter-static, native <hx-*> consumption',
+    hint: 'SvelteKit (web-components-native, runes + adapter-static)',
     color: pc.red,
     dependencies: {
-      '@sveltejs/kit': '^2.20.0',
-      svelte: '^5.28.0',
+      '@sveltejs/kit': '^2.0.0',
+      svelte: '^5.0.0',
       '@helixui/library': '^1.0.0',
       '@helixui/tokens': '^0.3.0',
     },
     devDependencies: {
-      '@sveltejs/adapter-auto': '^6.0.0',
-      '@sveltejs/vite-plugin-svelte': '^5.0.0',
-      vite: '^6.4.0',
+      '@sveltejs/adapter-static': '^3.0.0',
+      '@sveltejs/vite-plugin-svelte': '^6.0.0',
+      'svelte-check': '^4.0.0',
+      vite: '^7.0.0',
       typescript: '^5.7.0',
     },
-    features: ['ssr', 'native-wc-support', 'runes'],
-    experimental: true,
+    features: ['static', 'native-wc-support', 'runes', 'view-transitions'],
   },
   {
     id: 'angular',
@@ -343,8 +343,8 @@ export const TEMPLATES: TemplateConfig[] = [
   {
     id: 'astro',
     name: 'Astro',
-    description: 'Content-first with islands architecture, zero JS by default',
-    hint: 'beta — template under review',
+    description: 'Astro 5 + adapter-static + view transitions, native <hx-*> consumption',
+    hint: 'Astro (web-components-native, static-first)',
     color: pc.yellow,
     dependencies: {
       astro: '^5.7.0',
@@ -352,10 +352,10 @@ export const TEMPLATES: TemplateConfig[] = [
       '@helixui/tokens': '^0.3.0',
     },
     devDependencies: {
+      '@astrojs/check': '^0.9.0',
       typescript: '^5.7.0',
     },
-    features: ['islands', 'zero-js-default', 'content-collections'],
-    experimental: true,
+    features: ['islands', 'view-transitions', 'native-wc-support'],
   },
   {
     id: 'vanilla',

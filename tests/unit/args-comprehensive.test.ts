@@ -66,8 +66,10 @@ describe('--template flag', () => {
     expect(result.template).toBe('vue-vite');
   });
 
-  it('--template svelte-kit sets template (requires --show-experimental in v0.6.0+)', () => {
-    const result = parseArgs(['--show-experimental', '--template', 'svelte-kit']);
+  it('--template svelte-kit sets template (production in v0.9.0+)', () => {
+    // v0.9.0: svelte-kit promoted from experimental; --show-experimental no
+    // longer required.
+    const result = parseArgs(['--template', 'svelte-kit']);
     expect(result.template).toBe('svelte-kit');
   });
 

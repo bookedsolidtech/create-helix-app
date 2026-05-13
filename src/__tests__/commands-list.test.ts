@@ -27,11 +27,13 @@ describe('listAll — default (showExperimental=false)', () => {
     return consoleSpy.mock.calls.map((args) => String(args[0])).join('\n');
   };
 
-  it('lists all 3 production templates by default', () => {
+  it('lists all 5 production templates by default', () => {
     const output = renderTui();
     expect(output).toContain('wc-storybook');
     expect(output).toContain('react-next');
     expect(output).toContain('react-vite');
+    expect(output).toContain('astro');
+    expect(output).toContain('svelte-kit');
   });
 
   it('hides every experimental template by default', () => {
@@ -46,7 +48,7 @@ describe('listAll — default (showExperimental=false)', () => {
 
   it('appends a footer mentioning --show-experimental with the hidden count', () => {
     const output = renderTui();
-    expect(output).toMatch(/13 experimental templates hidden/);
+    expect(output).toMatch(/11 experimental templates hidden/);
     expect(output).toContain('--show-experimental');
   });
 
@@ -95,17 +97,19 @@ describe('listAll — --show-experimental', () => {
     expect(experimentalIdx).toBeGreaterThan(productionIdx);
   });
 
-  it('lists all 3 production templates in the Production section', () => {
+  it('lists all 5 production templates in the Production section', () => {
     const output = renderTui();
     expect(output).toContain('wc-storybook');
     expect(output).toContain('react-next');
     expect(output).toContain('react-vite');
+    expect(output).toContain('astro');
+    expect(output).toContain('svelte-kit');
   });
 
-  it('lists all 13 experimental templates in the Experimental section', () => {
+  it('lists all 11 experimental templates in the Experimental section', () => {
     const output = renderTui();
     const experimentalIds = TEMPLATES.filter((t) => t.experimental).map((t) => t.id);
-    expect(experimentalIds).toHaveLength(13);
+    expect(experimentalIds).toHaveLength(11);
     for (const id of experimentalIds) {
       expect(output).toContain(id);
     }
@@ -134,13 +138,16 @@ describe('listAll — JSON mode partitioning', () => {
       frameworks: Array<{ id: string; experimental?: boolean }>;
       experimentalHidden?: number;
     };
-    expect(parsed.frameworks).toHaveLength(3);
-    expect(parsed.experimentalHidden).toBe(13);
+    // v0.9.0: 5 production templates (wc-storybook, react-next, react-vite,
+    // astro promoted in v0.8.0 — but the experimental flag wasn't dropped
+    // until v0.9.0 — and svelte-kit promoted in v0.9.0).
+    expect(parsed.frameworks).toHaveLength(5);
+    expect(parsed.experimentalHidden).toBe(11);
     // None of the visible entries should be marked experimental.
     expect(parsed.frameworks.every((f) => f.experimental !== true)).toBe(true);
   });
 
-  it('JSON with --show-experimental includes all 16 templates and tags the 13 experimental ones', () => {
+  it('JSON with --show-experimental includes all 16 templates and tags the 11 experimental ones', () => {
     listAll(true, true);
     const parsed = JSON.parse(consoleSpy.mock.calls[0][0] as string) as {
       frameworks: Array<{ id: string; experimental?: boolean }>;
@@ -149,6 +156,6 @@ describe('listAll — JSON mode partitioning', () => {
     expect(parsed.frameworks).toHaveLength(16);
     expect(parsed.experimentalHidden).toBeUndefined();
     const taggedCount = parsed.frameworks.filter((f) => f.experimental === true).length;
-    expect(taggedCount).toBe(13);
+    expect(taggedCount).toBe(11);
   });
 });

@@ -371,11 +371,11 @@ describe('scaffoldProject — svelte-kit', () => {
     expect(pkg.scripts.preview).toBe('vite preview');
   });
 
-  it('svelte.config.js uses adapter-auto', async () => {
+  it('svelte.config.js uses adapter-static (v0.9.0+; was adapter-auto in v0.8.x)', async () => {
     const opts = makeOptions({ name: 'sk-adapter', framework: 'svelte-kit' });
     await scaffoldProject(opts);
     const config = await fs.readFile(path.join(opts.directory, 'svelte.config.js'), 'utf-8');
-    expect(config).toContain('@sveltejs/adapter-auto');
+    expect(config).toContain('@sveltejs/adapter-static');
   });
 });
 
