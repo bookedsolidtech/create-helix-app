@@ -2215,7 +2215,16 @@ export function ThemeToggle() {
     let current: 'light' | 'dark';
     if (attr === 'dark' || attr === 'light') {
       current = attr;
-    } else if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    } else if (
+      // v0.9.1 round-8 fix: guard matchMedia presence before reading
+      // .matches. window.matchMedia?.() with the optional CALL returns
+      // undefined when matchMedia itself is undefined (older webviews,
+      // some test shells); then .matches dereferences undefined and
+      // throws on mount, breaking hydration. The explicit typeof check
+      // is the safest portable form.
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+    ) {
       current = 'dark';
     } else {
       current = 'light';
