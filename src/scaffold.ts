@@ -2100,8 +2100,28 @@ import { useCallback, useEffect, useState } from 'react';
  * BEFORE React hydrates, so this component's first render matches the
  * persisted choice without a flash of unstyled content.
  */
+/**
+ * Lazy initializer for ThemeToggle's React state.
+ *
+ * The boot script in RootLayout runs synchronously before hydration and
+ * sets data-theme on <html>. This initializer reads that same attribute
+ * so the toggle's first React render already matches the persisted
+ * theme — no stale-state race where a fast first click would flip
+ * dark→dark instead of dark→light, and no wrong label/icon on cold
+ * load. (codex round-2 P2 fix)
+ *
+ * SSR-safe: in the Next App Router prerender phase document is
+ * undefined; default to 'light' (the boot script will correct on
+ * hydration). The component is 'use client' so the first paint
+ * happens client-side regardless.
+ */
+function readBootedTheme(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light';
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>(readBootedTheme);
 
   const applyTheme = useCallback((next: 'light' | 'dark') => {
     document.documentElement.setAttribute('data-theme', next);
@@ -2110,15 +2130,18 @@ export function ThemeToggle() {
     });
   }, []);
 
-  // Initial sync: read what the boot script already applied to <html>.
+  // On mount, re-read data-theme in case React server-rendered with
+  // 'light' (SSR default) but the boot script already applied 'dark'
+  // by the time hydration runs. The early-exit makes the dep on theme
+  // harmless (setTheme is a no-op when value matches).
   useEffect(() => {
     const current = (document.documentElement.getAttribute('data-theme') as
       | 'light'
       | 'dark'
       | null) ?? 'light';
-    setTheme(current);
+    if (current !== theme) setTheme(current);
     applyTheme(current);
-  }, [applyTheme]);
+  }, [applyTheme, theme]);
 
   const handleClick = useCallback(() => {
     const next: 'light' | 'dark' = theme === 'dark' ? 'light' : 'dark';
