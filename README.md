@@ -117,6 +117,32 @@ Three escape valves keep the v0.6.x flat single-app shape available:
 
 **Existing v0.5.x / v0.6.x / v0.7.x scaffolds are not broken.** Their shape on disk is unchanged. A `create-helix migrate-to-monorepo` subcommand is deferred; see [`MIGRATING.md`](./MIGRATING.md) for the manual recipe (which covers Next/Vite/Astro alike — they share the same workspace shape).
 
+### Cross-kit feature parity (v0.9.1+)
+
+The 4 production kits (react-next, react-vite, astro, svelte-kit) share a deliberately consistent consumer surface so a developer moving between them recognizes the shape:
+
+| Feature                                       | react-next                           | react-vite              | astro                       | svelte-kit          |
+| --------------------------------------------- | ------------------------------------ | ----------------------- | --------------------------- | ------------------- |
+| `<h1>`                                        | "Build interfaces on web standards." | same                    | same                        | same                |
+| `<title>`                                     | `{name} — built with create-helix`   | same                    | same                        | same                |
+| Theme toggle                                  | native `<button>` w/ `aria-label`    | same                    | same                        | same                |
+| `localStorage` key                            | `helix-theme`                        | same                    | same                        | same                |
+| Pre-hydration boot script                     | inline `<script>`                    | `/public/theme-boot.js` | inline `<script is:inline>` | inline `<script>`   |
+| Pre-hydration `prefers-color-scheme` fallback | yes                                  | yes                     | yes                         | yes                 |
+| `<main>` landmark                             | per-page (exactly 1)                 | in App.tsx              | in Layout                   | in `+layout.svelte` |
+| Hero CTAs                                     | styled `<a class="button">`          | same                    | same                        | same                |
+| `<hx-*>` consumption                          | `@lit/react` wrappers                | `@lit/react` wrappers   | native                      | native              |
+
+What's intentionally platform-specific:
+
+- **App structure** — App Router multi-route (Next), SPA (Vite), static + ClientRouter (Astro), file-based routing (SvelteKit).
+- **View transitions** — Astro's `<ClientRouter />` and SvelteKit's `onNavigate` + browser-native View Transitions API. React kits don't get these for free.
+- **Build artifacts** — `.next/`, `dist/`, `dist/` (astro), `build/` + `.svelte-kit/`.
+
+What's deferred to upstream:
+
+- `<hx-select>` placeholder color contrast (`#94a3b8` on white = 2.56:1) — single remaining axe-core violation across all 8 default page-visits. Tracked in the BST `Helix Bug Reports.md` vault doc.
+
 ## WC-Storybook brand-storytelling experience
 
 `npx create-helix` → choose **WC Storybook (factory)** to scaffold a Lit 3 design system with a fully-staged Storybook out of the box. Three brand prompts shape the experience:
