@@ -105,6 +105,12 @@ describe('wc-storybook monorepo integration (Phase F)', () => {
       types: './src/index.ts',
       import: './src/index.ts',
     });
+    // v0.9.1 round-6 follow-up: Lit-class re-exports moved off the
+    // package root to './lit'.
+    expect(pkg.exports['./lit']).toEqual({
+      types: './src/lit.ts',
+      import: './src/lit.ts',
+    });
     expect(pkg.exports['./tokens']).toBe('./src/tokens/tokens.css');
     expect(pkg.exports['./styles']).toBe('./dist/styles.css');
     // Publishable-library identity surface is NOT carried over to the

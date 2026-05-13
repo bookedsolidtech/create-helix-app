@@ -95,6 +95,13 @@ describe('v0.7.0 Phase F — wc-storybook monorepo emits packages/design-system'
       types: './src/index.ts',
       import: './src/index.ts',
     });
+    // v0.9.1 round-6 follow-up: Lit-class re-exports moved off the
+    // package root to './lit' so apps/web type-checks never pull
+    // decorator-based Lit source files into their compilation.
+    expect(pkg.exports['./lit']).toEqual({
+      types: './src/lit.ts',
+      import: './src/lit.ts',
+    });
     expect(pkg.exports['./tokens']).toBe('./src/tokens/tokens.css');
     // './styles' remains pointed at dist/ because the compiled stylesheet
     // only exists post-build — it's an OPTIONAL artifact, not part of
@@ -202,12 +209,22 @@ describe('v0.7.0 Phase F — wc-storybook monorepo emits packages/design-system'
     expect(indexTs).toContain('onHxOpen');
     expect(indexTs).toContain('onHxClose');
 
-    // DS-specific Lit class + variant types preserved from the flat
-    // barrel so Storybook stories under src/stories/ still resolve.
-    // dsName defaults to the unscoped project name → 'aurora-app'.
-    expect(indexTs).toContain("from './base/aurora-app-element.js'");
-    expect(indexTs).toContain('AuroraAppButton');
-    expect(indexTs).toContain('ButtonVariant');
+    // v0.9.1 round-6 follow-up: Lit class + variant-type re-exports
+    // moved off the package-root index.ts to src/lit.ts (exposed via
+    // the './lit' subpath in package.json exports). The package root
+    // stays React-only so apps/web type-checks never pull
+    // decorator-based source files into compilation. Storybook
+    // stories continue to use relative imports — no API change there.
+    expect(indexTs).not.toContain("from './base/");
+    expect(indexTs).not.toContain('AuroraAppButton');
+
+    const litTs = await fs.readFile(
+      path.join(dir, 'packages', 'design-system', 'src', 'lit.ts'),
+      'utf8',
+    );
+    expect(litTs).toContain("from './base/aurora-app-element.js'");
+    expect(litTs).toContain('AuroraAppButton');
+    expect(litTs).toContain('ButtonVariant');
   });
 
   it('redirects every wc-storybook factory output under packages/design-system', async () => {

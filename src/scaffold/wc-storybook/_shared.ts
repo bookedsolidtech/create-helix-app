@@ -173,6 +173,15 @@ export async function writeDesignSystemPackageJson(args: {
     // dependency graph. Pointing at src eliminates the build
     // ordering trap entirely.
     //
+    // v0.9.1 round-6 follow-up (codex P1): the package-root barrel is
+    // React-wrappers ONLY (no Lit class re-exports). Lit-direct
+    // consumers should switch to the './lit' subpath. This keeps
+    // decorator-based source files out of apps/web's transitive
+    // compilation path — apps don't enable experimentalDecorators in
+    // their tsconfig, and although tsc --noEmit doesn't deeply
+    // type-check non-included files today, the latent risk is real
+    // and the split is the architecturally clean fix.
+    //
     // './tokens' streams the raw CSS file (apps import this once at
     // root to define --{prefix}-* + --hx-* variables); './styles'
     // remains pointed at dist/ because the compiled stylesheet only
@@ -182,6 +191,10 @@ export async function writeDesignSystemPackageJson(args: {
       '.': {
         types: './src/index.ts',
         import: './src/index.ts',
+      },
+      './lit': {
+        types: './src/lit.ts',
+        import: './src/lit.ts',
       },
       './tokens': './src/tokens/tokens.css',
       './styles': './dist/styles.css',
@@ -318,9 +331,10 @@ export async function writeDesignSystemIndex(args: {
 // versions of HELiX components from here instead of dropping bare
 // <hx-*> elements into their JSX.
 //
-// The DS-specific Lit class (${className}Button) + variant types from
-// the wc-storybook factory are re-exported at the bottom for Storybook
-// + any consumer that wants the underlying Lit element.
+// v0.9.1 cross-kit audit: this barrel is React-only. The DS-specific
+// Lit class + variant-type re-exports moved to src/lit.ts (exposed
+// at '@scope/design-system/lit'). The split keeps decorator-based
+// Lit source files out of apps/web's compilation path.
 
 import { createComponent } from '@lit/react';
 import React from 'react';
@@ -408,13 +422,38 @@ export const TextInput = createComponent({
   },
 });
 
-// DS-specific Lit class + variant types — preserved from the flat
-// factory's barrel so Storybook stories + Lit-direct consumers still
-// resolve them through the package root.
+// v0.9.1 cross-kit audit: Lit class + variant-type re-exports moved
+// to the './lit' subpath (src/lit.ts). The package root stays
+// React-only so apps/web type-checks don't pull decorator-based Lit
+// source files into their compilation. Storybook stories that need
+// the underlying Lit element use relative imports (no API change for
+// them), and any Lit-direct external consumer should switch to the
+// './lit' subpath import. See package.json exports.
+`;
+  await safeWriteFile(path.join(rootDir, DS_PACKAGE_REL, 'src', 'index.ts'), content);
+
+  // v0.9.1: separate Lit-class barrel under src/lit.ts, exposed as the
+  // '@${scope}/design-system/lit' subpath. Keeps the package root
+  // React-clean while preserving the back-compat import surface for
+  // anyone who was reaching for the Lit classes directly through the
+  // workspace package (rare today, but the wc-storybook flat factory
+  // shipped them so we maintain the path).
+  const litBarrelContent = `// ${dsTitle} Design System — Lit-class barrel.
+//
+// Direct access to the Lit-based custom element classes for consumers
+// that need the underlying element constructor (subclassing, custom
+// Storybook host elements, type annotations on the Lit element itself).
+//
+// Apps that consume <hx-*> components for rendering should NOT need
+// these — use the React wrappers from the package root instead. This
+// subpath exists so the package root stays free of decorator-based
+// source files (which the React app tsconfigs don't enable
+// experimentalDecorators for).
+
 export { ${baseClass} } from './base/${ds}-element.js';
 export { ${className}Button } from './components/${ds}-button/${ds}-button.js';
 export { ${className}ButtonStyles } from './components/${ds}-button/${ds}-button.styles.js';
 export type { ButtonVariant } from './components/${ds}-button/${ds}-button.styles.js';
 `;
-  await safeWriteFile(path.join(rootDir, DS_PACKAGE_REL, 'src', 'index.ts'), content);
+  await safeWriteFile(path.join(rootDir, DS_PACKAGE_REL, 'src', 'lit.ts'), litBarrelContent);
 }
