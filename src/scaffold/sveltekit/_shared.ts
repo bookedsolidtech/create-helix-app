@@ -55,7 +55,17 @@
  */
 import path from 'node:path';
 import { safeWriteFile, safeWriteJson } from '../../scaffold.js';
+import {
+  HELIX_LIBRARY_VERSION,
+  HELIX_TOKENS_VERSION,
+  HELIX_ICONS_VERSION,
+} from '../../helix-versions.js';
 import { APPS_WEB_REL } from '../_shared/monorepo-redirect.js';
+import {
+  HELIX_ICONS_POSTINSTALL_CMD,
+  helixIconsGitignoreEntry,
+  helixIconsSetBasePathDynamic,
+} from '../_shared/helix-icons-setup.js';
 
 // Re-export so monorepo.ts mirrors the Phase D Next / Phase E Vite /
 // Astro Phase C import shapes.
@@ -81,8 +91,8 @@ const ADAPTER_STATIC_VERSION = '^3.0.0';
 const VITE_PLUGIN_SVELTE_VERSION = '^6.0.0';
 const SVELTE_CHECK_VERSION = '^4.0.0';
 const VITE_VERSION = '^7.0.0';
-const HELIX_LIBRARY_VERSION = '^1.0.0';
-const HELIX_TOKENS_VERSION = '^0.3.0';
+// HELIX_LIBRARY_VERSION / HELIX_TOKENS_VERSION come from the centralized
+// helix-versions.ts (single source of truth — see import above).
 const TYPESCRIPT_VERSION = '^5.7.0';
 // @types/node — required by the SvelteKit-generated .svelte-kit/tsconfig.json,
 // which compiles with `types: ["node"]`. Without this devDep, `svelte-check`
@@ -125,6 +135,10 @@ export async function writeAppsWebPackageJson(args: {
     // the page so customElements.define() runs on hydration. Pinned to
     // the same range the design-system declares to avoid double-install.
     '@helixui/library': HELIX_LIBRARY_VERSION,
+    // @helixui/library@3.x peer-requires @helixui/icons (the <hx-icon>
+    // registry) — declare it so a fresh install has no unmet peer and
+    // the emitted <hx-icon library="..."> examples resolve.
+    '@helixui/icons': HELIX_ICONS_VERSION,
     [`@${scope}/types`]: 'workspace:*',
     [`@${scope}/utils`]: 'workspace:*',
   };
@@ -148,6 +162,10 @@ export async function writeAppsWebPackageJson(args: {
       preview: 'vite preview',
       'type-check': 'svelte-kit sync && svelte-check',
       prepare: 'svelte-kit sync',
+      // Copy @helixui/icons sprite SVGs into static/icons/ so <hx-icon>
+      // resolves them same-origin (see scripts/copy-helix-icons.mjs,
+      // emitted by writeHelixIconsCopyScript).
+      postinstall: HELIX_ICONS_POSTINSTALL_CMD,
     },
     dependencies,
     devDependencies: {
@@ -477,11 +495,17 @@ ${tokensComment}
    * every hx-* tag, and any <hx-*> already in the DOM upgrades on the
    * spot.
    *
+   * setBasePath() points the @helixui/icons registry at the same-origin
+   * /icons/ path the postinstall sprite-copy populates — it runs before
+   * @helixui/library loads, or <hx-icon> resolves sprites against the
+   * blocked cross-origin jsdelivr CDN default.
+   *
    * Runs ONCE per app boot — client-side navigations (the onNavigate
    * hook below) preserve the registered custom elements.
    */
-  onMount(() => {
-    import('@helixui/library');
+  onMount(async () => {
+${helixIconsSetBasePathDynamic('    ')}
+    await import('@helixui/library');
   });
 
   /**
@@ -1425,6 +1449,9 @@ export async function writeAppsWebGitignore(args: { rootDir: string }): Promise<
 # SvelteKit
 .svelte-kit
 build
+
+# HELiX — postinstall-generated @helixui/icons sprite SVGs
+${helixIconsGitignoreEntry('static')}
 
 # Env
 .env

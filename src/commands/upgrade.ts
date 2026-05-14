@@ -3,6 +3,8 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { validateDirectory } from '../validation.js';
+import { detectOffline, readRegistryCache, writeRegistryCache } from '../network.js';
+import { HELIX_LIBRARY_MAJOR, HELIX_ICONS_VERSION } from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
@@ -19,7 +21,18 @@ interface PackageJson {
   name?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  /**
+   * peerDependencies matters here: the wc-storybook scaffold declares its
+   * `@helixui/*` packages as peerDependencies (the version CONTRACT) in
+   * addition to devDependencies. An upgrade that touched only deps/devDeps
+   * would leave the peer pin stale and produce an internally-inconsistent
+   * package.json.
+   */
+  peerDependencies?: Record<string, string>;
 }
+
+/** The three dependency buckets `upgrade` reads from and writes back to. */
+const DEP_BUCKETS = ['dependencies', 'devDependencies', 'peerDependencies'] as const;
 
 function readPackageJson(dir: string): PackageJson | null {
   const pkgPath = path.join(dir, 'package.json');
@@ -33,6 +46,79 @@ function readPackageJson(dir: string): PackageJson | null {
 
 function isHelixDep(name: string): boolean {
   return HELIX_PREFIXES.some((prefix) => name.startsWith(prefix));
+}
+
+/**
+ * Parse a semver-ish string into a [major, minor, patch] tuple, ignoring any
+ * range prefix (`^`/`~`/`>=`), prerelease, and build metadata. Returns null
+ * when the string can't be parsed — the caller falls back to string
+ * comparison rather than guessing.
+ *
+ * Deliberately not a full semver library: `upgrade` only needs "is latest
+ * strictly newer than installed" — the same minimal-dependency stance
+ * `doctor.ts` takes for its major-floor check.
+ */
+function parseSemver(version: string): [number, number, number] | null {
+  const cleaned = version.trim().replace(/^[\^~]|^>=?|^<=?|^=/g, '');
+  const core = cleaned.split('-')[0].split('+')[0];
+  const parts = core.split('.');
+  // A clean version is EXACTLY `M.m.p`, every part purely numeric. Anything
+  // else — partial ranges (`4.x`, `1.0`), wildcards (`*`), disjunctions
+  // (`^1.0.0 || ^4.0.0`), npm aliases (`npm:pkg@4.0.0`) — is unparseable.
+  // `parseInt` would silently accept `0 || ^4` as `0`, so validate the
+  // exact shape: callers must treat null as "cannot compare — leave alone".
+  if (parts.length !== 3 || !parts.every((p) => /^\d+$/.test(p))) return null;
+  return [Number(parts[0]), Number(parts[1]), Number(parts[2])];
+}
+
+/**
+ * Compare two semver-ish strings. Returns -1 when `a < b`, 0 when equal, 1
+ * when `a > b`, or null when either side can't be parsed.
+ */
+export function compareSemver(a: string, b: string): -1 | 0 | 1 | null {
+  const pa = parseSemver(a);
+  const pb = parseSemver(b);
+  if (pa === null || pb === null) return null;
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] < pb[i]) return -1;
+    if (pa[i] > pb[i]) return 1;
+  }
+  return 0;
+}
+
+/**
+ * Lenient leading-major extractor: the first run of digits in a spec
+ * (`^3.9.1`, `3.x`, `3.0.0` → 3; `~0.3.0` → 0; unparseable → 0). Unlike
+ * `parseSemver` this never returns null — it's for a coarse "is this on
+ * major N+" gate where a partial range still carries a usable major. For a
+ * disjunctive range (`^1.0.0 || ^4.0.0`) it reads the FIRST major (1), which
+ * is the conservative lower bound.
+ */
+function leadingMajor(spec: string): number {
+  const m = /(\d+)/.exec(spec);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/**
+ * Major version of `pkgName` as ACTUALLY RESOLVED in `dir`'s node_modules —
+ * 0 when it isn't installed or the version is unparseable.
+ *
+ * The declared range text is not enough to decide "is this project on the
+ * 3.x HELiX contract": a broad or union spec like `>=1.0.0` or
+ * `^1.0.0 || ^3.9.1` reads as major 1 via `leadingMajor` but can resolve to
+ * a 3.x install — which already has the unmet @helixui/icons peer this
+ * migration is meant to fix. Best-effort: if node_modules hasn't been
+ * populated yet this returns 0 and the declared-range signals still apply.
+ */
+function resolveInstalledMajor(dir: string, pkgName: string): number {
+  const pkgJsonPath = path.join(dir, 'node_modules', ...pkgName.split('/'), 'package.json');
+  try {
+    const raw = fs.readFileSync(pkgJsonPath, 'utf-8');
+    const parsed = JSON.parse(raw) as { version?: string };
+    return parsed.version !== undefined ? leadingMajor(parsed.version) : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -84,33 +170,72 @@ export async function fetchLatestVersions(packageNames: string[]): Promise<Recor
 
 /**
  * Returns true when the directory contains a package.json with at least one
- * `@helix/*` or `@helixui/*` dependency.
+ * `@helix/*` or `@helixui/*` dependency in any bucket (dependencies,
+ * devDependencies, or peerDependencies).
  */
 export function detectHelixProject(dir: string): boolean {
   const pkg = readPackageJson(dir);
   if (pkg === null) return false;
 
-  const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const allDeps = {
+    ...pkg.dependencies,
+    ...pkg.peerDependencies,
+    ...pkg.devDependencies,
+  };
   return Object.keys(allDeps).some(isHelixDep);
+}
+
+/**
+ * Resolve the directory whose `package.json` `upgrade` should operate on.
+ *
+ * For a flat project that's `dir`. For a scaffolded monorepo the HELiX
+ * dependencies live in `apps/web/package.json`, not the workspace root — so
+ * if `dir` itself declares no HELiX dep but `dir/apps/web` does, follow it
+ * there. This mirrors `doctor`'s `resolveHelixManifestDir` so that
+ * `create-helix doctor` (which already follows apps/web) and the
+ * `create-helix upgrade` it recommends operate on the same manifest —
+ * otherwise the recommended command exits "No HELiX project detected" from
+ * a monorepo root.
+ */
+export function resolveHelixDir(dir: string): string {
+  if (detectHelixProject(dir)) return dir;
+  const appsWeb = path.join(dir, 'apps', 'web');
+  if (detectHelixProject(appsWeb)) return appsWeb;
+  return dir;
 }
 
 /**
  * Returns a map of installed HELiX package names to their current version
  * strings (as written in package.json).
+ *
+ * When a package appears in more than one bucket (`dependencies`,
+ * `devDependencies`, `peerDependencies`) — the wc-storybook scaffold puts
+ * `@helixui/*` in both peer + dev — the STALEST range wins. That matters:
+ * if one bucket is current and another is behind, collapsing to the current
+ * one would make `buildUpgradePlan` report the package up-to-date and the
+ * stale bucket would never be rewritten. Surfacing the stalest range flags
+ * the package as upgradeable, and the write-back then syncs every bucket.
  */
 export function getInstalledVersions(dir: string): Record<string, string> {
   const pkg = readPackageJson(dir);
   if (pkg === null) return {};
 
-  const allDeps: Record<string, string> = {
-    ...pkg.dependencies,
-    ...pkg.devDependencies,
-  };
-
   const result: Record<string, string> = {};
-  for (const [name, version] of Object.entries(allDeps)) {
-    if (isHelixDep(name)) {
-      result[name] = version;
+  for (const bucket of [pkg.dependencies, pkg.devDependencies, pkg.peerDependencies]) {
+    if (bucket === undefined) continue;
+    for (const [name, version] of Object.entries(bucket)) {
+      if (!isHelixDep(name)) continue;
+      const existing = result[name];
+      if (existing === undefined) {
+        result[name] = version;
+        continue;
+      }
+      // Keep the staler of the two ranges. `compareSemver` of the
+      // prefix-stripped versions: 1 means `existing` is newer than this
+      // bucket's `version`, so `version` is staler → keep it. -1 / 0 / null
+      // → keep `existing` (already the staler-or-equal, or incomparable).
+      const cmp = compareSemver(existing.replace(/^[\^~]/, ''), version.replace(/^[\^~]/, ''));
+      if (cmp === 1) result[name] = version;
     }
   }
   return result;
@@ -118,6 +243,13 @@ export function getInstalledVersions(dir: string): Record<string, string> {
 
 export interface UpgradeOptions {
   dryRun?: boolean;
+  /**
+   * When true, skip the npm registry entirely and serve latest-version data
+   * from the on-disk registry cache (`~/.helix/cache/registry.json`). Set by
+   * the `--offline` flag. Even without it, `runUpgrade` falls back to the
+   * cache when a fast offline probe says the network is unreachable.
+   */
+  offline?: boolean;
 }
 
 export interface UpgradePlan {
@@ -128,9 +260,12 @@ export interface UpgradePlan {
 }
 
 /**
- * Build an upgrade plan given installed versions and the fetched latest versions.
- * For packages not found in `latestVersions` (e.g. offline or not published),
- * the current version is used as the latest so they appear up-to-date.
+ * Build an upgrade plan given installed versions and the fetched latest
+ * versions. A package is marked `changed` only when the latest is strictly
+ * newer than what's installed — never when it's equal or OLDER, so `upgrade`
+ * can't silently propose a downgrade. For packages not in `latestVersions`
+ * (offline, not published) the current version is used as the latest so they
+ * appear up-to-date.
  */
 export function buildUpgradePlan(
   installed: Record<string, string>,
@@ -140,22 +275,31 @@ export function buildUpgradePlan(
     const knownLatest = latestVersions[name];
     const normalizedCurrent = current.replace(/^[\^~]/, '');
     const latest = knownLatest ?? normalizedCurrent;
+    const cmp = compareSemver(normalizedCurrent, latest);
+    // Only `changed` when we can PROVE the latest is strictly newer
+    // (cmp === -1). Equal, already-newer (cmp 0/1), OR unparseable
+    // (cmp === null) all leave the dep untouched. Unparseable matters:
+    // npm specs like `4.x`, `*`, or alias ranges don't parse, and a
+    // string-inequality fallback could rewrite a project already on a
+    // newer major DOWN to `latest` — the exact downgrade this guards against.
+    const changed = cmp === -1;
     return {
       name,
       current,
       latest,
-      changed: normalizedCurrent !== latest,
+      changed,
     };
   });
 }
 
 /**
- * Main upgrade entry point. Queries the npm registry for latest versions of all
- * installed HELiX packages, shows current vs latest, and (unless `--dry-run`)
- * writes updated versions back to package.json.
+ * Main upgrade entry point. Resolves the latest versions of all installed
+ * HELiX packages (registry when online, on-disk cache when offline), shows
+ * current vs latest, and — unless `--dry-run` — writes the updated versions
+ * back to every dependency bucket they appear in.
  */
 export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Promise<void> {
-  const { dryRun = false } = options;
+  const { dryRun = false, offline = false } = options;
 
   // SECURITY: Validate the directory path before reading any files.
   // This prevents path traversal attacks when the directory argument is
@@ -166,7 +310,13 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     process.exit(1);
   }
 
-  if (!detectHelixProject(dir)) {
+  // For a scaffolded monorepo the HELiX deps live in apps/web/package.json,
+  // not the workspace root. `doctor` already follows apps/web and recommends
+  // `create-helix upgrade` as the fix — so `upgrade` must follow it too, or
+  // the recommended command exits "No HELiX project detected" from the root.
+  const projectDir = resolveHelixDir(dir);
+
+  if (!detectHelixProject(projectDir)) {
     p.log.error(
       pc.red('No HELiX project detected.') +
         ' ' +
@@ -175,22 +325,116 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     process.exit(1);
   }
 
-  const installed = getInstalledVersions(dir);
+  const installed = getInstalledVersions(projectDir);
 
-  // Query the npm registry for the latest versions of all installed HELiX packages
-  const s = p.spinner();
-  s.start('Fetching latest versions from npm registry…');
-  const latestVersions = await fetchLatestVersions(Object.keys(installed));
-  s.stop('Fetched latest versions');
+  // Read the manifest once, up front: the icon-peer migration decision below
+  // needs the actual per-bucket shape (not just the flat installed map), and
+  // the write-back at the end mutates this same object. `detectHelixProject`
+  // already proved it parses, but guard defensively.
+  const pkgPath = path.join(projectDir, 'package.json');
+  const pkg = readPackageJson(projectDir);
+  if (pkg === null) {
+    p.log.error(pc.red(`Unable to read ${pkgPath}.`));
+    process.exit(1);
+  }
 
-  const fetchedCount = Object.keys(latestVersions).length;
-  const totalCount = Object.keys(installed).length;
-  if (totalCount > 0 && fetchedCount === 0) {
-    p.log.warn(
-      pc.yellow('Could not reach npm registry.') +
-        ' ' +
-        pc.dim('Showing installed versions only — upgrade check skipped.'),
-    );
+  // Drupal scaffolds intentionally keep @helixui/tokens on the 0.x Drupal
+  // contract — v0.9.2 did not migrate the Drupal preset surface (see
+  // src/presets/loader.ts). `upgrade` must respect that: bumping it to the
+  // 3.x registry latest would push the project onto an unverified contract.
+  // `@helixui/drupal-starter` is the Drupal marker. The package is dropped
+  // from `installed` so it never enters the plan or the write-back.
+  const drupalTokensExcluded =
+    installed['@helixui/drupal-starter'] !== undefined &&
+    installed['@helixui/tokens'] !== undefined;
+  if (drupalTokensExcluded) {
+    delete installed['@helixui/tokens'];
+  }
+
+  // Resolve "latest" — registry when online, on-disk cache when offline.
+  // `--offline` short-circuits the probe; otherwise a fast (500ms) reachability
+  // check lets `upgrade` degrade gracefully when the network is simply down,
+  // instead of hanging on a 5s-per-package fetch timeout.
+  const isOffline = offline || (await detectOffline());
+  let latestVersions: Record<string, string>;
+
+  if (isOffline) {
+    const cache = readRegistryCache();
+    if (cache === null) {
+      p.log.warn(
+        pc.yellow('Offline — no cached registry data available.') +
+          ' ' +
+          pc.dim('Showing installed versions only; run `create-helix upgrade` online to refresh.'),
+      );
+      latestVersions = {};
+    } else {
+      latestVersions = cache.packages;
+      const age = Math.round((Date.now() - cache.updatedAt) / (60 * 60 * 1000));
+      p.log.info(pc.dim(`Offline — using cached registry data (${age}h old).`));
+    }
+  } else {
+    const s = p.spinner();
+    s.start('Fetching latest versions from npm registry…');
+    const fetched = await fetchLatestVersions(Object.keys(installed));
+    s.stop('Fetched latest versions');
+
+    const fetchedCount = Object.keys(fetched).length;
+    const totalCount = Object.keys(installed).length;
+    const cache = readRegistryCache();
+
+    // Start from the fresh results, then backfill any package the registry
+    // did NOT return from the cache. A partial failure (one timeout, one
+    // success) must not silently mark the missing package up-to-date.
+    latestVersions = { ...fetched };
+    if (fetchedCount < totalCount && cache !== null) {
+      for (const name of Object.keys(installed)) {
+        if (latestVersions[name] === undefined && cache.packages[name] !== undefined) {
+          latestVersions[name] = cache.packages[name];
+        }
+      }
+    }
+
+    if (fetchedCount === 0) {
+      p.log.warn(
+        cache !== null
+          ? pc.yellow('Could not reach npm registry — using cached version data.') +
+              ' ' +
+              pc.dim('Results may be stale.')
+          : pc.yellow('Could not reach npm registry.') +
+              ' ' +
+              pc.dim('Showing installed versions only — upgrade check skipped.'),
+      );
+    } else if (fetchedCount < totalCount) {
+      p.log.warn(
+        pc.yellow('Some registry lookups failed.') +
+          ' ' +
+          pc.dim('Missing packages backfilled from the cache where available.'),
+      );
+    }
+
+    if (fetchedCount > 0) {
+      // Merge the fresh results INTO the existing cache rather than
+      // overwriting — a partial failure must never shrink the cache and
+      // leave subsequent offline runs worse off than before.
+      writeRegistryCache({ ...(cache?.packages ?? {}), ...fetched });
+    }
+  }
+
+  // create-helix KNOWS the @helixui/icons floor that @helixui/library@3.x
+  // peer-requires (HELIX_ICONS_VERSION). Treat it as a registry-independent
+  // MINIMUM "latest" for @helixui/icons: if a project declares @helixui/icons
+  // below that floor and the registry lookup missed (offline, no cache, or a
+  // partial failure), the plan would otherwise see "no known latest", keep
+  // the stale range, and no-op — leaving `doctor` failing immediately after
+  // it told the user to run `create-helix upgrade`. A real registry hit (>=
+  // the floor) still wins; buildUpgradePlan's compareSemver guard refuses any
+  // downgrade, so a project already above the floor is left untouched.
+  if (installed['@helixui/icons'] !== undefined) {
+    const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
+    const knownIconsLatest = latestVersions['@helixui/icons'];
+    if (knownIconsLatest === undefined || compareSemver(knownIconsLatest, iconsFloor) === -1) {
+      latestVersions['@helixui/icons'] = iconsFloor;
+    }
   }
 
   const plan = buildUpgradePlan(installed, latestVersions);
@@ -207,6 +451,56 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   // Display table
   const upgradeable = plan.filter((entry) => entry.changed);
   const upToDate = plan.filter((entry) => !entry.changed);
+
+  // HELiX 3.x migration: @helixui/library@3.x peer-requires @helixui/icons
+  // (the <hx-icon> registry). If the project's @helixui/library will be on
+  // 3.x+ after this run — whether this run BUMPS it there or it was ALREADY
+  // 3.x — and @helixui/icons is not declared anywhere, `upgrade` adds it.
+  // The already-on-3.x case matters: that is the exact state `doctor` flags
+  // and tells the user to fix with `create-helix upgrade`, so the
+  // remediation must not be a no-op there — which is why this is computed
+  // BEFORE the "nothing to upgrade" early return below. The final
+  // @helixui/library spec is `latest` when it's being upgraded, else
+  // whatever is already declared; `leadingMajor` reads a usable major from
+  // either. This is the bounded part of the migration `upgrade` can do
+  // safely (a package.json edit) — the same-origin sprite wiring is a
+  // source-file change a tool shouldn't make blind (see the note below).
+  // "Will @helixui/library be on 3.x+ after this run?" — true if it's being
+  // upgraded TO 3.x+, OR it's ALREADY 3.x+ in ANY bucket. The second half
+  // matters for mixed-bucket projects (e.g. peerDependencies on `^3.9.1`,
+  // devDependencies still on `^1.0.0`) when there's no registry upgrade
+  // entry — offline, or a full registry miss. `installed[...]` alone is the
+  // merged STALEST range, which would read as 1.x and miss the migration.
+  const libEntry = upgradeable.find((e) => e.name === '@helixui/library');
+  const maxDeclaredMajor = (name: string): number =>
+    DEP_BUCKETS.reduce((max, b) => {
+      const range = pkg[b]?.[name];
+      return range !== undefined ? Math.max(max, leadingMajor(range)) : max;
+    }, 0);
+  // Third disjunct: the version @helixui/library ACTUALLY resolves to in
+  // node_modules. A broad or union declared range (`>=1.0.0`,
+  // `^1.0.0 || ^3.9.1`) reads as major 1 via leadingMajor but can resolve to
+  // a 3.x install that already has the unmet @helixui/icons peer — neither
+  // the registry-entry nor the declared-range signal catches that.
+  const libraryWillBeV3Plus =
+    (libEntry !== undefined && leadingMajor(libEntry.latest) >= HELIX_LIBRARY_MAJOR) ||
+    maxDeclaredMajor('@helixui/library') >= HELIX_LIBRARY_MAJOR ||
+    resolveInstalledMajor(projectDir, '@helixui/library') >= HELIX_LIBRARY_MAJOR;
+  // When @helixui/library will be on 3.x+, @helixui/icons must end up both
+  // DECLARED and INSTALLABLE. Three states:
+  //   - absent    → add it (to the library's buckets, then ensure installable)
+  //   - peer-only → seed devDependencies; `pnpm install` does NOT put a bare
+  //                 peerDependency into the package's own node_modules, so a
+  //                 peer-only declaration leaves doctor + the runtime unable
+  //                 to resolve it
+  //   - already in dependencies/devDependencies → nothing to do
+  const iconsBuckets = DEP_BUCKETS.filter((b) => pkg[b]?.['@helixui/icons'] !== undefined);
+  const iconsAbsent = iconsBuckets.length === 0;
+  const iconsPeerOnly =
+    !iconsAbsent &&
+    !iconsBuckets.includes('dependencies') &&
+    !iconsBuckets.includes('devDependencies');
+  const iconsMigrationNeeded = libraryWillBeV3Plus && (iconsAbsent || iconsPeerOnly);
 
   if (upToDate.length > 0) {
     p.log.success(pc.green(`${upToDate.length} package(s) already up to date`));
@@ -225,7 +519,27 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     }
   }
 
-  if (upgradeable.length === 0) {
+  if (iconsMigrationNeeded) {
+    console.log();
+    p.log.info(
+      iconsAbsent
+        ? `@helixui/library is on 3.x but its required @helixui/icons peer is missing — will add @helixui/icons ${HELIX_ICONS_VERSION}.`
+        : '@helixui/icons is declared only in peerDependencies — will seed a devDependencies copy so it actually installs.',
+    );
+  }
+
+  if (drupalTokensExcluded) {
+    console.log();
+    p.log.info(
+      pc.dim(
+        '@helixui/tokens skipped — Drupal scaffolds stay on the 0.x Drupal token contract (not migrated to 3.x in this release).',
+      ),
+    );
+  }
+
+  // Nothing to do only when there are no version bumps AND no icon-peer
+  // migration to apply.
+  if (upgradeable.length === 0 && !iconsMigrationNeeded) {
     console.log();
     p.outro(pc.green('All HELiX packages are up to date!'));
     return;
@@ -237,24 +551,92 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     return;
   }
 
-  // Write updated versions
-  const pkgPath = path.join(dir, 'package.json');
-  const raw = fs.readFileSync(pkgPath, 'utf-8');
-  const pkg = JSON.parse(raw) as PackageJson;
-
+  // Write updated versions back to every bucket each package appears in.
+  // Mutates the `pkg` object read up front (from `projectDir` — a monorepo's
+  // apps/web manifest, not the raw `dir`).
+  //
+  // Per-bucket no-downgrade guard: `entry.latest` is derived from the
+  // STALEST declared range (getInstalledVersions surfaces the stalest so the
+  // package gets flagged at all), so a bucket that's ALREADY newer than
+  // `entry.latest` must not be dragged backward — which can happen on an
+  // offline run against a stale cache (peerDeps `^3.9.1`, devDeps `^1.0.0`,
+  // cached latest `2.5.0`). Only rewrite a bucket when `latest` is strictly
+  // newer than what that bucket already pins; an unparseable current range
+  // (compareSemver → null) is left untouched.
   for (const entry of upgradeable) {
-    if (pkg.dependencies?.[entry.name] !== undefined) {
-      pkg.dependencies[entry.name] = `^${entry.latest}`;
+    for (const bucket of DEP_BUCKETS) {
+      const deps = pkg[bucket];
+      const currentInBucket = deps?.[entry.name];
+      if (deps === undefined || currentInBucket === undefined) continue;
+      if (compareSemver(currentInBucket.replace(/^[\^~]/, ''), entry.latest) === -1) {
+        deps[entry.name] = `^${entry.latest}`;
+      }
     }
-    if (pkg.devDependencies?.[entry.name] !== undefined) {
-      pkg.devDependencies[entry.name] = `^${entry.latest}`;
+  }
+
+  if (iconsMigrationNeeded && iconsAbsent) {
+    // Add @helixui/icons to the SAME bucket(s) @helixui/library lives in —
+    // library-shaped projects (the wc-storybook scaffold) keep HELiX packages
+    // in peerDependencies/devDependencies on purpose, so forcing icons into
+    // `dependencies` would break that contract. Then ensure at least one
+    // INSTALLABLE bucket: `pnpm install` does NOT place a bare
+    // peerDependency into the package's own node_modules, so a peer-only
+    // placement would leave doctor + the runtime unable to resolve it. (The
+    // wc-storybook scaffold declares @helixui/icons in BOTH peer + dev for
+    // exactly this reason.)
+    const targetBuckets = new Set<(typeof DEP_BUCKETS)[number]>(
+      DEP_BUCKETS.filter((b) => pkg[b]?.['@helixui/library'] !== undefined),
+    );
+    if (targetBuckets.size === 0) targetBuckets.add('dependencies');
+    if (!targetBuckets.has('dependencies') && !targetBuckets.has('devDependencies')) {
+      targetBuckets.add('devDependencies');
     }
+    for (const bucket of targetBuckets) {
+      const deps = (pkg[bucket] ??= {});
+      deps['@helixui/icons'] = HELIX_ICONS_VERSION;
+    }
+  } else if (iconsMigrationNeeded && iconsPeerOnly) {
+    // @helixui/icons is declared, but only in peerDependencies — keep that
+    // contract entry and seed a devDependencies copy so the package actually
+    // installs into node_modules. Seed the NEWER of the peer range and the
+    // create-helix floor: a stale peer (`^1.0.0`) copied verbatim would
+    // install a version that STILL fails doctor's `^1.0.1` floor, leaving
+    // the reported issue unresolved after `pnpm install`. An unparseable
+    // peer range (compareSemver → null) also falls back to the known-good
+    // floor rather than risk seeding something doctor can't accept.
+    const peerRange = pkg.peerDependencies?.['@helixui/icons'];
+    const peerMeetsFloor =
+      peerRange !== undefined && (compareSemver(peerRange, HELIX_ICONS_VERSION) ?? -1) >= 0;
+    (pkg.devDependencies ??= {})['@helixui/icons'] = peerMeetsFloor
+      ? peerRange
+      : HELIX_ICONS_VERSION;
   }
 
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
 
   console.log();
   p.log.success(pc.green('package.json updated.'));
-  p.note('Run `npm install` to apply the changes.', 'Next step');
+  if (iconsMigrationNeeded && iconsAbsent) {
+    p.log.warn(
+      pc.yellow(`Added @helixui/icons ${HELIX_ICONS_VERSION}`) +
+        ' ' +
+        pc.dim('— required by @helixui/library@3.x.'),
+    );
+    p.note(
+      'HELiX 3.x serves <hx-icon> sprites from a CDN the browser blocks cross-origin.\n' +
+        'Two manual steps remain for <hx-icon> to render same-origin:\n' +
+        '  1. copy @helixui/icons sprite SVGs into your static dir (public/icons or static/icons)\n' +
+        "  2. call setBasePath('/icons') before @helixui/library loads in your runtime loader\n" +
+        'Run `create-helix doctor` to verify, or re-scaffold to get the wiring generated.',
+      'HELiX 3.x icon setup',
+    );
+  } else if (iconsMigrationNeeded && iconsPeerOnly) {
+    p.log.warn(
+      pc.yellow('Seeded a devDependencies copy of @helixui/icons') +
+        ' ' +
+        pc.dim('— the peer-only declaration is not installable on its own.'),
+    );
+  }
+  p.note('Run `pnpm install` to apply the changes.', 'Next step');
   p.outro(pc.green('Upgrade complete!'));
 }

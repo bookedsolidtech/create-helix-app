@@ -184,6 +184,12 @@ const ECOMMERCE_SDCS: SDCDefinition[] = [...STANDARD_SDCS, ...ECOMMERCE_ADDITION
 
 const SHARED_DEPENDENCIES: Record<string, string> = {
   '@helixui/drupal-starter': '^0.1.0',
+  // NOTE: deliberately NOT bumped to the centralized helix-versions.ts pin
+  // in v0.9.2. The Drupal preset surface (SDC components, the theme-token
+  // CSS pipeline, the drupal-theme-generator) was not migrated/verified
+  // against @helixui/tokens@3.x in this release — bumping the pin alone
+  // would leave Drupal scaffolds on an unverified contract. Drupal token
+  // migration is its own focused follow-up (v0.9.3).
   '@helixui/tokens': '^0.2.0',
 };
 

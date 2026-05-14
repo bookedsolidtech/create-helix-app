@@ -238,6 +238,51 @@ describe('v0.9.0 Phase E — sveltekit monorepo emits the full apps/web tree', (
     expect(layout).toContain('skip-link');
   });
 
+  it('apps/web wires the @helixui/icons local-sprite setup', async () => {
+    const dir = path.join(TEST_ROOT, 'icons-setup');
+    await scaffoldSvelteKitMr({ dir });
+
+    // +layout.svelte's onMount-gated loader points the @helixui/icons
+    // registry at /icons/ BEFORE loading @helixui/library — otherwise
+    // <hx-icon> sprites resolve to the blocked cross-origin jsdelivr CDN
+    // default.
+    const layout = await fs.readFile(
+      path.join(dir, 'apps', 'web', 'src', 'routes', '+layout.svelte'),
+      'utf8',
+    );
+    expect(layout).toContain("import('@helixui/icons')");
+    expect(layout).toContain("setBasePath('/icons')");
+    expect(layout.indexOf("setBasePath('/icons')")).toBeLessThan(
+      layout.indexOf("import('@helixui/library')"),
+    );
+
+    // scripts/copy-helix-icons.mjs lands inside apps/web (not at the
+    // monorepo root) — the script resolves @helixui/icons up the dep
+    // tree, which works for pnpm's hoisted workspace layout. SvelteKit
+    // copies into static/icons/ (its static-asset dir, not public/).
+    const copyScript = await fs.readFile(
+      path.join(dir, 'apps', 'web', 'scripts', 'copy-helix-icons.mjs'),
+      'utf8',
+    );
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain('createRequire(import.meta.url)');
+    expect(copyScript).toContain("join(process.cwd(), 'static', 'icons')");
+
+    // apps/web/package.json postinstall runs the copy script.
+    const pkg = await fs.readJson(path.join(dir, 'apps', 'web', 'package.json'));
+    expect(pkg.scripts.postinstall).toBe('node scripts/copy-helix-icons.mjs');
+
+    // apps/web/.gitignore excludes the postinstall-generated sprite dir
+    // (SvelteKit emits a per-app .gitignore on top of the workspace root).
+    const appGitignore = await fs.readFile(path.join(dir, 'apps', 'web', '.gitignore'), 'utf8');
+    expect(appGitignore).toContain('static/icons/');
+
+    // The workspace-root .gitignore also excludes the apps/web sprite dir.
+    const rootGitignore = await fs.readFile(path.join(dir, '.gitignore'), 'utf8');
+    expect(rootGitignore).toContain('apps/web/static/icons/');
+  });
+
   it('+page.svelte uses native web components (hx-button, hx-card, hx-icon, etc.)', async () => {
     const dir = path.join(TEST_ROOT, 'index');
     await scaffoldSvelteKitMr({ dir });

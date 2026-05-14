@@ -28,8 +28,11 @@ vi.mock('@clack/prompts', () => ({
   note: vi.fn(),
 }));
 
-// Mock network module to avoid real disk I/O in tests
+// Mock network module to avoid real disk I/O + real offline probes in tests.
+// detectOffline defaults to false (online) so runUpgrade takes the registry
+// path unless a test explicitly drives it offline.
 vi.mock('../network.js', () => ({
+  detectOffline: vi.fn(async () => false),
   readRegistryCache: vi.fn(() => null),
   writeRegistryCache: vi.fn(),
 }));

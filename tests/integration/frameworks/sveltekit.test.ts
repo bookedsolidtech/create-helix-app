@@ -71,6 +71,35 @@ describe('svelte-kit integration', () => {
     expect(content).toContain('_initialized');
     expect(content).toContain("import('@helixui/library')");
     expect(content).toContain("typeof window === 'undefined'");
+    // initHelix() points the @helixui/icons registry at /icons/ BEFORE
+    // loading the library — otherwise <hx-icon> sprites resolve to the
+    // blocked cross-origin jsdelivr CDN default.
+    expect(content).toContain("import('@helixui/icons')");
+    expect(content).toContain("setBasePath('/icons')");
+    expect(content.indexOf("setBasePath('/icons')")).toBeLessThan(
+      content.indexOf("import('@helixui/library')"),
+    );
+  });
+
+  it('wires the @helixui/icons local-sprite setup (postinstall + script + gitignore)', async () => {
+    const o = opts('sk-icons-setup');
+    await scaffoldProject(o);
+
+    // scripts/copy-helix-icons.mjs resolves both sprite SVGs and copies
+    // them into static/icons/ (SvelteKit's static-asset dir, not public/).
+    const copyScript = await readText(o.directory, 'scripts/copy-helix-icons.mjs');
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain('createRequire(import.meta.url)');
+    expect(copyScript).toContain("join(process.cwd(), 'static', 'icons')");
+
+    // package.json postinstall runs the copy script.
+    const pkg = await readJson<{ scripts: Record<string, string> }>(o.directory, 'package.json');
+    expect(pkg.scripts['postinstall']).toBe('node scripts/copy-helix-icons.mjs');
+
+    // .gitignore excludes the postinstall-generated sprite dir.
+    const gitignore = await readText(o.directory, '.gitignore');
+    expect(gitignore).toContain('static/icons/');
   });
 
   it('src/app.css exists and references HELiX tokens', async () => {

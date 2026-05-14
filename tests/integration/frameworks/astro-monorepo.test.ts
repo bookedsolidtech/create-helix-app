@@ -116,11 +116,24 @@ describe('astro monorepo integration (Phase C)', () => {
     await scaffoldProject(o);
     const layout = await readText(o.directory, 'apps/web/src/layouts/Layout.astro');
 
-    // Runtime loader — the inline <script>import '@helixui/library'</script>
-    // block. Astro processes <script> tags + Vite bundles the import;
-    // runs in the browser and calls customElements.define() once.
-    expect(layout).toContain("import '@helixui/library'");
-    expect(layout).toMatch(/<script>\s*\n\s*import '@helixui\/library';\s*\n\s*<\/script>/);
+    // Runtime loader — the inline <script> block. Astro processes
+    // <script> tags + Vite bundles the import; runs in the browser and
+    // calls customElements.define() once. The library is loaded via a
+    // dynamic import so setBasePath('/icons') can run first (a static
+    // import would hoist above it), wrapped in an async IIFE so the
+    // <script> never becomes a top-level-await module.
+    expect(layout).toContain("await import('@helixui/library')");
+    expect(layout).toMatch(
+      /<script>\s*\n\s*import \{ setBasePath \} from '@helixui\/icons';\s*\n\s*void \(async \(\) => \{\s*\n\s*setBasePath\('\/icons'\);\s*\n\s*await import\('@helixui\/library'\);\s*\n\s*\}\)\(\);\s*\n\s*<\/script>/,
+    );
+    expect(layout).toContain('void (async () => {');
+
+    // @helixui/icons registry points at the same-origin /icons/ path the
+    // postinstall sprite-copy populates, BEFORE the library loads.
+    expect(layout).toContain("import { setBasePath } from '@helixui/icons'");
+    expect(layout.indexOf("setBasePath('/icons')")).toBeLessThan(
+      layout.indexOf("await import('@helixui/library')"),
+    );
 
     // View transitions — Astro 5's ClientRouter (renamed from
     // <ViewTransitions /> in v4). Pin both the import source AND the
@@ -131,6 +144,31 @@ describe('astro monorepo integration (Phase C)', () => {
     // Tokens import targets the DS package's './tokens' export when
     // includeDesignSystem is true (the default for this opts() helper).
     expect(layout).toContain("import '@astro-layout/design-system/tokens'");
+  });
+
+  it('apps/web wires the @helixui/icons local-sprite setup', async () => {
+    const o = opts('astro-icons-setup');
+    await scaffoldProject(o);
+
+    // scripts/copy-helix-icons.mjs lands inside apps/web (not at the
+    // monorepo root) — the script resolves @helixui/icons up the dep
+    // tree, which works for pnpm's hoisted workspace layout.
+    const copyScript = await readText(o.directory, 'apps/web/scripts/copy-helix-icons.mjs');
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain("join(process.cwd(), 'public', 'icons')");
+
+    // apps/web/package.json postinstall runs the copy script.
+    const pkg = await readJson<{ scripts: Record<string, string> }>(
+      o.directory,
+      'apps/web/package.json',
+    );
+    expect(pkg.scripts['postinstall']).toBe('node scripts/copy-helix-icons.mjs');
+
+    // The workspace-root .gitignore excludes the postinstall-generated
+    // apps/web sprite dir.
+    const gitignore = await readText(o.directory, '.gitignore');
+    expect(gitignore).toContain('apps/web/public/icons/');
   });
 
   it('index.astro uses native <hx-*> tags (NOT React wrappers)', async () => {

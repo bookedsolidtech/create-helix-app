@@ -49,6 +49,16 @@
  */
 import path from 'node:path';
 import { safeWriteFile, safeWriteJson } from '../../scaffold.js';
+import {
+  HELIX_ICONS_SETBASEPATH_IMPORT,
+  HELIX_ICONS_SETBASEPATH_CALL,
+  HELIX_ICONS_POSTINSTALL_CMD,
+} from '../_shared/helix-icons-setup.js';
+import {
+  HELIX_LIBRARY_VERSION,
+  HELIX_TOKENS_VERSION,
+  HELIX_ICONS_VERSION,
+} from '../../helix-versions.js';
 import { APPS_WEB_REL } from '../_shared/monorepo-redirect.js';
 
 // Re-export so monorepo.ts mirrors the Phase D Next / Phase E Vite
@@ -57,10 +67,10 @@ export { APPS_WEB_REL };
 export { cloneOptionsForAppsWeb } from '../_shared/monorepo-redirect.js';
 
 /**
- * Pinned versions for the apps/web manifest. Same set the design-system
- * package declares (Phase F: @helixui/library ^1.0.0), so a fresh pnpm
- * install yields a single, hoisted copy of the runtime library at the
- * workspace root.
+ * Pinned versions for the apps/web manifest. The @helixui/* pins come from
+ * the centralized helix-versions.ts (single source of truth — same set the
+ * design-system package and templates.ts declare), so a fresh pnpm install
+ * yields a single, hoisted copy of the runtime library at the workspace root.
  *
  * Astro 5.7.0 is the version templates.ts pins for the standalone flat
  * scaffold; reusing it here keeps Storybook-MDX-aware Astro features
@@ -69,8 +79,6 @@ export { cloneOptionsForAppsWeb } from '../_shared/monorepo-redirect.js';
  */
 const ASTRO_VERSION = '^5.7.0';
 const ASTRO_CHECK_VERSION = '^0.9.0';
-const HELIX_LIBRARY_VERSION = '^1.0.0';
-const HELIX_TOKENS_VERSION = '^0.3.0';
 const TYPESCRIPT_VERSION = '^5.7.0';
 
 /**
@@ -114,6 +122,10 @@ export async function writeAppsWebPackageJson(args: {
     // the same range the design-system declares to avoid double-install
     // (pnpm hoists a single matching copy under the workspace root).
     '@helixui/library': HELIX_LIBRARY_VERSION,
+    // @helixui/library@3.x peer-requires @helixui/icons (the <hx-icon>
+    // registry) — declare it so a fresh install has no unmet peer and
+    // the emitted <hx-icon library="..."> examples resolve.
+    '@helixui/icons': HELIX_ICONS_VERSION,
     [`@${scope}/types`]: 'workspace:*',
     [`@${scope}/utils`]: 'workspace:*',
   };
@@ -137,6 +149,10 @@ export async function writeAppsWebPackageJson(args: {
       preview: 'astro preview',
       astro: 'astro',
       'type-check': 'astro check',
+      // Copy @helixui/icons sprite SVGs into public/icons/ so <hx-icon>
+      // resolves them same-origin (see scripts/copy-helix-icons.mjs,
+      // emitted by writeHelixIconsCopyScript).
+      postinstall: HELIX_ICONS_POSTINSTALL_CMD,
     },
     dependencies,
     devDependencies: {
@@ -368,16 +384,29 @@ const {
 
     {/* HELiX runtime loader.
         Astro processes script tags inside .astro files and bundles
-        them via Vite. The bare-import resolves at runtime; the library
-        calls customElements.define() once when loaded; all hx-* tags
-        on the page upgrade.
+        them via Vite. The library calls customElements.define() once
+        when loaded; all hx-* tags on the page upgrade.
+
+        setBasePath() points the @helixui/icons registry at the
+        same-origin /icons/ path the postinstall sprite-copy populates.
+        It MUST run before @helixui/library is evaluated — a static
+        \`import '@helixui/library'\` would hoist above the call, so the
+        library is loaded via dynamic import AFTER setBasePath() instead.
+        That dynamic import is wrapped in an async IIFE so the <script>
+        never becomes a top-level-await module — Astro's Vite build
+        target (and older module browsers) choke on TLA. Otherwise
+        <hx-icon> sprites resolve to the blocked cross-origin jsdelivr CDN.
 
         Runs once per full page load. With ClientRouter enabled
         (view-transitions), client-side route changes do NOT re-evaluate
         this script — the already-registered custom elements survive the
         morph. */}
     <script>
-      import '@helixui/library';
+      ${HELIX_ICONS_SETBASEPATH_IMPORT}
+      void (async () => {
+        ${HELIX_ICONS_SETBASEPATH_CALL}
+        await import('@helixui/library');
+      })();
     </script>
 
     {/* Theme persistence — runs inline (is:inline) so it fires BEFORE

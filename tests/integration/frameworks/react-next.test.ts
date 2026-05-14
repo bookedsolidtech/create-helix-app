@@ -53,6 +53,37 @@ describe('react-next integration', () => {
     expect(content).toContain('Selected bundles: core');
   });
 
+  it('wires the @helixui/icons local-sprite setup (provider + postinstall + gitignore)', async () => {
+    const o = opts('rn-icons-setup');
+    await scaffoldProject(o);
+
+    // The runtime loader is HelixProvider (provider.tsx). It points the
+    // @helixui/icons registry at /icons/ BEFORE importing
+    // @helixui/library — otherwise <hx-icon> sprites resolve to the
+    // blocked cross-origin jsdelivr CDN default.
+    const provider = await readText(o.directory, 'src/components/helix/provider.tsx');
+    expect(provider).toContain("import('@helixui/icons')");
+    expect(provider).toContain("setBasePath('/icons')");
+    expect(provider).toContain("import('@helixui/library')");
+    expect(provider.indexOf("setBasePath('/icons')")).toBeLessThan(
+      provider.indexOf("import('@helixui/library')"),
+    );
+
+    // scripts/copy-helix-icons.mjs resolves + copies both sprite SVGs.
+    const copyScript = await readText(o.directory, 'scripts/copy-helix-icons.mjs');
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain("join(process.cwd(), 'public', 'icons')");
+
+    // package.json postinstall runs the copy script.
+    const pkg = await readJson<{ scripts: Record<string, string> }>(o.directory, 'package.json');
+    expect(pkg.scripts['postinstall']).toBe('node scripts/copy-helix-icons.mjs');
+
+    // .gitignore excludes the postinstall-generated sprite dir.
+    const gitignore = await readText(o.directory, '.gitignore');
+    expect(gitignore).toContain('public/icons/');
+  });
+
   it('package.json has correct react-next dependencies', async () => {
     const o = opts('rn-deps');
     await scaffoldProject(o);

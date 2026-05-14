@@ -319,6 +319,26 @@ describeFn('v0.8.0 Phase D — Astro monorepo Playwright visual gate (gated on E
         /ERR_PNPM_[A-Z_]+/,
       );
 
+      // ── 2b. Run the @helixui/icons sprite-copy postinstall ─────
+      // The install above passes --ignore-scripts (so a flaky lifecycle
+      // script in a transitive dep can't hang the suite), which also
+      // skips apps/web's own `postinstall`. A real consumer's
+      // `npm install` runs it; mirror that here by invoking the script
+      // directly. It copies @helixui/icons' sprite SVGs into
+      // apps/web/public/icons/ so <hx-icon> resolves them same-origin —
+      // without it the page 404s on /icons/*.svg and the strict
+      // console-error gate below (correctly) fails.
+      const iconsResult = runSync(
+        `pnpm --filter=${FLAVOR.scope}/web exec node scripts/copy-helix-icons.mjs`,
+        projectDir,
+        TYPECHECK_TIMEOUT_MS,
+      );
+      expect(iconsResult.ok, `copy-helix-icons.mjs failed:\n${iconsResult.output}`).toBe(true);
+      expect(
+        fs.existsSync(path.join(projectDir, 'apps', 'web', 'public', 'icons', 'helix.svg')),
+        'copy-helix-icons.mjs did not emit apps/web/public/icons/helix.svg',
+      ).toBe(true);
+
       // ── 3. type-check apps/web (astro check) ───────────────────
       const tcResult = runSync(
         `pnpm --filter=${FLAVOR.scope}/web type-check`,

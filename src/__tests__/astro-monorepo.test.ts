@@ -178,8 +178,25 @@ describe('v0.8.0 Phase C — astro monorepo emits the full apps/web tree', () =>
 
     // The runtime loader — Astro processes <script> + Vite bundles the
     // import; runs in the browser; calls customElements.define() once.
-    expect(layout).toContain("import '@helixui/library'");
-    expect(layout).toMatch(/<script>\s*\n\s*import '@helixui\/library';\s*\n\s*<\/script>/);
+    // The library is loaded via a dynamic import so setBasePath('/icons')
+    // can run first (a static import would hoist above it), and that
+    // dynamic import is wrapped in an async IIFE so the <script> never
+    // becomes a top-level-await module (Astro's Vite target chokes on TLA).
+    expect(layout).toContain("await import('@helixui/library')");
+    expect(layout).toMatch(
+      /<script>\s*\n\s*import \{ setBasePath \} from '@helixui\/icons';\s*\n\s*void \(async \(\) => \{\s*\n\s*setBasePath\('\/icons'\);\s*\n\s*await import\('@helixui\/library'\);\s*\n\s*\}\)\(\);\s*\n\s*<\/script>/,
+    );
+    // TLA-free: the await lives inside the IIFE, not at <script> top level.
+    expect(layout).toContain('void (async () => {');
+
+    // @helixui/icons registry points at the same-origin /icons/ path the
+    // postinstall sprite-copy populates, BEFORE the library loads —
+    // otherwise <hx-icon> sprites hit the blocked cross-origin jsdelivr
+    // CDN default.
+    expect(layout).toContain("import { setBasePath } from '@helixui/icons'");
+    expect(layout.indexOf("setBasePath('/icons')")).toBeLessThan(
+      layout.indexOf("await import('@helixui/library')"),
+    );
 
     // View transitions — Astro 5's ClientRouter (renamed from
     // <ViewTransitions /> in v4).

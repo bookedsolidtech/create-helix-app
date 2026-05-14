@@ -6,19 +6,16 @@ import type {
   AnyTemplateConfig,
   CustomTemplateConfig,
 } from './types.js';
-
-// Centralized Helix version pins. The wc-storybook template tracks current
-// Helix (3.3.1 — the version that emits the cascade tokens this scaffold
-// expects: action.* semantic tier, on-{role}-strong text tokens, on-dark-*
-// border tokens). The other framework templates intentionally target older
-// Helix versions and keep their own literal pins until each is individually
-// upgraded.
-const HELIX_LIBRARY_VERSION = '^3.3.1';
-const HELIX_TOKENS_VERSION = '^3.3.1';
-// @helixui/icons is the registry layer for `<hx-icon>` — version-pinned
-// independently from @helixui/library because the icons package follows
-// its own release cadence. v0.6.0 Phase B introduces this dep.
-const HELIX_ICONS_VERSION = '^1.0.0';
+// Single source of truth for the HELiX dependency pins. Every template —
+// not just wc-storybook — tracks current Helix through these constants. The
+// per-template literal `^1.0.0` / `^0.3.0` pins they replaced were set once
+// and never tracked Helix's releases, so scaffolds were born ~2 majors stale
+// (surfaced by the Pulse implementation test). Bump in `helix-versions.ts`.
+import {
+  HELIX_LIBRARY_VERSION,
+  HELIX_TOKENS_VERSION,
+  HELIX_ICONS_VERSION,
+} from './helix-versions.js';
 
 export const TEMPLATES: TemplateConfig[] = [
   {
@@ -157,8 +154,9 @@ export const TEMPLATES: TemplateConfig[] = [
       next: '^16.0.0',
       react: '^19.1.0',
       'react-dom': '^19.1.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
@@ -181,8 +179,9 @@ export const TEMPLATES: TemplateConfig[] = [
     dependencies: {
       react: '^19.1.0',
       'react-dom': '^19.1.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
@@ -206,8 +205,9 @@ export const TEMPLATES: TemplateConfig[] = [
       isbot: '^5.1.0',
       react: '^19.1.0',
       'react-dom': '^19.1.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
@@ -230,8 +230,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.green,
     dependencies: {
       nuxt: '^4.0.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       typescript: '^5.7.0',
@@ -247,8 +248,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.green,
     dependencies: {
       vue: '^3.5.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       '@vitejs/plugin-vue': '^5.2.0',
@@ -266,8 +268,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.blue,
     dependencies: {
       'solid-js': '^1.9.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       'vite-plugin-solid': '^2.11.0',
@@ -285,8 +288,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.magenta,
     dependencies: {
       '@builder.io/qwik': '^1.14.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       vite: '^6.4.0',
@@ -304,8 +308,9 @@ export const TEMPLATES: TemplateConfig[] = [
     dependencies: {
       '@sveltejs/kit': '^2.0.0',
       svelte: '^5.0.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       '@sveltejs/adapter-static': '^3.0.0',
@@ -327,8 +332,9 @@ export const TEMPLATES: TemplateConfig[] = [
       '@angular/compiler': '^18.0.0',
       '@angular/platform-browser': '^18.0.0',
       '@angular/platform-browser-dynamic': '^18.0.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       rxjs: '^7.8.0',
       'zone.js': '^0.15.0',
     },
@@ -348,8 +354,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.yellow,
     dependencies: {
       astro: '^5.7.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       '@astrojs/check': '^0.9.0',
@@ -376,8 +383,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.blue,
     dependencies: {
       lit: '^3.2.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       vite: '^6.4.0',
@@ -395,8 +403,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.magenta,
     dependencies: {
       preact: '^10.26.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       '@preact/preset-vite': '^2.9.0',
@@ -415,8 +424,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.cyan,
     dependencies: {
       '@stencil/core': '^4.22.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       typescript: '^5.7.0',
@@ -432,8 +442,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.red,
     dependencies: {
       'ember-source': '^6.0.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       'ember-cli': '^6.0.0',
