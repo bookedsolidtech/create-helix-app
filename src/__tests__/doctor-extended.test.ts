@@ -286,10 +286,14 @@ describe('checkHelixLibrary / checkHelixTokens drift', () => {
     expect(result.status).toBe('ok');
   });
 
-  it('skips the @helixui/tokens drift check for a Drupal scaffold (0.x is intentional)', () => {
-    // Drupal presets pin @helixui/tokens to ^0.2.0 on purpose — v0.9.2 did
-    // not migrate the Drupal surface to 3.x. The drift check must NOT fail
-    // here and push the user toward an unverified upgrade.
+  it('skips the @helixui/tokens drift check for all Drupal scaffolds (deferred to v0.9.4)', () => {
+    // No honest signal exists yet for "is the runtime token layer current"
+    // on a Drupal theme — the runtime source is css/vendor/helix-tokens.css,
+    // which neither the declared range nor a node_modules lookup tells us
+    // about. v0.9.3 ships scaffold-time vendoring for FRESH scaffolds; the
+    // upgrade-time vendored-CSS refresh + pre-v0.9.3 theme-file migration
+    // is the v0.9.4 follow-up. Both pre- and post-v0.9.3 Drupal themes
+    // share this skip until that lands.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'acme-theme',
       dependencies: { '@helixui/drupal-starter': '^0.1.0', '@helixui/tokens': '^0.2.0' },
@@ -301,11 +305,31 @@ describe('checkHelixLibrary / checkHelixTokens drift', () => {
     const result = checkHelixTokens(tmp);
     expect(result.status).toBe('skip');
     expect(result.message).toMatch(/Drupal scaffold/);
+    expect(result.message).toMatch(/v0\.9\.4/);
+  });
+
+  it('skips the @helixui/tokens drift check on a v0.9.3+ Drupal scaffold too', () => {
+    // The skip is blanket — having the v0.9.3 wiring marker doesn't make
+    // the declared-range signal meaningful (the runtime is the vendored
+    // CSS, not the range). The v0.9.4 follow-up adds the missing pieces.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'acme-theme',
+      dependencies: { '@helixui/drupal-starter': '^0.1.0', '@helixui/tokens': '^3.9.1' },
+    });
+    fs.mkdirSync(path.join(tmp, 'scripts'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, 'scripts', 'copy-helix-tokens.mjs'),
+      '// v0.9.3+ wiring\n',
+      'utf8',
+    );
+    const result = checkHelixTokens(tmp);
+    expect(result.status).toBe('skip');
+    expect(result.message).toMatch(/Drupal scaffold/);
   });
 
   it('still runs the @helixui/library drift check for a Drupal scaffold (skip is tokens-only)', () => {
-    // The Drupal exemption is scoped to @helixui/tokens — if a Drupal theme
-    // somehow declares @helixui/library, that surface is NOT exempt.
+    // The Drupal exemption is narrowly scoped to @helixui/tokens — if a
+    // Drupal theme declares @helixui/library, that surface is NOT exempt.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'acme-theme',
       dependencies: { '@helixui/drupal-starter': '^0.1.0', '@helixui/library': '^1.0.0' },

@@ -383,17 +383,26 @@ function checkHelixDrift(cwd: string, pkgName: string, floorMajor: number): Chec
   // a monorepo scaffold (see resolveHelixManifestDir). Without this, doctor
   // run from a monorepo root would skip the drift check entirely.
   const dir = resolveHelixManifestDir(cwd);
-  // Drupal scaffolds intentionally keep @helixui/tokens on the 0.x Drupal
-  // contract — v0.9.2 did NOT migrate the Drupal preset surface to 3.x (see
-  // src/presets/loader.ts). So `@helixui/tokens` is not "drift" for a Drupal
-  // project; flagging it would push users to `create-helix upgrade` onto an
-  // unverified 3.x contract. (`@helixui/drupal-starter` is the Drupal marker.)
+  // Drupal scaffolds skip the @helixui/tokens drift check entirely. The
+  // runtime token layer for a Drupal theme comes from
+  // `css/vendor/helix-tokens.css` (vendored at scaffold time, refreshed by
+  // the theme's postinstall when `npm install` runs), NOT from
+  // `node_modules/@helixui/tokens` directly and NOT from the declared range
+  // in package.json. Until `runUpgrade` can refresh that vendored CSS
+  // alongside the pin bump (v0.9.4 follow-up), no signal here corresponds
+  // to "is the runtime token layer current":
+  //   - package.json range can move forward without the vendored CSS being
+  //     refreshed (the cp-r+drush flow doesn't run `npm install`).
+  //   - node_modules can be missing entirely (same flow) or stale even when
+  //     the declared range is current.
+  // Skipping is the only honest answer; doctor surfaces the install/upgrade
+  // tooling gap in the v0.9.4 task. (`@helixui/drupal-starter` is the marker.)
   if (pkgName === '@helixui/tokens' && projectDeclares(dir, '@helixui/drupal-starter')) {
     return {
       name: pkgName,
       status: 'skip',
       message:
-        'Drupal scaffold — @helixui/tokens stays on the 0.x Drupal contract (not v0.9.2-migrated).',
+        'Drupal scaffold — @helixui/tokens drift check deferred until runUpgrade can migrate theme wiring + refresh the vendored CSS (v0.9.4).',
     };
   }
   if (!projectDeclares(dir, pkgName)) {

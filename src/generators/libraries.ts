@@ -7,13 +7,27 @@ import type { PresetConfig } from '../types.js';
  * their Twig templates. This file only declares global theme-level CSS.
  */
 export function generateThemeLibraries(themeName: string, _preset: PresetConfig): string {
-  return `global:
+  return `# helix-tokens — upstream HELiX CSS variables vendored from
+# @helixui/tokens by the postinstall copy script (scripts/copy-helix-tokens.mjs).
+# 'global' depends on this so it always loads first; weight -200 also pins
+# the cascade order so any other library can't accidentally override the
+# token base layer. Loading this library is what makes
+# var(--hx-color-text-primary, …) resolve to a real upstream value instead
+# of the inline fallback.
+helix-tokens:
+  version: VERSION
+  css:
+    theme:
+      css/vendor/helix-tokens.css: { weight: -200 }
+
+global:
   version: VERSION
   css:
     theme:
       css/style.css: {}
   dependencies:
     - core/drupal
+    - ${themeName}/helix-tokens
 
 helix-overrides:
   version: VERSION
