@@ -107,6 +107,49 @@ describe('react-vite monorepo integration (Phase E)', () => {
     expect(config).toContain("'../..'");
   });
 
+  it('apps/web wires the @helixui/icons local-sprite setup', async () => {
+    const o = opts('rvm-icons-setup');
+    await scaffoldProject(o);
+
+    // react-vite's helix-setup.ts is its runtime loader (main.tsx imports
+    // it). The monorepo path reuses the flat react-vite body, so this is
+    // the same loader the flat scaffold emits. It points the
+    // @helixui/icons registry at /icons/ BEFORE loading the library — and
+    // does so inside an async IIFE rather than with a top-level await,
+    // which would break `vite build` (default browser target has no TLA
+    // support).
+    const helixSetup = await readText(o.directory, 'apps/web/src/helix-setup.ts');
+    expect(helixSetup).toContain("import { setBasePath } from '@helixui/icons'");
+    expect(helixSetup).toContain("setBasePath('/icons')");
+    expect(helixSetup).toContain("await import('@helixui/library')");
+    expect(helixSetup).toContain('void (async () => {');
+    expect(helixSetup).not.toMatch(/^await import/m);
+    expect(helixSetup.indexOf("setBasePath('/icons')")).toBeLessThan(
+      helixSetup.indexOf("await import('@helixui/library')"),
+    );
+
+    // scripts/copy-helix-icons.mjs lands inside apps/web (not at the
+    // monorepo root) — the script resolves @helixui/icons up the dep
+    // tree, which works for pnpm's hoisted workspace layout.
+    const copyScript = await readText(o.directory, 'apps/web/scripts/copy-helix-icons.mjs');
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain('createRequire(import.meta.url)');
+    expect(copyScript).toContain("join(process.cwd(), 'public', 'icons')");
+
+    // apps/web/package.json postinstall runs the copy script.
+    const pkg = await readJson<{ scripts: Record<string, string> }>(
+      o.directory,
+      'apps/web/package.json',
+    );
+    expect(pkg.scripts['postinstall']).toBe('node scripts/copy-helix-icons.mjs');
+
+    // The workspace-root .gitignore excludes the postinstall-generated
+    // apps/web sprite dir.
+    const gitignore = await readText(o.directory, '.gitignore');
+    expect(gitignore).toContain('apps/web/public/icons/');
+  });
+
   it('monorepo root files are not duplicated under apps/web/', async () => {
     const o = opts('rvm-leak');
     await scaffoldProject(o);

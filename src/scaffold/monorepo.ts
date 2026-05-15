@@ -260,6 +260,11 @@ build/
 .astro/
 storybook-static/
 
+# HELiX — postinstall-generated @helixui/icons sprite SVGs (apps/web).
+# public/icons/ for astro + react targets, static/icons/ for sveltekit.
+apps/web/public/icons/
+apps/web/static/icons/
+
 # TypeScript build info
 *.tsbuildinfo
 

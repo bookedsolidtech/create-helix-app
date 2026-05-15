@@ -555,6 +555,7 @@ export async function runCLI(): Promise<void> {
     brandVerticals: brandVerticalsFromArgs,
     showExperimental,
     doctorQuick,
+    offline: isOfflineFromArgs,
     monorepo: monorepoFlag,
     noDesignSystem: noDesignSystemFlag,
   } = parsed;
@@ -626,7 +627,10 @@ export async function runCLI(): Promise<void> {
 
   if (subcommand === 'upgrade') {
     const { runUpgrade } = await import('./commands/upgrade.js');
-    await runUpgrade(process.cwd(), { dryRun: isDryRun });
+    await runUpgrade(process.cwd(), {
+      dryRun: isDryRun,
+      offline: isOfflineFromArgs || (envVars.offline ?? false),
+    });
     process.exit(0);
   }
 

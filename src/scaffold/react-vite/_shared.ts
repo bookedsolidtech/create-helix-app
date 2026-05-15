@@ -37,7 +37,13 @@
  */
 import path from 'node:path';
 import { safeWriteFile, safeWriteJson } from '../../scaffold.js';
+import {
+  HELIX_LIBRARY_VERSION,
+  HELIX_TOKENS_VERSION,
+  HELIX_ICONS_VERSION,
+} from '../../helix-versions.js';
 import { APPS_WEB_REL, cloneOptionsForAppsWeb } from '../_shared/monorepo-redirect.js';
+import { HELIX_ICONS_POSTINSTALL_CMD } from '../_shared/helix-icons-setup.js';
 
 // Re-export so monorepo.ts mirrors the Phase D Next import shape.
 export { APPS_WEB_REL, cloneOptionsForAppsWeb };
@@ -73,8 +79,11 @@ export async function writeAppsWebPackageJson(args: {
   const dependencies: Record<string, string> = {
     react: '^19.1.0',
     'react-dom': '^19.1.0',
-    '@helixui/library': '^1.0.0',
-    '@helixui/tokens': '^0.3.0',
+    '@helixui/library': HELIX_LIBRARY_VERSION,
+    '@helixui/tokens': HELIX_TOKENS_VERSION,
+    // @helixui/library@3.x peer-requires @helixui/icons (the <hx-icon>
+    // registry) — declare it so a fresh install has no unmet peer.
+    '@helixui/icons': HELIX_ICONS_VERSION,
     '@lit/react': '^1.0.0',
     [`@${scope}/types`]: 'workspace:*',
     [`@${scope}/utils`]: 'workspace:*',
@@ -95,6 +104,10 @@ export async function writeAppsWebPackageJson(args: {
       lint: 'eslint .',
       'type-check': 'tsc --noEmit',
       test: 'vitest run',
+      // Copy @helixui/icons sprite SVGs into public/icons/ so <hx-icon>
+      // resolves them same-origin (see scripts/copy-helix-icons.mjs,
+      // emitted by writeHelixIconsCopyScript).
+      postinstall: HELIX_ICONS_POSTINSTALL_CMD,
     },
     dependencies,
     devDependencies: {

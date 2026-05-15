@@ -107,6 +107,45 @@ describe('react-next monorepo integration (Phase D)', () => {
     expect(config).toMatch(/externalDir:\s*true/);
   });
 
+  it('apps/web wires the @helixui/icons local-sprite setup', async () => {
+    const o = opts('rnm-icons-setup');
+    await scaffoldProject(o);
+
+    // The runtime loader is HelixProvider (provider.tsx) — the monorepo
+    // path reuses the flat react-next body, so this is the same loader the
+    // flat scaffold emits. It points the @helixui/icons registry at
+    // /icons/ BEFORE importing @helixui/library; otherwise <hx-icon>
+    // sprites resolve to the blocked cross-origin jsdelivr CDN default.
+    const provider = await readText(o.directory, 'apps/web/src/components/helix/provider.tsx');
+    expect(provider).toContain("import('@helixui/icons')");
+    expect(provider).toContain("setBasePath('/icons')");
+    expect(provider).toContain("import('@helixui/library')");
+    expect(provider.indexOf("setBasePath('/icons')")).toBeLessThan(
+      provider.indexOf("import('@helixui/library')"),
+    );
+
+    // scripts/copy-helix-icons.mjs lands inside apps/web (not at the
+    // monorepo root) — the script resolves @helixui/icons up the dep
+    // tree, which works for pnpm's hoisted workspace layout.
+    const copyScript = await readText(o.directory, 'apps/web/scripts/copy-helix-icons.mjs');
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain('createRequire(import.meta.url)');
+    expect(copyScript).toContain("join(process.cwd(), 'public', 'icons')");
+
+    // apps/web/package.json postinstall runs the copy script.
+    const pkg = await readJson<{ scripts: Record<string, string> }>(
+      o.directory,
+      'apps/web/package.json',
+    );
+    expect(pkg.scripts['postinstall']).toBe('node scripts/copy-helix-icons.mjs');
+
+    // The workspace-root .gitignore excludes the postinstall-generated
+    // apps/web sprite dir.
+    const gitignore = await readText(o.directory, '.gitignore');
+    expect(gitignore).toContain('apps/web/public/icons/');
+  });
+
   it('monorepo root files are not duplicated under apps/web/', async () => {
     const o = opts('rnm-leak');
     await scaffoldProject(o);

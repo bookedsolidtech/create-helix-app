@@ -39,6 +39,18 @@ import { getSceneEmissions } from './scaffold/wc-storybook/scenes.js';
 import { scaffoldReactNextMonorepo } from './scaffold/react-next/monorepo.js';
 import { scaffoldReactViteMonorepo } from './scaffold/react-vite/monorepo.js';
 import { scaffoldWcStorybookMonorepo } from './scaffold/wc-storybook/monorepo.js';
+import { HELIX_LIBRARY_VERSION, HELIX_TOKENS_VERSION } from './helix-versions.js';
+import {
+  isHelixIconsFramework,
+  helixIconsStaticDir,
+  helixIconsCopyScript,
+  helixIconsGitignoreEntry,
+  composePostinstall,
+  helixIconsSetBasePathDynamic,
+  HELIX_ICONS_COPY_SCRIPT_REL,
+  HELIX_ICONS_SETBASEPATH_IMPORT,
+  HELIX_ICONS_SETBASEPATH_CALL,
+} from './scaffold/_shared/helix-icons-setup.js';
 
 // ---------------------------------------------------------------------------
 // SECURITY: HTML sanitization
@@ -543,6 +555,15 @@ export async function scaffoldProject(options: ProjectOptions): Promise<void> {
     logVerbose(`Writing ${path.join(auxOptions.directory, 'src', 'helix-setup.ts')}`);
     await writeHelixSetup(auxOptions);
 
+    // Emit scripts/copy-helix-icons.mjs for the app frameworks that render
+    // <hx-icon>. Uses auxOptions so it lands in apps/web/ for monorepo
+    // scaffolds and at the root for flat ones — same redirect as
+    // writeHelixSetup above. No-op for non-icon frameworks.
+    logVerbose(
+      `Writing ${path.join(auxOptions.directory, HELIX_ICONS_COPY_SCRIPT_REL)} (if applicable)`,
+    );
+    await writeHelixIconsCopyScript(auxOptions);
+
     // Write .gitignore — but ONLY in flat mode. The monorepo orchestrator
     // (scaffoldMonorepoRoot) has already emitted a workspace-aware
     // .gitignore that covers .turbo/, every framework's build output, etc.
@@ -681,22 +702,36 @@ async function writePackageJson(
         sideEffects: ['**/*.css', './dist/index.js', './dist/components/**'],
       }
     : {};
+  // For the app frameworks that render <hx-icon>, chain a postinstall that
+  // copies the @helixui/icons sprite SVGs into the static dir (see
+  // writeHelixIconsCopyScript). composePostinstall preserves any
+  // template-declared postinstall instead of clobbering it.
+  const baseScripts = getScripts(options);
+  const scripts = isHelixIconsFramework(options.framework)
+    ? { ...baseScripts, postinstall: composePostinstall(baseScripts.postinstall) }
+    : baseScripts;
+
   const pkg = {
     name: options.name,
     version: '0.1.0',
     ...(isLibraryTemplate ? {} : { private: true }),
     ...(useEsm ? { type: 'module' } : {}),
     ...libraryEntrypoints,
-    scripts: getScripts(options),
+    scripts,
     dependencies: {
-      // wc-storybook pins Helix tokens at its own centralized 3.3.1 version
-      // via peerDependencies + devDependencies (action.* / on-{role}-strong /
-      // on-dark-* contract). Other frameworks get the legacy 0.3.0 default
-      // when designTokens is opted in — but ONLY if the template did not
-      // already declare its own version, otherwise the default would inject
-      // an incompatible spec alongside the template's pin and produce a
-      // package.json with two conflicting versions of the same package.
-      ...(options.designTokens && !isLibraryTemplate ? { '@helixui/tokens': '^0.3.0' } : {}),
+      // When designTokens is opted in and the template did not already
+      // declare its own @helixui/tokens pin, inject the centralized version
+      // (helix-versions.ts — single source of truth). The `...template.dependencies`
+      // spread below still wins for any template that declares its own pin,
+      // so this never produces two conflicting specs for the same package.
+      ...(options.designTokens && !isLibraryTemplate
+        ? { '@helixui/tokens': HELIX_TOKENS_VERSION }
+        : {}),
+      // NOTE: @helixui/icons (the <hx-icon> registry that @helixui/library@3.x
+      // peer-requires) is declared directly in each template's `dependencies`
+      // in templates.ts — TEMPLATES is the single source of truth so
+      // `create-helix info` / the public API report exactly what gets
+      // scaffolded. No injection here.
       ...template.dependencies,
     },
     devDependencies: {
@@ -1193,6 +1228,39 @@ async function writeHelixSetup(options: ProjectOptions): Promise<void> {
       : "\nimport '../helix-tokens.css';"
     : '';
 
+  // react-vite consumes helix-setup.ts as its runtime loader (main.tsx
+  // does `import './helix-setup'`). Its <hx-icon> examples need the
+  // @helixui/icons registry pointed at the same-origin /icons/ path the
+  // postinstall sprite-copy populates, BEFORE @helixui/library loads —
+  // otherwise <hx-icon> resolves sprites against the blocked cross-origin
+  // jsdelivr CDN.
+  //
+  // The load runs inside a self-invoking async function rather than at
+  // module top level: a static `import '@helixui/library'` would hoist
+  // above any setBasePath() call, and a *top-level* `await import(...)`
+  // makes helix-setup.ts a top-level-await module — which breaks
+  // `vite build` (default browser target es2020/chrome87 has no TLA
+  // support; main.tsx imports this module synchronously). The async IIFE
+  // sidesteps both: setBasePath() runs first, the library loads after, no
+  // TLA. Other consumers of this writer (vue-vite, wc-storybook) keep the
+  // bare static import — wc-storybook wires setBasePath() in its own
+  // preview.ts.
+  const needsHelixIconsSetup = options.framework === 'react-vite';
+
+  // The library-load block — async-IIFE (post-setBasePath, no TLA) for
+  // react-vite, bare static import for everyone else.
+  const libraryLoad = needsHelixIconsSetup
+    ? `${HELIX_ICONS_SETBASEPATH_IMPORT}
+
+// See the rationale above: setBasePath() must run before @helixui/library
+// loads, and the load can't be a top-level await (it would break
+// \`vite build\`). The async IIFE gives us ordered, TLA-free loading.
+void (async () => {
+  setBasePath('/icons');
+  await import('@helixui/library');
+})();`
+    : "import '@helixui/library';";
+
   let content: string;
 
   if (isAll) {
@@ -1200,7 +1268,7 @@ async function writeHelixSetup(options: ProjectOptions): Promise<void> {
  * HELiX Web Components — Full library import
  * All 98 components registered as custom elements.
  */
-import '@helixui/library';
+${libraryLoad}
 ${tokensImport}
 
 export {};
@@ -1216,7 +1284,7 @@ export {};
  *
  * Full component list: https://github.com/bookedsolidtech/helix
  */
-import '@helixui/library';
+${libraryLoad}
 ${tokensImport}
 
 export {};
@@ -1226,8 +1294,37 @@ export {};
   await safeWriteFile(path.join(srcDir, `helix-setup.${ext}`), content);
 }
 
+/**
+ * Emit `scripts/copy-helix-icons.mjs` into the scaffolded app.
+ *
+ * `@helixui/library@3.x`'s `<hx-icon>` resolves sprite SVGs through the
+ * `@helixui/icons` registry, which defaults `basePath` to a cross-origin
+ * jsdelivr CDN URL the browser blocks. The emitted script copies the
+ * package's bundled sprites into the framework's static dir at postinstall
+ * time; paired with a `setBasePath('/icons')` call in the runtime loader,
+ * `<hx-icon>` then resolves same-origin. See
+ * `src/scaffold/_shared/helix-icons-setup.ts` for the full rationale.
+ *
+ * Only the four app frameworks that render `<hx-icon>` (astro, svelte-kit,
+ * react-next, react-vite) get the script. Called with `auxOptions` so it
+ * lands in `apps/web/` for monorepo scaffolds and at the root for flat
+ * ones — the same redirect `writeHelixSetup` uses.
+ */
+async function writeHelixIconsCopyScript(options: ProjectOptions): Promise<void> {
+  if (!isHelixIconsFramework(options.framework)) return;
+  const staticDir = helixIconsStaticDir(options.framework);
+  const scriptPath = path.join(options.directory, ...HELIX_ICONS_COPY_SCRIPT_REL.split('/'));
+  await safeEnsureDir(path.dirname(scriptPath));
+  await safeWriteFile(scriptPath, helixIconsCopyScript(staticDir));
+}
+
 async function writeGitignore(options: ProjectOptions): Promise<void> {
   const wcStorybookExtras = options.framework === 'wc-storybook' ? 'src/stories/catalog/\n' : '';
+  // The @helixui/icons sprite SVGs are postinstall-generated artifacts
+  // (see writeHelixIconsCopyScript) — ignore them like any build output.
+  const helixIconsExtras = isHelixIconsFramework(options.framework)
+    ? `${helixIconsGitignoreEntry(helixIconsStaticDir(options.framework))}\n`
+    : '';
   const content = `node_modules/
 dist/
 .next/
@@ -1235,7 +1332,7 @@ dist/
 .svelte-kit/
 .astro/
 storybook-static/
-${wcStorybookExtras}.env
+${wcStorybookExtras}${helixIconsExtras}.env
 .env.local
 *.log
 .DS_Store
@@ -1578,15 +1675,27 @@ interface HelixProviderProps {
 
 export function HelixProvider({ children, theme }: HelixProviderProps) {
   useEffect(() => {
-    // Dynamic import ensures HELiX only loads on the client
-    import('@helixui/library').then(() => {
-      // Set explicit theme to avoid hx-theme's matchMedia SSR issue
-      if (theme && theme !== 'system') {
-        document.documentElement.setAttribute('data-theme', theme);
-      }
-    }).catch(() => {
-      // Library failed to load — components will render as unstyled custom elements
-    });
+    // Dynamic import ensures HELiX only loads on the client.
+    //
+    // setBasePath() points the @helixui/icons registry at the
+    // same-origin /icons/ path the postinstall sprite-copy populates.
+    // It MUST run before @helixui/library is imported — otherwise
+    // <hx-icon> resolves sprites against the blocked cross-origin
+    // jsdelivr CDN default.
+    import('@helixui/icons')
+      .then(({ setBasePath }) => {
+        setBasePath('/icons');
+        return import('@helixui/library');
+      })
+      .then(() => {
+        // Set explicit theme to avoid hx-theme's matchMedia SSR issue
+        if (theme && theme !== 'system') {
+          document.documentElement.setAttribute('data-theme', theme);
+        }
+      })
+      .catch(() => {
+        // Library failed to load — components will render as unstyled custom elements
+      });
   }, [theme]);
 
   // Render children immediately — components will upgrade when loaded
@@ -4894,9 +5003,16 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
   ${CSP_META}
   <title>${sanitizeForHtml(options.name)}</title>
 
-  <!-- HELiX via CDN — zero build step -->
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@helixui/library@latest/dist/index.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@helixui/tokens@latest/dist/tokens.css">
+  <!-- HELiX via CDN — zero build step. Pinned to a concrete version (not
+       @latest) for reproducible loads — see helix-versions.ts. -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@helixui/library@${HELIX_LIBRARY_VERSION.replace(
+    /^[\^~]/,
+    '',
+  )}/dist/index.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@helixui/tokens@${HELIX_TOKENS_VERSION.replace(
+    /^[\^~]/,
+    '',
+  )}/dist/tokens.css">
 
   <style>
     body {
@@ -5486,8 +5602,22 @@ const {
     <meta property="og:description" content={description} />
     <meta property="og:image" content="/og/helixui.png" />
     <title>{title}</title>
+    {/* HELiX runtime loader. setBasePath() points the @helixui/icons
+        registry at the same-origin /icons/ path the postinstall
+        sprite-copy populates. It MUST run before @helixui/library is
+        evaluated — a static import of @helixui/library would hoist
+        above the call, so the library is loaded via dynamic import
+        AFTER setBasePath() instead. The dynamic import is wrapped in an
+        async IIFE: a bare top-level await-import would make this a
+        top-level-await module, which Astro's Vite build target (and
+        older module browsers) choke on. Otherwise <hx-icon> sprites
+        resolve to the blocked cross-origin jsdelivr CDN. */}
     <script>
-      import '@helixui/library';
+      ${HELIX_ICONS_SETBASEPATH_IMPORT}
+      void (async () => {
+        ${HELIX_ICONS_SETBASEPATH_CALL}
+        await import('@helixui/library');
+      })();
     </script>
     <link rel="stylesheet" href="/styles/global.css" />
   </head>
@@ -6223,6 +6353,11 @@ declare namespace svelteHTML {
  * Uses a singleton guard to ensure the library is imported only once,
  * even if initHelix() is called multiple times (e.g. hot-reloads).
  *
+ * setBasePath() points the @helixui/icons registry at the same-origin
+ * /icons/ path the postinstall sprite-copy populates — it runs before
+ * @helixui/library loads, or <hx-icon> resolves sprites against the
+ * blocked cross-origin jsdelivr CDN default.
+ *
  * Call from onMount() in +layout.svelte so it runs client-side only.
  */
 let _initialized = false;
@@ -6230,6 +6365,7 @@ let _initialized = false;
 export async function initHelix(): Promise<void> {
   if (typeof window === 'undefined' || _initialized) return;
   _initialized = true;
+${helixIconsSetBasePathDynamic('  ')}
   await import('@helixui/library');
 }
 `,

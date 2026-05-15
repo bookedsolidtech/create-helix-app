@@ -65,9 +65,14 @@ const FRAMEWORKS: FrameworkTestEntry[] = [
 // Collect temp dirs for cleanup
 const tempDirs: string[] = [];
 
+// Each entry is a fully-installed scaffold (a heavy node_modules tree). When
+// the whole `E2E=1` suite runs in parallel, the `rm -rf` of ~40 of these can
+// exceed vitest's default 10s hook timeout under disk load — a teardown-only
+// flake that has nothing to do with whether the scaffolds work. Give the
+// cleanup a generous ceiling so the suite stays a deterministic ship gate.
 afterAll(async () => {
   await Promise.all(tempDirs.map((d) => removeTempDir(d)));
-});
+}, 180_000);
 
 // ---------------------------------------------------------------------------
 // Helper: run a shell command and capture combined output
