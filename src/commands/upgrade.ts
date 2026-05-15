@@ -338,12 +338,17 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     process.exit(1);
   }
 
-  // Drupal scaffolds intentionally keep @helixui/tokens on the 0.x Drupal
-  // contract — v0.9.2 did not migrate the Drupal preset surface (see
-  // src/presets/loader.ts). `upgrade` must respect that: bumping it to the
-  // 3.x registry latest would push the project onto an unverified contract.
-  // `@helixui/drupal-starter` is the Drupal marker. The package is dropped
-  // from `installed` so it never enters the plan or the write-back.
+  // Drupal scaffolds: exempt @helixui/tokens from the upgrade plan
+  // entirely. The runtime token layer for a Drupal theme is
+  // `css/vendor/helix-tokens.css` (vendored at scaffold time, refreshed by
+  // the theme's postinstall when `npm install` runs) — NOT the declared
+  // range in package.json. Bumping the pin without also refreshing that
+  // vendored CSS would advance the declaration while the theme keeps
+  // serving stale token bytes. v0.9.3 ships the scaffold-time vendoring
+  // for FRESH scaffolds; the upgrade-time refresh + pre-v0.9.3 theme-file
+  // migration is the v0.9.4 follow-up. Until then, no honest @helixui/tokens
+  // upgrade exists for an existing Drupal theme, so skip it from the plan.
+  // (`@helixui/drupal-starter` is the Drupal marker.)
   const drupalTokensExcluded =
     installed['@helixui/drupal-starter'] !== undefined &&
     installed['@helixui/tokens'] !== undefined;
@@ -532,7 +537,7 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     console.log();
     p.log.info(
       pc.dim(
-        '@helixui/tokens skipped — Drupal scaffolds stay on the 0.x Drupal token contract (not migrated to 3.x in this release).',
+        '@helixui/tokens skipped — for Drupal themes the runtime tokens come from css/vendor/helix-tokens.css, not the declared range. Upgrade-time vendored-CSS refresh is the v0.9.4 follow-up.',
       ),
     );
   }

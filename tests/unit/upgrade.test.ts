@@ -740,8 +740,9 @@ describe('upgrade command', () => {
     });
   });
 
-  // ─── v0.9.2: Drupal scaffolds keep @helixui/tokens on the 0.x contract ────
-  describe('runUpgrade — Drupal token exemption', () => {
+  // ─── Drupal scaffolds: @helixui/tokens skipped until v0.9.4 migrates the
+  // theme wiring files (libraries.yml, style.css, scripts/copy-helix-tokens.mjs).
+  describe('runUpgrade — Drupal token exemption (deferred to v0.9.4)', () => {
     beforeEach(() => {
       // Registry says every package's latest is 1.0.0.
       vi.stubGlobal('fetch', () =>
@@ -753,8 +754,11 @@ describe('upgrade command', () => {
     });
 
     it('does not bump @helixui/tokens for a project that declares @helixui/drupal-starter', async () => {
-      // The Drupal preset surface was not migrated to 3.x in v0.9.2 — upgrade
-      // must leave @helixui/tokens on its 0.x Drupal pin (see presets/loader.ts).
+      // v0.9.3 wired FRESH Drupal scaffolds to load @helixui/tokens at
+      // runtime, but `runUpgrade` cannot yet rewrite a pre-v0.9.3 theme's
+      // libraries.yml / style.css / scripts/ — only package.json. Bumping
+      // the pin without the wiring would leave tokens still unused, so the
+      // tokens-bump is skipped until v0.9.4 makes upgrade theme-aware.
       const dir = makeTmpProject({
         name: 'acme-theme',
         dependencies: {
@@ -789,6 +793,38 @@ describe('upgrade command', () => {
         dependencies: Record<string, string>;
       };
       expect(updated.dependencies['@helixui/tokens']).toBe('^1.0.0');
+    });
+
+    it('also skips @helixui/tokens for a v0.9.3+ Drupal theme (blanket exemption)', async () => {
+      // The skip is blanket — the runtime token layer for any Drupal theme
+      // is `css/vendor/helix-tokens.css`, not the declared range. Bumping
+      // the pin alone (without refreshing that vendored CSS) would advance
+      // the declaration while the theme keeps serving stale token bytes.
+      // v0.9.4 adds the upgrade-time vendored-CSS refresh.
+      const dir = makeTmpProject({
+        name: 'acme-theme',
+        dependencies: {
+          '@helixui/drupal-starter': '^0.1.0',
+          '@helixui/tokens': '^0.2.0',
+        },
+      });
+      tmpDirs.push(dir);
+      fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'scripts', 'copy-helix-tokens.mjs'),
+        '// v0.9.3+ wiring\n',
+        'utf-8',
+      );
+
+      await runUpgrade(dir, { dryRun: false });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      // tokens untouched (blanket exemption)…
+      expect(updated.dependencies['@helixui/tokens']).toBe('^0.2.0');
+      // …but the exemption is scoped to tokens — drupal-starter still upgrades.
+      expect(updated.dependencies['@helixui/drupal-starter']).toBe('^1.0.0');
     });
   });
 

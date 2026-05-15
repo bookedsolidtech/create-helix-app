@@ -17,6 +17,7 @@ import {
 } from '../../src/generators/drupal-theme.js';
 import { generateThemeLibraries } from '../../src/generators/libraries.js';
 import { getPreset, VALID_PRESETS, PRESETS } from '../../src/presets/loader.js';
+import { HELIX_TOKENS_VERSION } from '../../src/helix-versions.js';
 import type { DrupalPreset, PresetConfig, SDCDefinition } from '../../src/types.js';
 import path from 'node:path';
 import os from 'node:os';
@@ -53,7 +54,7 @@ function makePreset(overrides: Partial<PresetConfig> = {}): PresetConfig {
     name: 'Standard',
     description: 'Test preset',
     sdcList: [nodeTeaserSdc, heroBannerSdc],
-    dependencies: { '@helixui/drupal-starter': '^0.1.0', '@helixui/tokens': '^0.2.0' },
+    dependencies: { '@helixui/drupal-starter': '^0.1.0', '@helixui/tokens': HELIX_TOKENS_VERSION },
     templateVars: {},
     architectureNotes: 'Test notes',
     ...overrides,
@@ -199,7 +200,7 @@ describe('generatePackageJson', () => {
       dependencies: Record<string, string>;
     };
     expect(parsed.dependencies['@helixui/drupal-starter']).toBe('^0.1.0');
-    expect(parsed.dependencies['@helixui/tokens']).toBe('^0.2.0');
+    expect(parsed.dependencies['@helixui/tokens']).toBe(HELIX_TOKENS_VERSION);
   });
 
   it('includes preset id in description', () => {
