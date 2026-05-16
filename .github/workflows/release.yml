@@ -50,17 +50,19 @@ jobs:
           NPM_CONFIG_PROVENANCE: 'true'
           HUSKY: '0'
 
-      - name: Generate SBOM
-        if: steps.changesets.outputs.published == 'true'
-        run: pnpm run sbom
-
-      - name: Upload SBOM as release artifact
-        if: steps.changesets.outputs.published == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-cyclonedx
-          path: sbom.json
-          retention-days: 90
+      # SBOM generation removed in v0.9.4. The prior cyclonedx-npm-based step
+      # was both broken (`pnpm ls --all` rejected by pnpm) and architecturally
+      # wrong (cyclonedx-npm only reads package-lock.json, ignoring
+      # pnpm.overrides for vite/fast-uri). Swapping to cdxgen would solve
+      # those, but cdxgen's ~675 transitive deps include sequelize@6.x with
+      # HIGH-severity advisories that cascade into our audit gate, and
+      # cdxgen's `--required-only` filter drops production transitives —
+      # neither extreme produced an accurate, ship-safe SBOM. Picking a
+      # workable SBOM stack is its own focused task (see open task tracker);
+      # for now the SBOM step is dropped so it stops blocking release
+      # notifications (Discord-notify below is gated after this step in
+      # earlier revisions of the workflow — without the SBOM step there
+      # is no gate to fail).
 
       - name: Notify Discord on release
         if: steps.changesets.outputs.published == 'true'

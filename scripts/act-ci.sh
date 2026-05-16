@@ -133,12 +133,17 @@ if [[ -d "$PNPM_STORE_DIR" ]]; then
   PNPM_MOUNT="--container-options -v ${PNPM_STORE_DIR}:/root/.local/share/pnpm/store"
 fi
 
-# -- Test mode env vars -------------------------------------------------------
+# -- Test mode vars -----------------------------------------------------------
+# ACT_MATRIX_TESTS / ACT_FULL_TESTS gate the `test-full` job in act-ci.yml,
+# which is checked at the JOB level (`if: vars.X == 'true'`). Job-level `if:`
+# cannot access the env context, only vars — so these MUST be passed via
+# --var, not --env. (Earlier --env wiring made the workflow look correct in
+# act but caused GitHub to refuse parsing it with "workflow file issue".)
 if [[ "$USE_MATRIX" == true ]]; then
-  ENV_ARGS="$ENV_ARGS --env ACT_MATRIX_TESTS=true --env ACT_FULL_TESTS=true"
+  ENV_ARGS="$ENV_ARGS --var ACT_MATRIX_TESTS=true --var ACT_FULL_TESTS=true"
   TEST_MODE="full suite + Node 20/22/24 matrix (CI Matrix parity)"
 elif [[ "$USE_FULL" == true ]]; then
-  ENV_ARGS="$ENV_ARGS --env ACT_FULL_TESTS=true"
+  ENV_ARGS="$ENV_ARGS --var ACT_FULL_TESTS=true"
   TEST_MODE="full suite (current Node)"
 else
   TEST_MODE="default (all tests)"
@@ -153,7 +158,7 @@ echo ""
 
 START_TIME=$(date +%s)
 
-if act pull_request -W "$WORKFLOW" $JOB_ARGS \
+if act workflow_dispatch -W "$WORKFLOW" $JOB_ARGS \
   $ENV_ARGS \
   $ARCH_ARGS \
   $PNPM_MOUNT \
