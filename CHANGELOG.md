@@ -1,5 +1,16 @@
 # create-helix
 
+## 0.9.5
+
+### Patch Changes
+
+- f1e1b38: chore: migrate npm publishing to Trusted Publishing (OIDC)
+
+  Removes long-lived `NPM_TOKEN` dependency from CI publish workflow.
+  Authentication now happens via GitHub Actions OIDC token federation,
+  in response to the npm Mini Shai-Hulud token rotation event. Sigstore
+  provenance attestation preserved. No consumer-facing changes.
+
 ## 0.9.4
 
 ### Patch Changes
