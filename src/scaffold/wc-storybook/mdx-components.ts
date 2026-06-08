@@ -103,7 +103,7 @@ inner content.
 <div className="hx-narrative-hero">
   <h3>Your workspace at a glance</h3>
   <hx-card>
-    <h4 slot="header">Recent activity</h4>
+    <h4 slot="heading">Recent activity</h4>
     <p>3 new comments on your latest project, 2 pending invitations, and 1 unread message from your team lead.</p>
     <div slot="footer">
       <hx-button variant="primary">Open inbox</hx-button>
