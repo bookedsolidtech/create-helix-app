@@ -24,6 +24,7 @@ import {
   runUpgrade,
 } from '../../src/commands/upgrade.js';
 import { detectOffline, readRegistryCache } from '../../src/network.js';
+import { HELIX_ICONS_VERSION } from '../../src/helix-versions.js';
 
 /** Helper: create a temp directory with a package.json. */
 function makeTmpProject(pkgJson: Record<string, unknown>): string {
@@ -1186,8 +1187,9 @@ describe('upgrade command', () => {
       // union range `^1.0.0 || ^2.0.0`. The version-bump write-back can't
       // reason about it (compareSemver → null), so it survives un-raised — and
       // copying it verbatim into devDependencies could install a version that
-      // still fails doctor's ^1.0.1 floor. The seeded copy must fall back to
-      // the known-good floor; the peer entry itself is left untouched.
+      // still fails doctor's HELIX_ICONS_VERSION floor. The seeded copy must
+      // fall back to the known-good floor; the peer entry itself is left
+      // untouched.
       const dir = makeTmpProject({
         name: 'unparseable-peer-icons',
         dependencies: { '@helixui/library': '^3.9.1' },
@@ -1204,11 +1206,11 @@ describe('upgrade command', () => {
       // The unparseable peer entry is left as the project declared it...
       expect(updated.peerDependencies['@helixui/icons']).toBe('^1.0.0 || ^2.0.0');
       // ...but the installable devDependencies copy falls back to the floor.
-      expect(updated.devDependencies['@helixui/icons']).toBe('^1.0.1');
+      expect(updated.devDependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
     });
 
     it('keeps a peer-only @helixui/icons range that already meets the floor', async () => {
-      // Peer at ^1.2.0 — already above the ^1.0.1 floor. The seeded copy must
+      // Peer at ^1.2.0 — already above the ^1.0.4 floor. The seeded copy must
       // honour the project's newer pin, not flatten it down to the floor.
       const dir = makeTmpProject({
         name: 'newer-peer-icons',
@@ -1226,7 +1228,7 @@ describe('upgrade command', () => {
     });
 
     it('raises a stale but installed @helixui/icons range to the create-helix floor when offline', async () => {
-      // @helixui/icons already in `dependencies` at ^1.0.0 — below the ^1.0.1
+      // @helixui/icons already in `dependencies` at ^1.0.0 — below the ^1.0.4
       // floor doctor enforces. Offline (no registry, no cache) the plan has no
       // "latest" for it and would no-op, leaving doctor failing right after it
       // pointed the user at `create-helix upgrade`. create-helix's own pinned
@@ -1245,11 +1247,11 @@ describe('upgrade command', () => {
       const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
         dependencies: Record<string, string>;
       };
-      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+      expect(updated.dependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
     });
 
     it('leaves an @helixui/icons range already at or above the floor untouched when offline', async () => {
-      // ^1.2.0 is above the ^1.0.1 floor — the floor is a minimum, not a
+      // ^1.2.0 is above the ^1.0.4 floor — the floor is a minimum, not a
       // target; it must never drag a newer pin backward.
       const dir = makeTmpProject({
         name: 'newer-installed-icons',
