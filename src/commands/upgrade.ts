@@ -9,9 +9,9 @@ import {
   HELIX_LIBRARY_VERSION,
   HELIX_ICONS_VERSION,
   libraryProvablyAtLeast,
-  versionMeetsFloor,
   isResolvableRange,
   iconsRangeWithinCompat,
+  iconsVersionCompatible,
 } from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
@@ -521,8 +521,8 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   const libraryFloor = HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '');
   // Is @helixui/library provably a stable >= 3.10.0 (resolved/declared/being
   // moved there)? Computed ONCE and reused by both the synthetic-latest block
-  // below and the peer-only devDep-seed — both raise icons to the 1.0.4 floor
-  // ONLY when this holds.
+  // below and the peer-only devDep-seed — both enforce the @helixui/icons
+  // ^1.0.4 compatibility range ONLY when this holds.
   const libraryAtFloor = libraryMeetsFloor(
     pkg,
     projectDir,
@@ -532,10 +532,14 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   if (libraryAtFloor && installed['@helixui/icons'] !== undefined) {
     const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
     const knownIconsLatest = latestVersions['@helixui/icons'];
-    // Override the registry "latest" with the floor when there's no known
-    // latest OR the known latest is below the floor — a semver floor check
-    // (not ad-hoc compareSemver), consistent with doctor's icons-floor gate.
-    if (knownIconsLatest === undefined || !versionMeetsFloor(knownIconsLatest, iconsFloor)) {
+    // Override the registry "latest" with the create-helix pin when there's no
+    // known latest OR the known latest is NOT ^1.0.4-compatible — a RANGE check
+    // (`iconsVersionCompatible` = `satisfies(^1.0.4)`), consistent with doctor's
+    // icons gate. The range model matters here too: a lower-bound `>= 1.0.4`
+    // check would accept a hypothetical incompatible 2.x "latest" and upgrade
+    // the project onto a breaking major; the range check rejects it and pins the
+    // known-good floor instead.
+    if (knownIconsLatest === undefined || !iconsVersionCompatible(knownIconsLatest)) {
       latestVersions['@helixui/icons'] = iconsFloor;
     }
   }

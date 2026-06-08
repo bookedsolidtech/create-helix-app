@@ -112,27 +112,6 @@ export function libraryProvablyAtLeast(spec: string, floor: string): boolean {
 }
 
 /**
- * True when the CONCRETE `version` (e.g. an installed `package.json` version,
- * or a registry "latest") is >= the minimum of the `floor` range. The companion
- * to `libraryProvablyAtLeast` for when you hold an exact version rather than a
- * declared range. `semver.coerce` tolerates a leading `v`/loose form; any
- * unparseable input fails open to false. Used by `upgrade`'s
- * registry-latest-vs-floor override (deciding whether to substitute the
- * create-helix pin when the registry has no acceptable "latest"). NOT for the
- * icons COMPATIBILITY check — that is a range membership test
- * (`iconsVersionCompatible`), since a lower bound alone would accept a 2.x major.
- */
-export function versionMeetsFloor(version: string, floor: string): boolean {
-  try {
-    const coerced = semver.coerce(version);
-    const floorMin = semver.minVersion(floor);
-    return coerced != null && floorMin != null && semver.gte(coerced, floorMin);
-  } catch {
-    return false;
-  }
-}
-
-/**
  * True when `spec` is a SINGLE range leaf `semver` can reduce to a concrete
  * minimum — i.e. a usable npm version range that can be copied verbatim as ONE
  * installable dependency pin. False for `workspace:*`, `catalog:`, npm aliases,
@@ -162,8 +141,10 @@ export function isResolvableRange(spec: string): boolean {
  * incompatible major: `2.0.0` → false (flagged), `1.0.5`/`1.9.0` → true (ok),
  * `1.0.1` (below the patch floor) → false (flagged). `semver.coerce` tolerates
  * a leading `v`/loose form; any unparseable input fails CLOSED to false (an
- * un-checkable version can't be proven compatible). Drives doctor's resolved
- * icons-version gate.
+ * un-checkable version can't be proven compatible). Drives every concrete-icons
+ * gate: doctor's resolved icons-version check AND `upgrade`'s
+ * registry-latest-vs-pin override (an incompatible 2.x "latest" is rejected, so
+ * the known-good pin is substituted instead).
  */
 export function iconsVersionCompatible(version: string): boolean {
   try {

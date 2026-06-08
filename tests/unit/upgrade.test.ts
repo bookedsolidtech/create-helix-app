@@ -1591,6 +1591,61 @@ describe('upgrade command', () => {
       };
       expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
     });
+
+    it('does NOT substitute an incompatible 2.x icons registry "latest" — falls back to the ^1.0.4 pin', async () => {
+      // codex final pass: the registry-latest-vs-pin override is RANGE-aware,
+      // not a lower bound. library is 3.10+ (floor applies) and icons is
+      // installed at ^1.0.1, but the registry reports icons latest 2.0.0 — a
+      // breaking major the 3.10 <hx-icon> peer does NOT accept. A `>= 1.0.4`
+      // check would have accepted 2.0.0 and upgraded the project onto it; the
+      // `iconsVersionCompatible` (satisfies ^1.0.4) check rejects it, so the
+      // override substitutes the known-good create-helix pin instead.
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/icons': '2.0.0' },
+      });
+      const dir = makeTmpProject({
+        name: 'icons-latest-2x-rejected',
+        dependencies: {
+          '@helixui/library': '^3.10.0',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      // NOT ^2.0.0 — the incompatible latest was rejected and the floor pinned.
+      expect(updated.dependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
+    });
+
+    it('accepts a compatible icons registry "latest" 1.0.5 and upgrades to it', async () => {
+      // The mirror of the case above: a registry latest WITHIN ^1.0.4 is a
+      // valid icons target, so the override leaves it in place and the plan
+      // upgrades the stale ^1.0.1 pin to ^1.0.5 (not the create-helix floor).
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/icons': '1.0.5' },
+      });
+      const dir = makeTmpProject({
+        name: 'icons-latest-compatible',
+        dependencies: {
+          '@helixui/library': '^3.10.0',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.5');
+    });
   });
 
   // ─── v0.9.2: --offline serves from the registry cache ────────────────────
