@@ -114,6 +114,45 @@ describe('checkHelixIcons', () => {
     expect(result.message).toContain(HELIX_ICONS_VERSION);
   });
 
+  it('flags icons 1.0.1 when @helixui/library is a >=3.10.0 comparator range (floor applies)', () => {
+    // A peer-only / app manifest can legally declare the library as a
+    // comparator range like `>=3.10.0` (or `>=3.10.0 <4.0.0`). versionAtLeast
+    // alone only parses bare/^/~ forms, so the gate must normalize the lower
+    // bound — otherwise it wrongly ACCEPTS icons 1.0.1 against a contract that
+    // already requires 1.0.4 (codex final pass, Finding 2).
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      peerDependencies: { '@helixui/library': '>=3.10.0 <4.0.0' },
+      dependencies: { '@helixui/icons': '^1.0.1' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '1.0.1',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.message).toMatch(/1\.0\.1/);
+    expect(result.message).toContain(HELIX_ICONS_VERSION);
+  });
+
+  it('does NOT flag icons 1.0.1 when @helixui/library is a >=3.9.0 comparator range (below floor)', () => {
+    // The comparator-range understanding must stay minor-aware: a `>=3.9.0`
+    // lower bound is below 3.10.0, so the floor must NOT apply — a project
+    // permitting 3.9.x with icons 1.0.1 is valid.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      peerDependencies: { '@helixui/library': '>=3.9.0' },
+      dependencies: { '@helixui/icons': '^1.0.1' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '1.0.1',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v1\.0\.1/);
+  });
+
   it('does NOT flag icons 1.0.1 when @helixui/library is 3.9.x (floor is 3.10+ only)', () => {
     // library 3.9.x + icons 1.0.1 → the 1.0.4 floor was tightened in 3.10.0;
     // the 3.9.x pins paired with icons 1.0.1, so an un-upgraded 3.9.x scaffold

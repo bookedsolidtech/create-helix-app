@@ -375,6 +375,20 @@ function declaredMaxMajor(dir: string, pkgName: string): number {
 }
 
 /**
+ * Effective lower bound of a single range leaf, normalized so `versionAtLeast`
+ * (which only parses bare/`^`/`~`/`v` forms) can read it. Handles the
+ * comparator forms a consumer can legally put in package.json:
+ *   - `>=3.10.0` / `>3.9.0` / `=3.10.0` → the bound version
+ *   - `>=3.10.0 <4.0.0` (compound) → the FIRST clause (the lower bound)
+ * Strips a single leading comparator operator from the first whitespace token.
+ * `^`/`~`/`v`/bare forms pass through unchanged for `versionAtLeast`.
+ */
+function rangeLowerBound(leaf: string): string {
+  const firstClause = leaf.trim().split(/\s+/)[0] ?? '';
+  return firstClause.replace(/^(>=|<=|>|<|=)/, '');
+}
+
+/**
  * Does `@helixui/library` resolve or declare at >= `floor` (a minor-aware
  * semver floor, e.g. `^3.10.0`)? Used to gate the @helixui/icons 1.0.4 peer,
  * which is required only from @helixui/library 3.10.0 onward — NOT from the
@@ -382,16 +396,18 @@ function declaredMaxMajor(dir: string, pkgName: string): number {
  * wrongly flag an un-upgraded 3.9.x scaffold.
  *
  * Checks the RESOLVED install first (the ground truth), then every declared
- * range. Union/OR ranges (`^1.0.0 || ^3.9.1`) are split so each leaf's leading
- * version is compared — so a project whose declared range merely PERMITS 3.10
- * is treated as on-floor, matching how `installedMajor`/`declaredMaxMajor`
- * already over-approximate to avoid false negatives.
+ * range. Union/OR ranges (`^1.0.0 || ^3.9.1`) are split so each leaf is
+ * compared, and each leaf's effective lower bound is normalized through
+ * `rangeLowerBound` so comparator forms (`>=3.10.0`, `>=3.10.0 <4.0.0`) are
+ * understood, not just bare/`^`/`~`. A project whose declared range merely
+ * PERMITS 3.10 is treated as on-floor (over-approximating to avoid false
+ * negatives); unparseable leaves stay conservative (no enforcement).
  */
 function libraryAtLeast(dir: string, pkgName: string, floor: string): boolean {
   const resolved = readConsumerPackageVersion(dir, pkgName);
   if (resolved !== null && versionAtLeast(resolved.version, floor)) return true;
   return declaredRanges(dir, pkgName).some((range) =>
-    range.split('||').some((leaf) => versionAtLeast(leaf.trim(), floor)),
+    range.split('||').some((leaf) => versionAtLeast(rangeLowerBound(leaf), floor)),
   );
 }
 

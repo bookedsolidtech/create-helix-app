@@ -1314,6 +1314,84 @@ describe('upgrade command', () => {
       };
       expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
     });
+
+    it('does NOT raise icons when @helixui/library is workspace:* even if the registry latest is 3.10', async () => {
+      // Monorepo scaffolds pin the workspace library as `workspace:*` — an
+      // unparseable spec buildUpgradePlan leaves untouched (compareSemver →
+      // null), so the library is NOT actually moving to 3.10. The registry
+      // reporting 3.10 as "latest" must NOT, on its own, prove the floor and
+      // rewrite a valid icons ^1.0.1 pin (codex final pass, Finding 1).
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/library': '3.10.0' },
+      });
+      const dir = makeTmpProject({
+        name: 'workspace-library-icons-untouched',
+        dependencies: {
+          '@helixui/library': 'workspace:*',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+    });
+
+    it('does NOT raise icons when @helixui/library is a catalog: spec even if the registry latest is 3.10', async () => {
+      // Same as workspace:* — a `catalog:` spec is unparseable, so the plan
+      // leaves the library alone and icons must not be synthesized to 1.0.4.
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/library': '3.10.0' },
+      });
+      const dir = makeTmpProject({
+        name: 'catalog-library-icons-untouched',
+        dependencies: {
+          '@helixui/library': 'catalog:',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+    });
+
+    it('DOES raise icons when @helixui/library is a parseable ^3.9.1 the plan moves to 3.10', async () => {
+      // Counterpart to the workspace:* case: when the declared spec parses AND
+      // is below the registry latest (3.10), buildUpgradePlan genuinely moves
+      // the library to 3.10, so the icons floor SHOULD apply. This proves the
+      // gate still fires on a real, provable upgrade — it's the registry-latest
+      // path, now correctly conditioned on a movable declared spec.
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/library': '3.10.0' },
+      });
+      const dir = makeTmpProject({
+        name: 'movable-library-icons-raised',
+        dependencies: {
+          '@helixui/library': '^3.9.1',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
+    });
   });
 
   // ─── v0.9.2: --offline serves from the registry cache ────────────────────

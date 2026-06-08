@@ -146,14 +146,33 @@ function specMeetsFloor(spec: string, floor: string): boolean {
   return (compareSemver(spec, floor) ?? -1) >= 0;
 }
 
+/** Every `||`-split leaf of `@helixui/library`'s declared ranges across buckets. */
+function declaredLibraryLeaves(pkg: PackageJson): string[] {
+  return DEP_BUCKETS.flatMap((b) => {
+    const range = pkg[b]?.['@helixui/library'];
+    return range !== undefined ? range.split('||').map((leaf) => leaf.trim()) : [];
+  });
+}
+
 /**
- * Does `@helixui/library` resolve, declare, or upgrade-target >= `floor`
- * (minor-aware, e.g. `^3.10.0`)? Gates the @helixui/icons 1.0.4 peer, which is
- * required only from library 3.10.0 onward — NOT from the earlier 3.9.x pins,
- * which paired with icons 1.0.1. A major-only `>= 3` gate would wrongly rewrite
- * an un-upgraded 3.9.x scaffold. Over-approximates across resolved install,
- * every declared range leaf (`||`-split), and the registry bump target so a
- * range that merely permits 3.10 (`^1.0.0 || ^3.10.0`) is still caught.
+ * Will `@helixui/library` PROVABLY be >= `floor` (minor-aware, e.g. `^3.10.0`)
+ * after this run? Gates the @helixui/icons 1.0.4 peer, which is required only
+ * from library 3.10.0 onward — NOT from the earlier 3.9.x pins, which paired
+ * with icons 1.0.1.
+ *
+ * "Provable" is the key word: `upgrade` must only raise icons when it can show
+ * the library actually reaches 3.10. Three positive signals:
+ *   1. the RESOLVED install is already >= floor (ground truth), or
+ *   2. a PARSEABLE declared range leaf is already >= floor, or
+ *   3. the plan will MOVE the library to >= floor — which means a declared leaf
+ *      is parseable AND strictly below the registry latest (so buildUpgradePlan
+ *      marks it `changed`) AND that registry latest is >= floor.
+ *
+ * Crucially, `registryLatest >= floor` ALONE is NOT proof: when every declared
+ * spec is unparseable — `workspace:*`, `catalog:...`, an npm alias — the plan
+ * leaves the library untouched (compareSemver → null), so the library is NOT
+ * actually reaching 3.10 and icons must NOT be raised. Monorepo scaffolds use
+ * `workspace:*`/`catalog:` library specs, so this is a real path.
  */
 function libraryMeetsFloor(
   pkg: PackageJson,
@@ -163,13 +182,19 @@ function libraryMeetsFloor(
 ): boolean {
   const installed = resolveInstalledVersion(projectDir, '@helixui/library');
   if (installed !== undefined && specMeetsFloor(installed, floor)) return true;
-  if (registryLatest !== undefined && specMeetsFloor(registryLatest, floor)) return true;
-  return DEP_BUCKETS.some((b) => {
-    const range = pkg[b]?.['@helixui/library'];
-    return (
-      range !== undefined && range.split('||').some((leaf) => specMeetsFloor(leaf.trim(), floor))
-    );
-  });
+
+  const declaredLeaves = declaredLibraryLeaves(pkg);
+  // Already declared at >= floor (parseable leaf).
+  if (declaredLeaves.some((leaf) => specMeetsFloor(leaf, floor))) return true;
+
+  // The plan will move the library to the registry latest only when a declared
+  // leaf parses AND is strictly below that latest (compareSemver === -1). An
+  // unparseable spec (workspace:/catalog:/alias) compares null → not moved, so
+  // the registry latest is irrelevant and must not stand in as proof.
+  if (registryLatest !== undefined && specMeetsFloor(registryLatest, floor)) {
+    return declaredLeaves.some((leaf) => compareSemver(leaf, registryLatest) === -1);
+  }
+  return false;
 }
 
 /**
