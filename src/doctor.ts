@@ -318,14 +318,23 @@ export function checkHelixIcons(cwd: string): CheckResult {
     };
   }
   const { version, pkgJsonPath } = resolved;
-  // @helixui/library@3.x peer-requires @helixui/icons at the
-  // HELIX_ICONS_VERSION floor — a major-only check would wrongly pass a
-  // 1.0.0 install that doesn't satisfy the ^1.0.4 the scaffold pins.
-  if (!versionAtLeast(version, HELIX_ICONS_VERSION)) {
+  // The HELIX_ICONS_VERSION patch floor (1.0.4) is ONLY required once
+  // @helixui/library is on 3.x — that's the release whose <hx-icon> registry
+  // peer-requires icons 1.0.4 exactly. For a project still on library 1.x/2.x
+  // (or with no library at all), icons 1.0.1–1.0.3 are perfectly valid, so
+  // applying the 3.x floor there would wrongly fail doctor. Gate the floor on
+  // the resolved/declared library major; below 3.x, a resolvable icons install
+  // is enough. (Check both declared and installed so a broad/union range that
+  // reads pre-3.x but resolves at 3.x — e.g. `^1.0.0 || ^3.9.1` — is caught.)
+  const libMajor = Math.max(
+    declaredMaxMajor(dir, '@helixui/library'),
+    installedMajor(dir, '@helixui/library'),
+  );
+  if (libMajor >= HELIX_LIBRARY_MAJOR && !versionAtLeast(version, HELIX_ICONS_VERSION)) {
     return {
       name: '@helixui/icons',
       status: 'fail',
-      message: `v${version} — below the ${HELIX_ICONS_VERSION} floor create-helix pins; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
+      message: `v${version} — below the ${HELIX_ICONS_VERSION} floor @helixui/library@${libMajor}.x requires; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
     };
   }
   return {

@@ -1269,6 +1269,29 @@ describe('upgrade command', () => {
       };
       expect(updated.dependencies['@helixui/icons']).toBe('^1.2.0');
     });
+
+    it('does NOT raise a stale icons range when @helixui/library is 2.x (floor is 3.x-only)', async () => {
+      // The 1.0.4 floor is a 3.x-library requirement. A project still on
+      // library 2.x with icons ^1.0.1 must be left alone offline — synthesizing
+      // a 1.0.4 "latest" here would rewrite a perfectly valid pre-3.x pin
+      // (codex Finding 2). Offline so the only floor signal is the synthetic
+      // one, which must now be gated on the library major.
+      const dir = makeTmpProject({
+        name: 'library-2x-icons-untouched',
+        dependencies: {
+          '@helixui/library': '^2.5.0',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+    });
   });
 
   // ─── v0.9.2: --offline serves from the registry cache ────────────────────

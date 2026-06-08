@@ -434,7 +434,24 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   // it told the user to run `create-helix upgrade`. A real registry hit (>=
   // the floor) still wins; buildUpgradePlan's compareSemver guard refuses any
   // downgrade, so a project already above the floor is left untouched.
-  if (installed['@helixui/icons'] !== undefined) {
+  //
+  // SCOPED to 3.x: this floor is only required once @helixui/library is (or is
+  // becoming) 3.x — that's the release whose <hx-icon> peer needs icons 1.0.4.
+  // For a project still on library 1.x/2.x, icons 1.0.1–1.0.3 are valid, so
+  // synthesizing a 1.0.4 "latest" there would rewrite a perfectly fine pin.
+  // Mirror doctor's gate using the pre-plan signals (declared major over every
+  // bucket, the resolved install, and the registry bump target for library).
+  const libraryFloorMajor = Math.max(
+    DEP_BUCKETS.reduce((max, b) => {
+      const range = pkg[b]?.['@helixui/library'];
+      return range !== undefined ? Math.max(max, leadingMajor(range)) : max;
+    }, 0),
+    resolveInstalledMajor(projectDir, '@helixui/library'),
+    latestVersions['@helixui/library'] !== undefined
+      ? leadingMajor(latestVersions['@helixui/library'])
+      : 0,
+  );
+  if (libraryFloorMajor >= HELIX_LIBRARY_MAJOR && installed['@helixui/icons'] !== undefined) {
     const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
     const knownIconsLatest = latestVersions['@helixui/icons'];
     if (knownIconsLatest === undefined || compareSemver(knownIconsLatest, iconsFloor) === -1) {
