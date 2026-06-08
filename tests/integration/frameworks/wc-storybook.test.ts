@@ -343,6 +343,26 @@ describe('wc-storybook integration', () => {
     expect(gen).not.toMatch(/if\s*\(\s*key\s*===\s*['"]surface['"]/);
   });
 
+  it('scripts/build-tokens.ts does not warn on the legacy {value} token shape', async () => {
+    // @helixui/tokens ships its tokens.json in the legacy {value} shape, so a
+    // fresh scaffold's seed tokens.json IS legacy-shaped. The generator must
+    // treat that shape as a first-class, supported input — it must NOT emit a
+    // "legacy {value} shape, removal in 0.7.x" deprecation that would fire a
+    // false alarm against the current upstream tokens contract on every clean
+    // build. The reader still handles both shapes; it just stays quiet.
+    const o = opts('wcs-no-legacy-warn');
+    await scaffoldProject(o);
+    const gen = await readText(o.directory, 'scripts/build-tokens.ts');
+    // Still reads both shapes (legacy + DTCG)…
+    expect(gen).toContain('isLegacyLeaf');
+    expect(gen).toContain('isDtcgLeaf');
+    // …but emits no deprecation machinery for the legacy shape.
+    expect(gen).not.toMatch(/DEPRECATION/);
+    expect(gen).not.toMatch(/removal in 0\.7/i);
+    expect(gen).not.toContain('warnLegacyOnce');
+    expect(gen).not.toContain('legacyWarned');
+  });
+
   it('scripts/sync-tokens.ts pulls from Figma REST with .env credentials', async () => {
     const o = opts('wcs-sync');
     await scaffoldProject(o);

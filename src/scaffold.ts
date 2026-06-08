@@ -12954,12 +12954,14 @@ const DURATION_PATTERNS: readonly RegExp[] = [
   /(?:^|[/-])animation[-/]duration(?:$|[/-])/i,
 ];
 
-// Sprint 1.5b — read BOTH the DTCG shape (\`{$value, $type}\`, default
-// from Custom Helix Exporter 0.6.0+) AND the legacy shape (\`{value}\`,
-// pre-0.6 exporter and any tokens.json that hasn't been migrated yet).
-// Single reader handles both during the 0.6.x deprecation window; the
-// legacy branch emits a one-time deprecation warning so engineers see
-// the migration window closing. 0.7.x will remove the legacy branch.
+// Read BOTH the DTCG shape (\`{$value, $type}\`, emitted by Custom Helix
+// Exporter 0.6.0+) AND the legacy shape (\`{value}\`). Both are first-class,
+// fully supported inputs: @helixui/tokens still ships its tokens.json in the
+// legacy \`{value}\` shape (verified against the published 3.x contract), so a
+// fresh scaffold's seed tokens.json IS legacy-shaped. This reader handles
+// either shape without complaint — it does NOT warn on the legacy shape,
+// since that would fire a false deprecation against the current, supported
+// upstream tokens contract on every clean build.
 type DtcgLeaf = { $value: string | number; $type?: string };
 type LegacyLeaf = { value: string | number };
 type TokenLeaf = DtcgLeaf | LegacyLeaf;
@@ -13022,26 +13024,13 @@ function formatLeafForCss(leaf: TokenLeaf, fullName: string): string {
   return String(raw) + 'px';
 }
 
-// One-shot deprecation warning per build — repeated warnings on every
-// leaf would drown the build log without adding signal. Hoisted to module
-// scope so the watch-mode rebuild path also fires it on each rebuild.
-let legacyWarned = false;
-function warnLegacyOnce(): void {
-  if (legacyWarned) return;
-  legacyWarned = true;
-  console.warn(
-    '[build-tokens] DEPRECATION: tokens.json uses the legacy {value} shape. ' +
-      'The Custom Helix Exporter emits W3C DTCG ({$value, $type}) by default ' +
-      'starting plugin 0.6.0. Legacy support will be removed in 0.7.x. ' +
-      'Migrate via: \`tsx <figma-tokens>/scripts/migrate-tokens-to-dtcg.ts src/tokens/tokens.json\`',
-  );
-}
-
 type CssVar = { name: string; value: string };
 
 function walk(node: TokenNode, segments: string[], out: CssVar[]): void {
   if (isDtcgLeaf(node) || isLegacyLeaf(node)) {
-    if (isLegacyLeaf(node)) warnLegacyOnce();
+    // Both the DTCG ({$value, $type}) and legacy ({value}) shapes are
+    // supported, first-class inputs — @helixui/tokens ships its tokens.json
+    // in the legacy shape, so no deprecation warning is emitted here.
     const name = PREFIX + '-' + segments.join('-');
     out.push({ name, value: formatLeafForCss(node, segments.join('-')) });
     return;
