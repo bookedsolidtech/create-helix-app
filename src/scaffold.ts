@@ -2646,7 +2646,7 @@ export default function Home() {
         <div className="grid-auto">
           {/* Interactive Card */}
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Interactive Input</h3>
               <hx-badge variant="info">Forms</hx-badge>
             </div>
@@ -2669,7 +2669,7 @@ export default function Home() {
 
           {/* Button Variants */}
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Button Variants</h3>
               <hx-badge variant="success">Actions</hx-badge>
             </div>
@@ -2677,16 +2677,16 @@ export default function Home() {
               All button styles respond to the active theme.
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <hx-button variant="primary" size="sm">Primary</hx-button>
-              <hx-button variant="secondary" size="sm">Secondary</hx-button>
-              <hx-button variant="danger" size="sm">Danger</hx-button>
-              <hx-button variant="ghost" size="sm">Ghost</hx-button>
+              <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+              <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+              <hx-button variant="danger" hx-size="sm">Danger</hx-button>
+              <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
             </div>
           </hx-card>
 
           {/* Data Display */}
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Data Display</h3>
               <hx-badge variant="warning">Metrics</hx-badge>
             </div>
@@ -2710,14 +2710,14 @@ export default function Home() {
 
           {/* Avatars & Badges */}
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Avatars &amp; Badges</h3>
               <hx-badge variant="danger">Identity</hx-badge>
             </div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <hx-avatar size="sm">AB</hx-avatar>
-              <hx-avatar size="md">CD</hx-avatar>
-              <hx-avatar size="lg">EF</hx-avatar>
+              <hx-avatar hx-size="sm">AB</hx-avatar>
+              <hx-avatar hx-size="md">CD</hx-avatar>
+              <hx-avatar hx-size="lg">EF</hx-avatar>
               <hx-divider vertical style={{ height: '2rem' }}></hx-divider>
               <hx-badge variant="info">Info</hx-badge>
               <hx-badge variant="success">Success</hx-badge>
@@ -2738,7 +2738,7 @@ export default function Home() {
           <hx-tab-panel>
             <div style={{ padding: '1.5rem 0' }}>
               <hx-card>
-                <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0 }}>Using HELiX in Next.js 16</h3>
                   <hx-badge variant="info">Architecture</hx-badge>
                 </div>
@@ -2756,7 +2756,7 @@ export default function Home() {
           <hx-tab-panel>
             <div style={{ padding: '1.5rem 0' }}>
               <hx-card>
-                <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0 }}>CSS Custom Properties</h3>
                   <hx-badge variant="success">Tokens</hx-badge>
                 </div>
@@ -2787,7 +2787,7 @@ hx-card::part(card) {
           <hx-tab-panel>
             <div style={{ padding: '1.5rem 0' }}>
               <hx-card>
-                <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0 }}>Two Approaches</h3>
                   <hx-badge variant="warning">Events</hx-badge>
                 </div>
@@ -2874,7 +2874,7 @@ import { HxButton } from '@/components/helix/wrappers';
 
         <div className="grid-3">
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Key Files</h3>
               <hx-badge variant="info">Reference</hx-badge>
             </div>
@@ -2889,7 +2889,7 @@ import { HxButton } from '@/components/helix/wrappers';
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Commands</h3>
               <hx-badge variant="success">CLI</hx-badge>
             </div>
@@ -2906,7 +2906,7 @@ import { HxButton } from '@/components/helix/wrappers';
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Next Steps</h3>
               <hx-badge variant="warning">Action</hx-badge>
             </div>
@@ -2957,14 +2957,14 @@ export default function ComponentsPage() {
         </div>
         <div className="grid-4">
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Button</h3>
               <hx-badge variant="success">Stable</hx-badge>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-              <hx-button variant="primary" size="sm">Primary</hx-button>
-              <hx-button variant="secondary" size="sm">Secondary</hx-button>
-              <hx-button variant="ghost" size="sm">Ghost</hx-button>
+              <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+              <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+              <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
             </div>
             <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
               Multi-variant button with loading states, icons, and full keyboard support.
@@ -2972,7 +2972,7 @@ export default function ComponentsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Badge</h3>
               <hx-badge variant="success">Stable</hx-badge>
             </div>
@@ -2988,7 +2988,7 @@ export default function ComponentsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Card</h3>
               <hx-badge variant="success">Stable</hx-badge>
             </div>
@@ -2998,14 +2998,14 @@ export default function ComponentsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Avatar</h3>
               <hx-badge variant="success">Stable</hx-badge>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem' }}>
-              <hx-avatar size="sm">AB</hx-avatar>
-              <hx-avatar size="md">CD</hx-avatar>
-              <hx-avatar size="lg">EF</hx-avatar>
+              <hx-avatar hx-size="sm">AB</hx-avatar>
+              <hx-avatar hx-size="md">CD</hx-avatar>
+              <hx-avatar hx-size="lg">EF</hx-avatar>
             </div>
             <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
               User identity with initials, image, or icon support.
@@ -3021,7 +3021,7 @@ export default function ComponentsPage() {
         </div>
         <div className="grid-3">
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Text Input</h3>
               <hx-badge variant="info">Forms</hx-badge>
             </div>
@@ -3032,7 +3032,7 @@ export default function ComponentsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Checkbox &amp; Switch</h3>
               <hx-badge variant="info">Forms</hx-badge>
             </div>
@@ -3044,7 +3044,7 @@ export default function ComponentsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Select</h3>
               <hx-badge variant="info">Forms</hx-badge>
             </div>
@@ -3067,7 +3067,7 @@ export default function ComponentsPage() {
         </div>
         <div className="grid-3">
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Progress</h3>
               <hx-badge variant="warning">Metrics</hx-badge>
             </div>
@@ -3088,7 +3088,7 @@ export default function ComponentsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Tags &amp; Chips</h3>
               <hx-badge variant="success">Display</hx-badge>
             </div>
@@ -3106,7 +3106,7 @@ export default function ComponentsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Alerts</h3>
               <hx-badge variant="danger">Feedback</hx-badge>
             </div>
@@ -3152,7 +3152,7 @@ export default function DocsPage() {
       <section className="container section">
         <div className="grid-auto">
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Quick Start</h3>
               <hx-badge variant="info">Guide</hx-badge>
             </div>
@@ -3165,7 +3165,7 @@ export default function DocsPage() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Architecture</h3>
               <hx-badge variant="warning">Concepts</hx-badge>
             </div>
@@ -3186,7 +3186,7 @@ export default function DocsPage() {
         </div>
         <div className="grid-3">
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Server Components</h3>
               <hx-badge variant="success">SSR</hx-badge>
             </div>
@@ -3198,7 +3198,7 @@ export default function DocsPage() {
 export default function Page() {
   return (
     <hx-card>
-      <div slot="header">Title</div>
+      <div slot="heading">Title</div>
       <p>Static content, zero JS</p>
     </hx-card>
   );
@@ -3207,7 +3207,7 @@ export default function Page() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Client Components</h3>
               <hx-badge variant="info">Interactive</hx-badge>
             </div>
@@ -3229,7 +3229,7 @@ import { HxButton } from
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Theming</h3>
               <hx-badge variant="warning">Tokens</hx-badge>
             </div>
@@ -3254,7 +3254,7 @@ import { HxButton } from
         </div>
         <div className="grid-3">
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>API Reference</h3>
               <hx-badge variant="info">External</hx-badge>
             </div>
@@ -3267,7 +3267,7 @@ import { HxButton } from
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Source Code</h3>
               <hx-badge variant="success">Open Source</hx-badge>
             </div>
@@ -3280,7 +3280,7 @@ import { HxButton } from
           </hx-card>
 
           <hx-card>
-            <div slot="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div slot="heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>HELiXiR MCP</h3>
               <hx-badge variant="warning">AI Tools</hx-badge>
             </div>
@@ -3357,7 +3357,7 @@ export default function FormsExample() {
         </p>
 
         <hx-card>
-          <div slot="header"><h2>Registration Form</h2></div>
+          <div slot="heading"><h2>Registration Form</h2></div>
           <form ref={formRef} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr' }}>
               <hx-text-input name="firstName" label="First name" placeholder="Jane" required></hx-text-input>
@@ -3381,7 +3381,7 @@ export default function FormsExample() {
 
         {submitted && (
           <hx-card style={{ marginTop: '1.5rem' }}>
-            <div slot="header">
+            <div slot="heading">
               <h3>Form Data (from FormData API)</h3>
               <hx-badge variant="success">Submitted</hx-badge>
             </div>
@@ -3398,7 +3398,7 @@ export default function FormsExample() {
         )}
 
         <hx-card style={{ marginTop: '1.5rem' }}>
-          <div slot="header"><h3>How It Works</h3></div>
+          <div slot="heading"><h3>How It Works</h3></div>
           <ul style={{ lineHeight: '2', paddingLeft: '1.5rem' }}>
             <li><strong>ElementInternals:</strong> Each HELiX form component calls <code>this.internals.setFormValue()</code></li>
             <li><strong>FormData:</strong> Values appear in <code>new FormData(form)</code> automatically</li>
@@ -3442,29 +3442,29 @@ export default function DashboardExample() {
             <p style={{ color: 'var(--hx-color-text-secondary, #666)' }}>HELiX data display components in action.</p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <hx-button variant="secondary" size="sm">Export</hx-button>
-            <hx-button variant="primary" size="sm">New Report</hx-button>
+            <hx-button variant="secondary" hx-size="sm">Export</hx-button>
+            <hx-button variant="primary" hx-size="sm">New Report</hx-button>
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '2rem' }}>
           <hx-card>
-            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Total Users</h3></div>
+            <div slot="heading"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Total Users</h3></div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>2,847</div>
             <hx-badge variant="success" style={{ marginTop: '0.5rem' }}>+12.5%</hx-badge>
           </hx-card>
           <hx-card>
-            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Active Sessions</h3></div>
+            <div slot="heading"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Active Sessions</h3></div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>1,024</div>
             <hx-badge variant="info" style={{ marginTop: '0.5rem' }}>Live</hx-badge>
           </hx-card>
           <hx-card>
-            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Uptime</h3></div>
+            <div slot="heading"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Uptime</h3></div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>99.9%</div>
             <hx-progress-bar value={99.9} max={100} label="Uptime: 99.9%" style={{ marginTop: '0.5rem' }}></hx-progress-bar>
           </hx-card>
           <hx-card>
-            <div slot="header"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Response Time</h3></div>
+            <div slot="heading"><h3 style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>Response Time</h3></div>
             <div style={{ fontSize: '2rem', fontWeight: 700 }}>142ms</div>
             <hx-badge variant="warning" style={{ marginTop: '0.5rem' }}>Avg</hx-badge>
           </hx-card>
@@ -3472,7 +3472,7 @@ export default function DashboardExample() {
 
         <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: '2fr 1fr' }}>
           <hx-card>
-            <div slot="header">
+            <div slot="heading">
               <h3>Recent Activity</h3>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -3483,7 +3483,7 @@ export default function DashboardExample() {
                 { user: 'Alex Rivera', action: 'Reported bug #312', time: '3 hrs ago', variant: 'warning' as const },
               ].map((item, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid var(--hx-color-border, #eee)' }}>
-                  <hx-avatar size="sm">{item.user.split(' ').map(n => n[0]).join('')}</hx-avatar>
+                  <hx-avatar hx-size="sm">{item.user.split(' ').map(n => n[0]).join('')}</hx-avatar>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 500 }}>{item.user}</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--hx-color-text-secondary, #888)' }}>{item.action}</div>
@@ -3495,7 +3495,7 @@ export default function DashboardExample() {
           </hx-card>
 
           <hx-card>
-            <div slot="header"><h3>System Status</h3></div>
+            <div slot="heading"><h3>System Status</h3></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
@@ -4019,7 +4019,7 @@ export default function App() {
       {/* ── Hero ──────────────────────────────────────────────────────── */}
       <section className="hero">
         <div className="container">
-          <hx-badge variant="brand" size="sm" style={{ marginBottom: '1rem' }}>
+          <hx-badge variant="brand" hx-size="sm" style={{ marginBottom: '1rem' }}>
             React + Vite
           </hx-badge>
           {/* v0.9.1 cross-kit harmonization: shared headline copy. */}
@@ -4078,7 +4078,7 @@ export default function App() {
               },
             ].map(({ icon, title, desc }) => (
               <hx-card key={title} className="feature-card">
-                <div slot="header">
+                <div slot="heading">
                   <span style={{ fontSize: '1.5rem', marginRight: '0.5rem' }}>{icon}</span>
                   <strong>{title}</strong>
                 </div>
@@ -4096,7 +4096,7 @@ export default function App() {
           <p className="section-subtitle">A taste of the HELiX component library.</p>
           <div className="demo-grid">
             <hx-card>
-              <div slot="header"><strong>Buttons</strong></div>
+              <div slot="heading"><strong>Buttons</strong></div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <hx-button variant="primary">Primary</hx-button>
                 <hx-button variant="secondary">Secondary</hx-button>
@@ -4106,7 +4106,7 @@ export default function App() {
             </hx-card>
 
             <hx-card>
-              <div slot="header"><strong>Badges &amp; Alerts</strong></div>
+              <div slot="heading"><strong>Badges &amp; Alerts</strong></div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
                 <hx-badge variant="info">Info</hx-badge>
                 <hx-badge variant="success">Success</hx-badge>
@@ -4117,7 +4117,7 @@ export default function App() {
             </hx-card>
 
             <hx-card>
-              <div slot="header"><strong>Text Input</strong></div>
+              <div slot="heading"><strong>Text Input</strong></div>
               {/* hx-text-input fires a custom hx-input event (not
                   React's native onInput). The useEffect above attaches
                   the listener once via the ref; this element just
@@ -4811,7 +4811,7 @@ export default function Index() {
           HELiX + React Router <HxBadge variant="info">SSR Ready</HxBadge>
         </h1>
         <HxCard>
-          <div slot="header">
+          <div slot="heading">
             <h2>Counter Demo</h2>
           </div>
           <p>Count: {count}</p>
@@ -4824,7 +4824,7 @@ export default function Index() {
         </HxCard>
 
         <HxCard>
-          <div slot="header">
+          <div slot="heading">
             <h2>React Router v7 + HELiX</h2>
             <HxBadge variant="success">v0.4.0</HxBadge>
           </div>
@@ -4923,7 +4923,7 @@ function handleSubmit() {
     <h1>HELiX + Vue</h1>
 
     <hx-card>
-      <div slot="header"><h2>Interactive Demo</h2></div>
+      <div slot="heading"><h2>Interactive Demo</h2></div>
 
       <hx-text-input
         label="Your name"
@@ -4951,16 +4951,16 @@ function handleSubmit() {
     </hx-card>
 
     <hx-card style="margin-top: 1.5rem">
-      <div slot="header">
+      <div slot="heading">
         <h2>Vue + Web Components</h2>
         <hx-badge variant="info">Native Support</hx-badge>
       </div>
       <p>Vue has first-class custom element support. Properties bind with
       <code>:prop</code>, events with <code>@hx-event</code>.</p>
       <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-        <hx-button variant="primary" size="sm">Primary</hx-button>
-        <hx-button variant="secondary" size="sm">Secondary</hx-button>
-        <hx-button variant="danger" size="sm">Danger</hx-button>
+        <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+        <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+        <hx-button variant="danger" hx-size="sm">Danger</hx-button>
       </div>
     </hx-card>
   </div>
@@ -5037,7 +5037,7 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
 
     <div class="card-grid">
       <hx-card>
-        <div slot="header"><h3>Interactive Form</h3></div>
+        <div slot="heading"><h3>Interactive Form</h3></div>
         <hx-text-input id="nameInput" label="Your name" placeholder="Type here..."></hx-text-input>
         <hx-button variant="primary" style="margin-top: 1rem" id="greetBtn">
           Say Hello
@@ -5046,17 +5046,17 @@ async function scaffoldVanilla(options: ProjectOptions): Promise<void> {
       </hx-card>
 
       <hx-card>
-        <div slot="header"><h3>Button Variants</h3></div>
+        <div slot="heading"><h3>Button Variants</h3></div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="danger" size="sm">Danger</hx-button>
-          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+          <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+          <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+          <hx-button variant="danger" hx-size="sm">Danger</hx-button>
+          <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
         </div>
       </hx-card>
 
       <hx-card>
-        <div slot="header">
+        <div slot="heading">
           <h3>For CMS Teams</h3>
           <hx-badge variant="info">Drupal / WordPress</hx-badge>
         </div>
@@ -5740,10 +5740,10 @@ import Layout from '../layouts/Layout.astro';
         no framework runtime, no hydration overhead, no islands required.
       </p>
       <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
-        <hx-button variant="primary" size="lg">
+        <hx-button variant="primary" hx-size="lg">
           <a href="/components" style="color:inherit;text-decoration:none;">Explore Components</a>
         </hx-button>
-        <hx-button variant="secondary" size="lg">
+        <hx-button variant="secondary" hx-size="lg">
           <a href="/docs" style="color:inherit;text-decoration:none;">Read the Docs</a>
         </hx-button>
       </div>
@@ -5765,7 +5765,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div class="grid-3">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Zero JS by Default</h3>
           <hx-badge variant="success">Astro</hx-badge>
         </div>
@@ -5778,7 +5778,7 @@ import Layout from '../layouts/Layout.astro';
         </p>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">No Directives Needed</h3>
           <hx-badge variant="info">HELiX</hx-badge>
         </div>
@@ -5791,7 +5791,7 @@ import Layout from '../layouts/Layout.astro';
         </p>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Perfect Island Fit</h3>
           <hx-badge variant="warning">Architecture</hx-badge>
         </div>
@@ -5811,7 +5811,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div class="grid-auto">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Button Variants</h3>
           <hx-badge variant="success">Actions</hx-badge>
         </div>
@@ -5819,14 +5819,14 @@ import Layout from '../layouts/Layout.astro';
           All variants respond to the active theme via CSS custom properties.
         </p>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="danger" size="sm">Danger</hx-button>
-          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+          <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+          <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+          <hx-button variant="danger" hx-size="sm">Danger</hx-button>
+          <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
         </div>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Status Badges</h3>
           <hx-badge variant="info">Display</hx-badge>
         </div>
@@ -5846,21 +5846,21 @@ import Layout from '../layouts/Layout.astro';
         </div>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Avatars</h3>
           <hx-badge variant="danger">Identity</hx-badge>
         </div>
         <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
-          <hx-avatar size="sm">AB</hx-avatar>
-          <hx-avatar size="md">CD</hx-avatar>
-          <hx-avatar size="lg">EF</hx-avatar>
+          <hx-avatar hx-size="sm">AB</hx-avatar>
+          <hx-avatar hx-size="md">CD</hx-avatar>
+          <hx-avatar hx-size="lg">EF</hx-avatar>
           <hx-divider vertical style="height:2rem;"></hx-divider>
-          <hx-avatar size="sm" style="--hx-avatar-bg:#3b82f6;">HX</hx-avatar>
+          <hx-avatar hx-size="sm" style="--hx-avatar-bg:#3b82f6;">HX</hx-avatar>
         </div>
         <p class="text-secondary" style="font-size:0.875rem;">User identity with CSS custom property theming.</p>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Data Display</h3>
           <hx-badge variant="warning">Metrics</hx-badge>
         </div>
@@ -5887,7 +5887,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div class="grid-3">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Static Pages</h3>
           <hx-badge variant="success">SSG</hx-badge>
         </div>
@@ -5896,12 +5896,12 @@ import Layout from '../layouts/Layout.astro';
           Renders as HTML at build time, upgrades on load.
         </p>
         <pre style="padding:0.75rem;border-radius:0.5rem;font-size:0.8rem;overflow:auto;">&lt;hx-card&gt;
-  &lt;div slot="header"&gt;Title&lt;/div&gt;
+  &lt;div slot="heading"&gt;Title&lt;/div&gt;
   &lt;p&gt;Zero JS static content&lt;/p&gt;
 &lt;/hx-card&gt;</pre>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Tokens &amp; Theming</h3>
           <hx-badge variant="info">CSS</hx-badge>
         </div>
@@ -5916,7 +5916,7 @@ import Layout from '../layouts/Layout.astro';
 &#125;</pre>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Island Interactivity</h3>
           <hx-badge variant="warning">Islands</hx-badge>
         </div>
@@ -5971,7 +5971,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div class="grid-3">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Key Files</h3>
           <hx-badge variant="info">Reference</hx-badge>
         </div>
@@ -5985,7 +5985,7 @@ import Layout from '../layouts/Layout.astro';
         </ul>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Commands</h3>
           <hx-badge variant="success">CLI</hx-badge>
         </div>
@@ -6000,7 +6000,7 @@ import Layout from '../layouts/Layout.astro';
         </p>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Next Steps</h3>
           <hx-badge variant="warning">Action</hx-badge>
         </div>
@@ -6039,21 +6039,21 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div style="display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Button</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+          <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+          <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+          <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
         </div>
         <p class="text-secondary" style="font-size:0.85rem;">
           Multi-variant button with loading states, icons, and full keyboard support.
         </p>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Badge</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
@@ -6066,7 +6066,7 @@ import Layout from '../layouts/Layout.astro';
         <p class="text-secondary" style="font-size:0.85rem;">Status indicators with semantic color variants.</p>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Card</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
@@ -6075,14 +6075,14 @@ import Layout from '../layouts/Layout.astro';
         </p>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Avatar</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
         <div style="display:flex;gap:0.75rem;align-items:center;margin-bottom:1rem;">
-          <hx-avatar size="sm">AB</hx-avatar>
-          <hx-avatar size="md">CD</hx-avatar>
-          <hx-avatar size="lg">EF</hx-avatar>
+          <hx-avatar hx-size="sm">AB</hx-avatar>
+          <hx-avatar hx-size="md">CD</hx-avatar>
+          <hx-avatar hx-size="lg">EF</hx-avatar>
         </div>
         <p class="text-secondary" style="font-size:0.85rem;">User identity with initials, image, or icon support.</p>
       </hx-card>
@@ -6096,7 +6096,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div class="grid-3">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Alerts</h3>
           <hx-badge variant="danger">Feedback</hx-badge>
         </div>
@@ -6107,7 +6107,7 @@ import Layout from '../layouts/Layout.astro';
         </div>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Progress</h3>
           <hx-badge variant="warning">Metrics</hx-badge>
         </div>
@@ -6123,7 +6123,7 @@ import Layout from '../layouts/Layout.astro';
         </div>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Tags</h3>
           <hx-badge variant="success">Display</hx-badge>
         </div>
@@ -6160,7 +6160,7 @@ import Layout from '../layouts/Layout.astro';
   <section class="container section">
     <div class="grid-auto">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Quick Start</h3>
           <hx-badge variant="info">Guide</hx-badge>
         </div>
@@ -6172,7 +6172,7 @@ import Layout from '../layouts/Layout.astro';
         </ol>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Architecture</h3>
           <hx-badge variant="warning">Concepts</hx-badge>
         </div>
@@ -6193,7 +6193,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div class="grid-3">
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">HELiX UI Docs</h3>
           <hx-badge variant="info">External</hx-badge>
         </div>
@@ -6201,7 +6201,7 @@ import Layout from '../layouts/Layout.astro';
         <a href="https://bookedsolid.tech/helixui" target="_blank" rel="noopener noreferrer">View HELiX UI Docs &rarr;</a>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">Source Code</h3>
           <hx-badge variant="success">Open Source</hx-badge>
         </div>
@@ -6209,7 +6209,7 @@ import Layout from '../layouts/Layout.astro';
         <a href="https://github.com/bookedsolidtech/helix" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
       </hx-card>
       <hx-card>
-        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;">HELiXiR MCP</h3>
           <hx-badge variant="warning">AI Tools</hx-badge>
         </div>
@@ -6463,9 +6463,9 @@ body {
     <hx-top-nav sticky label="Main navigation">
       <span slot="brand">${sanitizeForHtml(options.name)}</span>
       <nav slot="nav">
-        <hx-button variant="ghost" size="sm">Docs</hx-button>
-        <hx-button variant="ghost" size="sm">Components</hx-button>
-        <hx-button variant="ghost" size="sm">GitHub</hx-button>
+        <hx-button variant="ghost" hx-size="sm">Docs</hx-button>
+        <hx-button variant="ghost" hx-size="sm">Components</hx-button>
+        <hx-button variant="ghost" hx-size="sm">GitHub</hx-button>
       </nav>
     </hx-top-nav>
   </header>
@@ -6518,8 +6518,8 @@ body {
       Svelte treats custom elements as first-class citizens — no wrappers, no adapters.
     </p>
     <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-      <hx-button variant="primary" size="lg">Get Started</hx-button>
-      <hx-button variant="secondary" size="lg">View Components</hx-button>
+      <hx-button variant="primary" hx-size="lg">Get Started</hx-button>
+      <hx-button variant="secondary" hx-size="lg">View Components</hx-button>
     </div>
   </section>
 
@@ -6527,7 +6527,7 @@ body {
 
   <section class="feature-grid" style="margin-top: 2rem;">
     <hx-card>
-      <div slot="header">
+      <div slot="heading">
         <h3>Svelte 5 Runes</h3>
         <hx-badge variant="success">$state</hx-badge>
       </div>
@@ -6535,14 +6535,14 @@ body {
         Fine-grained reactivity with no boilerplate. Count: <strong>{count}</strong>, Doubled: <strong>{doubled}</strong>
       </p>
       <div style="display: flex; gap: 0.5rem; align-items: center;">
-        <hx-button variant="secondary" size="sm" onclick={() => count--}>−</hx-button>
-        <hx-button variant="primary" size="sm" onclick={() => count++}>+</hx-button>
-        <hx-button variant="ghost" size="sm" onclick={() => (count = 0)}>Reset</hx-button>
+        <hx-button variant="secondary" hx-size="sm" onclick={() => count--}>−</hx-button>
+        <hx-button variant="primary" hx-size="sm" onclick={() => count++}>+</hx-button>
+        <hx-button variant="ghost" hx-size="sm" onclick={() => (count = 0)}>Reset</hx-button>
       </div>
     </hx-card>
 
     <hx-card>
-      <div slot="header">
+      <div slot="heading">
         <h3>Interactive Demo</h3>
         <hx-badge variant="info">Custom Events</hx-badge>
       </div>
@@ -6565,15 +6565,15 @@ body {
     </hx-card>
 
     <hx-card>
-      <div slot="header"><h3>Component Showcase</h3></div>
+      <div slot="heading"><h3>Component Showcase</h3></div>
       <p style="color: var(--hx-color-text-secondary, #666); margin-bottom: 1rem;">
         HELiX ships 98+ production-ready components.
       </p>
       <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
-        <hx-button variant="primary" size="sm">Primary</hx-button>
-        <hx-button variant="secondary" size="sm">Secondary</hx-button>
-        <hx-button variant="danger" size="sm">Danger</hx-button>
-        <hx-button variant="ghost" size="sm">Ghost</hx-button>
+        <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+        <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+        <hx-button variant="danger" hx-size="sm">Danger</hx-button>
+        <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
       </div>
       <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <hx-badge variant="default">Default</hx-badge>
@@ -7185,7 +7185,7 @@ function handleThemeChange(e: Event) {
     <div slot="actions" style="display: flex; align-items: center; gap: 0.75rem;">
       <div style="display: flex; align-items: center; gap: 0.5rem;">
         <span style="font-size: 0.8rem;">Dark</span>
-        <hx-switch size="sm" :checked="isDark" @hx-change="handleThemeChange" />
+        <hx-switch hx-size="sm" :checked="isDark" @hx-change="handleThemeChange" />
       </div>
       <a
         href="https://github.com/bookedsolidtech"
@@ -7324,12 +7324,12 @@ function handleInput(e: Event) {
         75+ accessible, themeable components with Shadow DOM encapsulation.
       </p>
       <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
-        <hx-button variant="primary" size="lg">
+        <hx-button variant="primary" hx-size="lg">
           <NuxtLink to="/examples/forms" style="color: inherit; text-decoration: none;">
             See Forms Demo
           </NuxtLink>
         </hx-button>
-        <hx-button variant="secondary" size="lg">
+        <hx-button variant="secondary" hx-size="lg">
           <NuxtLink to="/components" style="color: inherit; text-decoration: none;">
             Browse Components
           </NuxtLink>
@@ -7355,7 +7355,7 @@ function handleInput(e: Event) {
 
     <div class="grid-auto">
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Interactive Input</h3>
           <hx-badge variant="info">Forms</hx-badge>
         </div>
@@ -7374,21 +7374,21 @@ function handleInput(e: Event) {
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Button Variants</h3>
           <hx-badge variant="success">Actions</hx-badge>
         </div>
         <p class="text-secondary" style="margin-bottom: 1rem;">All button styles respond to the active theme.</p>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="danger" size="sm">Danger</hx-button>
-          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+          <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+          <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+          <hx-button variant="danger" hx-size="sm">Danger</hx-button>
+          <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
         </div>
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Data Display</h3>
           <hx-badge variant="warning">Metrics</hx-badge>
         </div>
@@ -7407,14 +7407,14 @@ function handleInput(e: Event) {
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Avatars &amp; Badges</h3>
           <hx-badge variant="danger">Identity</hx-badge>
         </div>
         <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-          <hx-avatar size="sm">AB</hx-avatar>
-          <hx-avatar size="md">CD</hx-avatar>
-          <hx-avatar size="lg">EF</hx-avatar>
+          <hx-avatar hx-size="sm">AB</hx-avatar>
+          <hx-avatar hx-size="md">CD</hx-avatar>
+          <hx-avatar hx-size="lg">EF</hx-avatar>
           <hx-divider vertical style="height: 2rem;" />
           <hx-badge variant="info">Info</hx-badge>
           <hx-badge variant="success">Success</hx-badge>
@@ -7435,7 +7435,7 @@ function handleInput(e: Event) {
       <hx-tab-panel>
         <div style="padding: 1.5rem 0;">
           <hx-card>
-            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
               <h3 style="margin: 0;">Using HELiX in Nuxt 4</h3>
               <hx-badge variant="info">Architecture</hx-badge>
             </div>
@@ -7453,7 +7453,7 @@ function handleInput(e: Event) {
       <hx-tab-panel>
         <div style="padding: 1.5rem 0;">
           <hx-card>
-            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
               <h3 style="margin: 0;">CSS Custom Properties</h3>
               <hx-badge variant="success">Tokens</hx-badge>
             </div>
@@ -7476,7 +7476,7 @@ hx-button::part(button) {
       <hx-tab-panel>
         <div style="padding: 1.5rem 0;">
           <hx-card>
-            <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
               <h3 style="margin: 0;">Vue Event Handling</h3>
               <hx-badge variant="warning">Events</hx-badge>
             </div>
@@ -7538,7 +7538,7 @@ function handleInput(e: Event) {
 
     <div class="grid-3">
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Key Files</h3>
           <hx-badge variant="info">Reference</hx-badge>
         </div>
@@ -7553,7 +7553,7 @@ function handleInput(e: Event) {
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Commands</h3>
           <hx-badge variant="success">CLI</hx-badge>
         </div>
@@ -7569,7 +7569,7 @@ function handleInput(e: Event) {
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Next Steps</h3>
           <hx-badge variant="warning">Action</hx-badge>
         </div>
@@ -7611,20 +7611,20 @@ useHead({
     </div>
     <div style="display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Button</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="ghost" size="sm">Ghost</hx-button>
+          <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+          <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+          <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
         </div>
         <p class="text-secondary" style="font-size: 0.85rem;">Multi-variant button with full keyboard support.</p>
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Badge</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
@@ -7638,20 +7638,20 @@ useHead({
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Avatar</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
         <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
-          <hx-avatar size="sm">AB</hx-avatar>
-          <hx-avatar size="md">CD</hx-avatar>
-          <hx-avatar size="lg">EF</hx-avatar>
+          <hx-avatar hx-size="sm">AB</hx-avatar>
+          <hx-avatar hx-size="md">CD</hx-avatar>
+          <hx-avatar hx-size="lg">EF</hx-avatar>
         </div>
         <p class="text-secondary" style="font-size: 0.85rem;">User identity with initials or image support.</p>
       </hx-card>
 
       <hx-card>
-        <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div slot="heading" style="display: flex; justify-content: space-between; align-items: center;">
           <h3 style="margin: 0;">Progress Bar</h3>
           <hx-badge variant="success">Stable</hx-badge>
         </div>
@@ -7708,7 +7708,7 @@ function handleSubmit(e: Event) {
     </p>
 
     <hx-card>
-      <div slot="header"><h2>Registration Form</h2></div>
+      <div slot="heading"><h2>Registration Form</h2></div>
       <form style="display: flex; flex-direction: column; gap: 1.5rem;" @submit="handleSubmit">
         <div style="display: grid; gap: 1rem; grid-template-columns: 1fr 1fr;">
           <hx-text-input name="firstName" label="First name" placeholder="Jane" required />
@@ -7731,7 +7731,7 @@ function handleSubmit(e: Event) {
     </hx-card>
 
     <hx-card v-if="submitted" style="margin-top: 1.5rem;">
-      <div slot="header">
+      <div slot="heading">
         <h3>Form Data (from FormData API)</h3>
         <hx-badge variant="success">Submitted</hx-badge>
       </div>
@@ -7739,7 +7739,7 @@ function handleSubmit(e: Event) {
     </hx-card>
 
     <hx-card style="margin-top: 1.5rem;">
-      <div slot="header"><h3>How It Works</h3></div>
+      <div slot="heading"><h3>How It Works</h3></div>
       <ul style="line-height: 2; padding-left: 1.5rem;">
         <li><strong>ElementInternals:</strong> Each HELiX form component calls <code>this.internals.setFormValue()</code></li>
         <li><strong>FormData:</strong> Values appear in <code>new FormData(form)</code> automatically</li>
@@ -7768,7 +7768,7 @@ const handleClear = () => clearError({ redirect: '/' });
   <hx-theme theme="auto">
     <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem;">
       <hx-card style="max-width: 500px; width: 100%; text-align: center;">
-        <div slot="header">
+        <div slot="heading">
           <hx-badge variant="danger">{{ error.statusCode }}</hx-badge>
         </div>
         <h1 style="margin-bottom: 1rem;">{{ error.statusMessage || 'An error occurred' }}</h1>
@@ -7886,7 +7886,7 @@ bootstrapApplication(AppComponent).catch((err) => console.error(err));
       <p>Enterprise Angular with native custom element support via CUSTOM_ELEMENTS_SCHEMA.</p>
 
       <hx-card>
-        <div slot="header"><h2>Interactive Form</h2></div>
+        <div slot="heading"><h2>Interactive Form</h2></div>
         <hx-text-input
           label="Your name"
           placeholder="Enter your name"
@@ -7904,7 +7904,7 @@ bootstrapApplication(AppComponent).catch((err) => console.error(err));
       </hx-card>
 
       <hx-card style="margin-top: 1.5rem">
-        <div slot="header"><h2>Angular Signals + WC</h2></div>
+        <div slot="heading"><h2>Angular Signals + WC</h2></div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
           <hx-button variant="primary">Primary</hx-button>
           <hx-button variant="secondary">Secondary</hx-button>
@@ -8042,7 +8042,7 @@ export default function App() {
       <h1>HELiX + SolidJS + Vite</h1>
 
       <hx-card>
-        <div slot="header">
+        <div slot="heading">
           <h2>Reactive Counter</h2>
         </div>
         <p>
@@ -8057,7 +8057,7 @@ export default function App() {
       </hx-card>
 
       <hx-card style="margin-top: 1.5rem">
-        <div slot="header">
+        <div slot="heading">
           <h2>SolidJS + Web Components</h2>
           <hx-badge variant="info">Native Support</hx-badge>
         </div>
@@ -8066,13 +8066,13 @@ export default function App() {
           components. Properties and events bind natively without wrappers.
         </p>
         <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <hx-button variant="primary" size="sm">
+          <hx-button variant="primary" hx-size="sm">
             Primary
           </hx-button>
-          <hx-button variant="secondary" size="sm">
+          <hx-button variant="secondary" hx-size="sm">
             Secondary
           </hx-button>
-          <hx-button variant="danger" size="sm">
+          <hx-button variant="danger" hx-size="sm">
             Danger
           </hx-button>
         </div>
@@ -8267,7 +8267,7 @@ export const App = component$(() => {
       <h1>${sanitizeForHtml(options.name)}</h1>
 
       <hx-card>
-        <div slot="header"><h2>Counter Demo</h2></div>
+        <div slot="heading"><h2>Counter Demo</h2></div>
         <p>Count: {count.value}</p>
         <hx-button variant="primary" onClick$={() => count.value++}>
           Increment
@@ -8282,16 +8282,16 @@ export const App = component$(() => {
       </hx-card>
 
       <hx-card style="margin-top: 1.5rem">
-        <div slot="header">
+        <div slot="heading">
           <h2>Qwik + Web Components</h2>
           <hx-badge variant="info">Resumable</hx-badge>
         </div>
         <p>Qwik uses resumability — no hydration cost. Web components bind natively
         and load lazily with zero JavaScript overhead by default.</p>
         <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <hx-button variant="primary" size="sm">Primary</hx-button>
-          <hx-button variant="secondary" size="sm">Secondary</hx-button>
-          <hx-button variant="danger" size="sm">Danger</hx-button>
+          <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+          <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+          <hx-button variant="danger" hx-size="sm">Danger</hx-button>
         </div>
       </hx-card>
     </div>
@@ -8397,7 +8397,7 @@ export class MyElement extends LitElement {
       <div class="container">
         <h1>HELiX + Lit + Vite</h1>
         <hx-card>
-          <div slot="header"><h2>Counter Demo</h2></div>
+          <div slot="heading"><h2>Counter Demo</h2></div>
           <p>Count: \${this.count}</p>
           <hx-button variant="primary" @click=\${() => this.count++}>
             Increment
@@ -8412,7 +8412,7 @@ export class MyElement extends LitElement {
         </hx-card>
 
         <hx-card style="margin-top: 1.5rem">
-          <div slot="header">
+          <div slot="heading">
             <h2>Lit + Web Components</h2>
             <hx-badge variant="info">Native Support</hx-badge>
           </div>
@@ -8420,9 +8420,9 @@ export class MyElement extends LitElement {
           Shadow DOM, and HTML Templates — making it ideal for composing
           HELiX components with minimal overhead.</p>
           <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <hx-button variant="primary" size="sm">Primary</hx-button>
-            <hx-button variant="secondary" size="sm">Secondary</hx-button>
-            <hx-button variant="danger" size="sm">Danger</hx-button>
+            <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+            <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+            <hx-button variant="danger" hx-size="sm">Danger</hx-button>
           </div>
         </hx-card>
       </div>
@@ -14093,7 +14093,7 @@ export function Navbar() {
       <div slot="actions" style="display:flex;align-items:center;gap:0.75rem;">
         <div style="display:flex;align-items:center;gap:0.5rem;">
           <span style="font-size:0.8rem;">Dark</span>
-          <hx-switch ref={switchRef} size="sm" />
+          <hx-switch ref={switchRef} hx-size="sm" />
         </div>
         <a href="https://github.com/bookedsolidtech" target="_blank" rel="noopener noreferrer"
           style="color:inherit;display:flex;align-items:center;opacity:0.7;" title="Booked Solid on GitHub">
@@ -14234,10 +14234,10 @@ export function App() {
             75+ accessible, themeable HELiX components work natively with Preact — no wrappers needed.
           </p>
           <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
-            <hx-button variant="primary" size="lg">
+            <hx-button variant="primary" hx-size="lg">
               <a href="#components" style="color:inherit;text-decoration:none;">See Components</a>
             </hx-button>
-            <hx-button variant="secondary" size="lg">
+            <hx-button variant="secondary" hx-size="lg">
               <a href="#interactive" style="color:inherit;text-decoration:none;">Try the Demo</a>
             </hx-button>
           </div>
@@ -14261,7 +14261,7 @@ export function App() {
         <div class="grid-auto">
           {/* Button Variants */}
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Button Variants</h3>
               <hx-badge variant="success">Actions</hx-badge>
             </div>
@@ -14269,16 +14269,16 @@ export function App() {
               All button styles respond to the active theme.
             </p>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-              <hx-button variant="primary" size="sm">Primary</hx-button>
-              <hx-button variant="secondary" size="sm">Secondary</hx-button>
-              <hx-button variant="danger" size="sm">Danger</hx-button>
-              <hx-button variant="ghost" size="sm">Ghost</hx-button>
+              <hx-button variant="primary" hx-size="sm">Primary</hx-button>
+              <hx-button variant="secondary" hx-size="sm">Secondary</hx-button>
+              <hx-button variant="danger" hx-size="sm">Danger</hx-button>
+              <hx-button variant="ghost" hx-size="sm">Ghost</hx-button>
             </div>
           </hx-card>
 
           {/* Badges & Tags */}
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Badges &amp; Tags</h3>
               <hx-badge variant="info">Status</hx-badge>
             </div>
@@ -14298,7 +14298,7 @@ export function App() {
 
           {/* Data Display */}
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Data Display</h3>
               <hx-badge variant="warning">Metrics</hx-badge>
             </div>
@@ -14309,16 +14309,16 @@ export function App() {
               </div>
               <hx-progress-bar value={87} max={100}></hx-progress-bar>
               <div style="display:flex;gap:1rem;align-items:center;margin-top:0.5rem;">
-                <hx-avatar size="sm">AB</hx-avatar>
-                <hx-avatar size="md">CD</hx-avatar>
-                <hx-avatar size="lg">EF</hx-avatar>
+                <hx-avatar hx-size="sm">AB</hx-avatar>
+                <hx-avatar hx-size="md">CD</hx-avatar>
+                <hx-avatar hx-size="lg">EF</hx-avatar>
               </div>
             </div>
           </hx-card>
 
           {/* Why Preact */}
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Why Preact?</h3>
               <hx-badge variant="danger">3kB</hx-badge>
             </div>
@@ -14341,7 +14341,7 @@ export function App() {
 
         <div class="grid-auto">
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Say Hello</h3>
               <hx-badge variant="info">hx-input + hx-click</hx-badge>
             </div>
@@ -14363,7 +14363,7 @@ export function App() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Preact Patterns</h3>
               <hx-badge variant="warning">Architecture</hx-badge>
             </div>
@@ -14429,7 +14429,7 @@ export function App() {
 
         <div class="grid-3">
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Key Files</h3>
               <hx-badge variant="info">Reference</hx-badge>
             </div>
@@ -14444,7 +14444,7 @@ export function App() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Commands</h3>
               <hx-badge variant="success">CLI</hx-badge>
             </div>
@@ -14460,7 +14460,7 @@ export function App() {
           </hx-card>
 
           <hx-card>
-            <div slot="header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div slot="heading" style="display:flex;justify-content:space-between;align-items:center;">
               <h3 style="margin:0;">Next Steps</h3>
               <hx-badge variant="warning">Action</hx-badge>
             </div>
@@ -15424,7 +15424,7 @@ Router.map(function () {
   await safeWriteFile(
     path.join(templatesDir, 'application.hbs'),
     `<hx-card>
-  <div slot="header"><h1>Welcome to {{this.name}}</h1></div>
+  <div slot="heading"><h1>Welcome to {{this.name}}</h1></div>
   <p>Built with HELiX web components and Ember.js.</p>
   <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
     <hx-button variant="primary">Get Started</hx-button>
