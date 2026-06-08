@@ -9,6 +9,7 @@ import {
   HELIX_LIBRARY_VERSION,
   HELIX_TOKENS_MAJOR,
   HELIX_ICONS_VERSION,
+  libraryProvablyAtLeast,
 } from './helix-versions.js';
 
 export interface CheckResult {
@@ -324,21 +325,21 @@ export function checkHelixIcons(cwd: string): CheckResult {
   }
   const { version, pkgJsonPath } = resolved;
   // The HELIX_ICONS_VERSION patch floor (1.0.4) is ONLY required once
-  // @helixui/library is on 3.10.0+ — that's the release that tightened the
-  // <hx-icon> registry peer to icons 1.0.4 exactly. The earlier 3.9.x pins
+  // @helixui/library is a stable 3.10.0+ — that's the release that tightened
+  // the <hx-icon> registry peer to icons 1.0.4 exactly. The earlier 3.9.x pins
   // paired with icons 1.0.1, so an un-upgraded 3.9.x scaffold (or anything
-  // below 3.10.0, or no library at all) is fine on icons 1.0.1–1.0.3 and must
-  // NOT be flagged. Gate on a minor-aware library >= 3.10.0 floor, checking
-  // both the resolved install and every declared range so a broad/union range
-  // that permits 3.10 (e.g. `^1.0.0 || ^3.10.0`) is still caught.
+  // below 3.10.0, an upper-bound/prerelease/workspace range, or no library at
+  // all) is fine on icons 1.0.1–1.0.3 and must NOT be flagged. The shared
+  // `libraryProvablyAtLeast` predicate fails open on every ambiguous form.
+  const libraryFloor = HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '');
   if (
-    libraryAtLeast(dir, '@helixui/library', HELIX_LIBRARY_VERSION) &&
+    libraryAtLeast(dir, '@helixui/library', libraryFloor) &&
     !versionAtLeast(version, HELIX_ICONS_VERSION)
   ) {
     return {
       name: '@helixui/icons',
       status: 'fail',
-      message: `v${version} — below the ${HELIX_ICONS_VERSION} floor @helixui/library@${HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '')}+ requires; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
+      message: `v${version} — below the ${HELIX_ICONS_VERSION} floor @helixui/library@${libraryFloor}+ requires; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
     };
   }
   return {
@@ -375,39 +376,23 @@ function declaredMaxMajor(dir: string, pkgName: string): number {
 }
 
 /**
- * Effective lower bound of a single range leaf, normalized so `versionAtLeast`
- * (which only parses bare/`^`/`~`/`v` forms) can read it. Handles the
- * comparator forms a consumer can legally put in package.json:
- *   - `>=3.10.0` / `>3.9.0` / `=3.10.0` → the bound version
- *   - `>=3.10.0 <4.0.0` (compound) → the FIRST clause (the lower bound)
- * Strips a single leading comparator operator from the first whitespace token.
- * `^`/`~`/`v`/bare forms pass through unchanged for `versionAtLeast`.
- */
-function rangeLowerBound(leaf: string): string {
-  const firstClause = leaf.trim().split(/\s+/)[0] ?? '';
-  return firstClause.replace(/^(>=|<=|>|<|=)/, '');
-}
-
-/**
- * Does `@helixui/library` resolve or declare at >= `floor` (a minor-aware
- * semver floor, e.g. `^3.10.0`)? Used to gate the @helixui/icons 1.0.4 peer,
- * which is required only from @helixui/library 3.10.0 onward — NOT from the
- * earlier 3.9.x pins, which paired with icons 1.0.1. A major-only check would
- * wrongly flag an un-upgraded 3.9.x scaffold.
+ * Is `@helixui/library` PROVABLY a stable version >= `floor` (a clean `M.m.p`,
+ * e.g. `3.10.0`)? Gates the @helixui/icons 1.0.4 peer, which is required only
+ * from library 3.10.0 onward — NOT from the earlier 3.9.x pins, which paired
+ * with icons 1.0.1.
  *
- * Checks the RESOLVED install first (the ground truth), then every declared
- * range. Union/OR ranges (`^1.0.0 || ^3.9.1`) are split so each leaf is
- * compared, and each leaf's effective lower bound is normalized through
- * `rangeLowerBound` so comparator forms (`>=3.10.0`, `>=3.10.0 <4.0.0`) are
- * understood, not just bare/`^`/`~`. A project whose declared range merely
- * PERMITS 3.10 is treated as on-floor (over-approximating to avoid false
- * negatives); unparseable leaves stay conservative (no enforcement).
+ * Fails OPEN on ambiguity via the shared `libraryProvablyAtLeast` predicate (a
+ * single source of truth shared with `upgrade`, so the two paths can't drift):
+ * only an UNAMBIGUOUS clean lower-bound form >= floor enforces; upper-bound
+ * ranges (`<3.10.0`, `<4.0.0`), prereleases (`3.10.0-next.5`), `workspace:`/
+ * `catalog:`/alias/wildcard, and anything below 3.10 stay silent. Checks the
+ * RESOLVED install (ground truth) plus every `||`-split declared range leaf.
  */
 function libraryAtLeast(dir: string, pkgName: string, floor: string): boolean {
   const resolved = readConsumerPackageVersion(dir, pkgName);
-  if (resolved !== null && versionAtLeast(resolved.version, floor)) return true;
+  if (resolved !== null && libraryProvablyAtLeast(resolved.version, floor)) return true;
   return declaredRanges(dir, pkgName).some((range) =>
-    range.split('||').some((leaf) => versionAtLeast(rangeLowerBound(leaf), floor)),
+    range.split('||').some((leaf) => libraryProvablyAtLeast(leaf, floor)),
   );
 }
 

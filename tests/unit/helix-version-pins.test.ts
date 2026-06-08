@@ -6,6 +6,7 @@ import {
   HELIX_LIBRARY_MAJOR,
   HELIX_TOKENS_MAJOR,
   HELIX_ICONS_MAJOR,
+  libraryProvablyAtLeast,
 } from '../../src/helix-versions.js';
 import { TEMPLATES } from '../../src/templates.js';
 
@@ -95,5 +96,58 @@ describe('HELiX version pin coherence', () => {
     // Guard the guard: at least one template must declare a HELiX pin, otherwise
     // a refactor that stops emitting them would make this test vacuously pass.
     expect(assertions).toBeGreaterThan(0);
+  });
+});
+
+describe('libraryProvablyAtLeast — fail-open icons-floor gate', () => {
+  const FLOOR = '3.10.0';
+
+  it.each([
+    // Clean lower-bound forms whose minimum is >= 3.10.0 → ENFORCE.
+    '3.10.0',
+    '3.11.2',
+    'v3.10.0',
+    '^3.10.0',
+    '^3.10',
+    '~3.10.0',
+    '~3.10',
+    '>=3.10.0',
+    '>3.10.0',
+    '>=3.10.0 <4.0.0', // compound: first clause is a clean >= 3.10 lower bound
+  ])('enforces for the provable >=3.10 form %j', (spec) => {
+    expect(libraryProvablyAtLeast(spec, FLOOR)).toBe(true);
+  });
+
+  it.each([
+    // Below the floor.
+    '^3.9.1',
+    '>=3.9.0',
+    '~3.9',
+    '3.9.4',
+    '^2.5.0',
+    '2.x',
+    // Upper-bound-bearing / no lower bound → ambiguous.
+    '<3.10.0',
+    '<=3.10.0',
+    '<4.0.0',
+    '<4.0.0 >=3.10.0', // leads with an upper bound → reject
+    // Prerelease tag → ambiguous (may predate the tightened peer).
+    '3.10.0-next.5',
+    '^3.10.0-next.1',
+    // Non-version specs / wildcards / unparseable.
+    'workspace:*',
+    'catalog:',
+    'npm:@x/y@3.10.0',
+    '3.x',
+    '*',
+    'latest',
+    '',
+  ])('fails open (returns false) for the ambiguous/below-floor form %j', (spec) => {
+    expect(libraryProvablyAtLeast(spec, FLOOR)).toBe(false);
+  });
+
+  it('returns false when the floor itself is not a clean version', () => {
+    // Defensive: a malformed floor must never enforce.
+    expect(libraryProvablyAtLeast('3.11.0', 'not-a-version')).toBe(false);
   });
 });

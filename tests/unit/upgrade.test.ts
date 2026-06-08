@@ -1392,6 +1392,79 @@ describe('upgrade command', () => {
       };
       expect(updated.dependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
     });
+
+    it('does NOT raise icons when @helixui/library is an upper-bound <3.10.0 range even if registry latest is 3.10', async () => {
+      // REGRESSION GUARD: an upper-bound spec must never be misread as ">=3.10".
+      // Even with the registry reporting 3.10 as latest, `<3.10.0` is not a
+      // provable >=3.10 lower bound, so icons must stay at ^1.0.1.
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/library': '3.10.0' },
+      });
+      const dir = makeTmpProject({
+        name: 'upper-bound-lt-310-icons-untouched',
+        dependencies: {
+          '@helixui/library': '<3.10.0',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+    });
+
+    it('does NOT raise icons when @helixui/library is a bare upper-bound <4.0.0 range even if registry latest is 3.10', async () => {
+      // `<4.0.0` permits 1.x/2.x/3.9.x too — no lower bound, so not proof of
+      // >=3.10. Fail open: icons untouched.
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/library': '3.10.0' },
+      });
+      const dir = makeTmpProject({
+        name: 'upper-bound-lt-400-icons-untouched',
+        dependencies: {
+          '@helixui/library': '<4.0.0',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+    });
+
+    it('does NOT raise icons when @helixui/library is a 3.10.0-next prerelease (ambiguous, fail open)', async () => {
+      // A 3.10.0 prerelease may predate the tightened <hx-icon> peer — ambiguous
+      // → fail open. Even installed at the prerelease, icons must stay ^1.0.1.
+      vi.mocked(readRegistryCache).mockReturnValue({
+        updatedAt: Date.now(),
+        packages: { '@helixui/library': '3.10.0' },
+      });
+      const dir = makeTmpProject({
+        name: 'prerelease-library-icons-untouched',
+        dependencies: {
+          '@helixui/library': '3.10.0-next.5',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+    });
   });
 
   // ─── v0.9.2: --offline serves from the registry cache ────────────────────

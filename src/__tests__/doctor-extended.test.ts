@@ -114,12 +114,11 @@ describe('checkHelixIcons', () => {
     expect(result.message).toContain(HELIX_ICONS_VERSION);
   });
 
-  it('flags icons 1.0.1 when @helixui/library is a >=3.10.0 comparator range (floor applies)', () => {
+  it('flags icons 1.0.1 when @helixui/library is a >=3.10.0 <4.0.0 comparator range (clean lower bound >=3.10)', () => {
     // A peer-only / app manifest can legally declare the library as a
-    // comparator range like `>=3.10.0` (or `>=3.10.0 <4.0.0`). versionAtLeast
-    // alone only parses bare/^/~ forms, so the gate must normalize the lower
-    // bound — otherwise it wrongly ACCEPTS icons 1.0.1 against a contract that
-    // already requires 1.0.4 (codex final pass, Finding 2).
+    // comparator range. The clean lower bound (>=3.10.0) is >= the floor, so
+    // the icons floor must apply. libraryProvablyAtLeast reads the first clause
+    // as the lower bound and ignores the <4.0.0 upper clause.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       peerDependencies: { '@helixui/library': '>=3.10.0 <4.0.0' },
@@ -136,13 +135,63 @@ describe('checkHelixIcons', () => {
   });
 
   it('does NOT flag icons 1.0.1 when @helixui/library is a >=3.9.0 comparator range (below floor)', () => {
-    // The comparator-range understanding must stay minor-aware: a `>=3.9.0`
-    // lower bound is below 3.10.0, so the floor must NOT apply — a project
-    // permitting 3.9.x with icons 1.0.1 is valid.
+    // A `>=3.9.0` lower bound is below 3.10.0, so the floor must NOT apply — a
+    // project permitting 3.9.x with icons 1.0.1 is valid.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       peerDependencies: { '@helixui/library': '>=3.9.0' },
       dependencies: { '@helixui/icons': '^1.0.1' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '1.0.1',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v1\.0\.1/);
+  });
+
+  it('does NOT flag icons 1.0.1 when @helixui/library is an upper-bound <3.10.0 range (fail open)', () => {
+    // REGRESSION GUARD: stripping the comparator from an upper-bound leaf would
+    // misread `<3.10.0` as ">=3.10". An upper bound caps the library BELOW the
+    // floor (or anywhere), so the floor must NOT apply — fail open.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      peerDependencies: { '@helixui/library': '<3.10.0' },
+      dependencies: { '@helixui/icons': '^1.0.1' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '1.0.1',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v1\.0\.1/);
+  });
+
+  it('does NOT flag icons 1.0.1 when @helixui/library is an upper-bound <4.0.0 range (fail open)', () => {
+    // Same regression: a bare `<4.0.0` is an upper bound with no lower bound —
+    // it permits 1.x/2.x/3.9.x too, so it is NOT proof of >=3.10. Fail open.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      peerDependencies: { '@helixui/library': '<4.0.0' },
+      dependencies: { '@helixui/icons': '^1.0.1' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '1.0.1',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v1\.0\.1/);
+  });
+
+  it('does NOT flag icons 1.0.1 when @helixui/library is a 3.10.0-next prerelease (ambiguous, fail open)', () => {
+    // A 3.10.0 PRERELEASE may predate the tightened <hx-icon> peer, so a
+    // prerelease library spec is ambiguous — fail open and do not enforce.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      dependencies: { '@helixui/library': '3.10.0-next.5', '@helixui/icons': '^1.0.1' },
     });
     writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
       name: '@helixui/icons',

@@ -8,6 +8,7 @@ import {
   HELIX_LIBRARY_MAJOR,
   HELIX_LIBRARY_VERSION,
   HELIX_ICONS_VERSION,
+  libraryProvablyAtLeast,
 } from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
@@ -136,16 +137,6 @@ function resolveInstalledVersion(dir: string, pkgName: string): string | undefin
   }
 }
 
-/**
- * Is `spec` (a version or range leaf) >= `floor` on a minor-aware semver
- * comparison? `compareSemver` parses leading `^`/`~`, so `^3.9.1` vs `3.10.0`
- * correctly reports below-floor. Unparseable specs return false (conservative —
- * the floor is not applied rather than risk a wrong rewrite).
- */
-function specMeetsFloor(spec: string, floor: string): boolean {
-  return (compareSemver(spec, floor) ?? -1) >= 0;
-}
-
 /** Every `||`-split leaf of `@helixui/library`'s declared ranges across buckets. */
 function declaredLibraryLeaves(pkg: PackageJson): string[] {
   return DEP_BUCKETS.flatMap((b) => {
@@ -155,24 +146,28 @@ function declaredLibraryLeaves(pkg: PackageJson): string[] {
 }
 
 /**
- * Will `@helixui/library` PROVABLY be >= `floor` (minor-aware, e.g. `^3.10.0`)
- * after this run? Gates the @helixui/icons 1.0.4 peer, which is required only
- * from library 3.10.0 onward — NOT from the earlier 3.9.x pins, which paired
- * with icons 1.0.1.
+ * Will `@helixui/library` PROVABLY be a stable version >= `floor` (a clean
+ * `M.m.p`, e.g. `3.10.0`) after this run? Gates the @helixui/icons 1.0.4 peer,
+ * required only from library 3.10.0 onward — NOT from the earlier 3.9.x pins,
+ * which paired with icons 1.0.1.
  *
- * "Provable" is the key word: `upgrade` must only raise icons when it can show
- * the library actually reaches 3.10. Three positive signals:
- *   1. the RESOLVED install is already >= floor (ground truth), or
- *   2. a PARSEABLE declared range leaf is already >= floor, or
- *   3. the plan will MOVE the library to >= floor — which means a declared leaf
- *      is parseable AND strictly below the registry latest (so buildUpgradePlan
- *      marks it `changed`) AND that registry latest is >= floor.
+ * "Provable" is the key word: `upgrade` must only raise icons when it can show,
+ * unambiguously, that the library reaches a stable 3.10. Three positive signals
+ * — all routed through the SHARED `libraryProvablyAtLeast` predicate (the same
+ * one `doctor` uses, so the two paths can't drift), which fails OPEN on every
+ * ambiguous form (upper-bound ranges, prereleases, workspace:/catalog:/alias,
+ * wildcards, below-floor):
+ *   1. the RESOLVED install is provably >= floor (ground truth), or
+ *   2. a declared leaf is provably >= floor already, or
+ *   3. the plan will MOVE the library to the registry latest — which needs a
+ *      declared leaf that PARSES and is strictly below that latest (so
+ *      buildUpgradePlan marks it `changed`) AND a registry latest that is itself
+ *      a provable stable >= floor.
  *
- * Crucially, `registryLatest >= floor` ALONE is NOT proof: when every declared
- * spec is unparseable — `workspace:*`, `catalog:...`, an npm alias — the plan
- * leaves the library untouched (compareSemver → null), so the library is NOT
- * actually reaching 3.10 and icons must NOT be raised. Monorepo scaffolds use
- * `workspace:*`/`catalog:` library specs, so this is a real path.
+ * Signal 3 is why `registryLatest >= floor` ALONE is never proof: when every
+ * declared spec is unparseable — `workspace:*`, `catalog:...`, an npm alias —
+ * `compareSemver` returns null, the plan leaves the library untouched, and icons
+ * must NOT be raised. Monorepo scaffolds use those specs, so this is a real path.
  */
 function libraryMeetsFloor(
   pkg: PackageJson,
@@ -181,17 +176,18 @@ function libraryMeetsFloor(
   floor: string,
 ): boolean {
   const installed = resolveInstalledVersion(projectDir, '@helixui/library');
-  if (installed !== undefined && specMeetsFloor(installed, floor)) return true;
+  if (installed !== undefined && libraryProvablyAtLeast(installed, floor)) return true;
 
   const declaredLeaves = declaredLibraryLeaves(pkg);
-  // Already declared at >= floor (parseable leaf).
-  if (declaredLeaves.some((leaf) => specMeetsFloor(leaf, floor))) return true;
+  // Already declared at a provable >= floor.
+  if (declaredLeaves.some((leaf) => libraryProvablyAtLeast(leaf, floor))) return true;
 
-  // The plan will move the library to the registry latest only when a declared
-  // leaf parses AND is strictly below that latest (compareSemver === -1). An
+  // The plan moves the library to the registry latest only when a declared leaf
+  // parses AND is strictly below that latest (compareSemver === -1). An
   // unparseable spec (workspace:/catalog:/alias) compares null → not moved, so
-  // the registry latest is irrelevant and must not stand in as proof.
-  if (registryLatest !== undefined && specMeetsFloor(registryLatest, floor)) {
+  // the registry latest is irrelevant. And that latest must itself be a provable
+  // stable >= floor (a prerelease "latest" is not proof).
+  if (registryLatest !== undefined && libraryProvablyAtLeast(registryLatest, floor)) {
     return declaredLeaves.some((leaf) => compareSemver(leaf, registryLatest) === -1);
   }
   return false;
@@ -511,15 +507,17 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   // the floor) still wins; buildUpgradePlan's compareSemver guard refuses any
   // downgrade, so a project already above the floor is left untouched.
   //
-  // SCOPED to 3.10.0+: this floor is only required once @helixui/library is
-  // (or is becoming) 3.10.0+ — that's the release that tightened the <hx-icon>
-  // peer to icons 1.0.4. The earlier 3.9.x pins paired with icons 1.0.1, so a
-  // project on 3.9.x (or below 3.10.0, or on 1.x/2.x) must NOT have icons
-  // synthesized up to 1.0.4 — that would rewrite a perfectly valid pre-3.10
-  // pin. Mirror doctor's minor-aware gate across the resolved install, every
-  // declared range, and the registry bump target for library.
+  // SCOPED to a provable stable 3.10.0+: this floor is only required once
+  // @helixui/library is (or is becoming) 3.10.0+ — the release that tightened
+  // the <hx-icon> peer to icons 1.0.4. The earlier 3.9.x pins paired with icons
+  // 1.0.1, so a project on 3.9.x (or below 3.10.0, an upper-bound/prerelease/
+  // workspace range, or on 1.x/2.x) must NOT have icons synthesized up to 1.0.4
+  // — that would rewrite a perfectly valid pre-3.10 pin. The shared
+  // `libraryProvablyAtLeast` predicate (same one doctor uses) fails open on
+  // every ambiguous form.
+  const libraryFloor = HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '');
   if (
-    libraryMeetsFloor(pkg, projectDir, latestVersions['@helixui/library'], HELIX_LIBRARY_VERSION) &&
+    libraryMeetsFloor(pkg, projectDir, latestVersions['@helixui/library'], libraryFloor) &&
     installed['@helixui/icons'] !== undefined
   ) {
     const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
