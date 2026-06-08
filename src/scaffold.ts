@@ -990,8 +990,8 @@ a responsive semantic mode.)
 
 \`\`\`typescript
 // Individual imports (tree-shakeable)
-import '@helixui/library/hx-button';
-import '@helixui/library/hx-card';
+import '@helixui/library/components/hx-button';
+import '@helixui/library/components/hx-card';
 
 // Bundle import (all components)
 import '@helixui/library';
