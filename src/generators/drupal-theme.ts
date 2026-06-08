@@ -685,9 +685,9 @@ function generateNodeTeaserTwig(): string {
       <img slot="image" src="{{ image_url }}" alt="{{ image_alt|default('') }}" loading="lazy">
     {% endif %}
 
-    <div slot="header" class="node-teaser__header">
+    <div slot="heading" class="node-teaser__header">
       {% if category %}
-        <hx-badge variant="neutral" size="sm">{{ category }}</hx-badge>
+        <hx-badge variant="neutral" hx-size="sm">{{ category }}</hx-badge>
       {% endif %}
     </div>
 
@@ -706,7 +706,7 @@ function generateNodeTeaserTwig(): string {
 
     <div slot="footer" class="node-teaser__meta">
       {% if author_name %}
-        <hx-avatar size="sm" label="{{ author_name }}"></hx-avatar>
+        <hx-avatar hx-size="sm" label="{{ author_name }}"></hx-avatar>
         <hx-text variant="body-xs">{{ author_name }}</hx-text>
       {% endif %}
       {% if date %}

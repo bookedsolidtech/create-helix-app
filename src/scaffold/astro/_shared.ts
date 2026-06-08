@@ -615,7 +615,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
       <h2 id="features-title">Why teams choose ${dsTitle}</h2>
       <div class="features-grid">
         <hx-card>
-          <div slot="header" class="card-header">
+          <div slot="heading" class="card-header">
             <hx-icon library="fa-free" name="shield-halved" aria-hidden="true"></hx-icon>
             <h3>Accessible by default</h3>
           </div>
@@ -626,7 +626,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
         </hx-card>
 
         <hx-card>
-          <div slot="header" class="card-header">
+          <div slot="heading" class="card-header">
             <hx-icon library="fa-free" name="palette" aria-hidden="true"></hx-icon>
             <h3>Theme everything</h3>
           </div>
@@ -637,7 +637,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
         </hx-card>
 
         <hx-card>
-          <div slot="header" class="card-header">
+          <div slot="heading" class="card-header">
             <hx-icon library="fa-free" name="rocket" aria-hidden="true"></hx-icon>
             <h3>Framework agnostic</h3>
           </div>
@@ -1014,14 +1014,14 @@ import ThemeToggle from '../components/ThemeToggle.astro';
       <p>Container surface for grouping related content.</p>
       <div class="example-grid">
         <hx-card>
-          <h3 slot="header">Standard card</h3>
+          <h3 slot="heading">Standard card</h3>
           <p>Cards group related content into a visually distinct container.</p>
         </hx-card>
         <hx-card>
-          <h3 slot="header">With actions</h3>
+          <h3 slot="heading">With actions</h3>
           <p>Add buttons or links in the footer slot for card-level actions.</p>
           <div slot="footer">
-            <hx-button variant="primary" size="sm">Action</hx-button>
+            <hx-button variant="primary" hx-size="sm">Action</hx-button>
           </div>
         </hx-card>
       </div>
