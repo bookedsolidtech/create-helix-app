@@ -62,9 +62,9 @@ describe('checkHelixIcons', () => {
     expect(result.message).toMatch(/pnpm install/);
   });
 
-  it('fails when @helixui/icons resolves but is below the create-helix floor (0.9.0) on library 3.x', () => {
-    // The icons floor is only required once @helixui/library is 3.x, so the
-    // manifest must declare library 3.x for the floor gate to fire.
+  it('fails when @helixui/icons resolves but is below the create-helix floor (0.9.0) on library 3.10+', () => {
+    // The icons floor is only required once @helixui/library is 3.10.0+, so the
+    // manifest must declare library 3.10+ for the floor gate to fire.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       devDependencies: { '@helixui/library': '^3.10.0', '@helixui/icons': '^0.9.0' },
@@ -79,10 +79,10 @@ describe('checkHelixIcons', () => {
     expect(result.message).toContain(HELIX_ICONS_VERSION);
   });
 
-  it('fails when icons is 1.0.0 — below the floor — and @helixui/library is 3.x', () => {
+  it('fails when icons is 1.0.0 — below the floor — and @helixui/library is 3.10+', () => {
     // The major-only check this replaced would have passed 1.0.0; the
-    // tightened floor catches it (codex round-3 finding) — but ONLY when the
-    // library is 3.x, which is the release that peer-requires the floor.
+    // tightened floor catches it — but ONLY when the library is 3.10+, the
+    // release that peer-requires the floor.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       devDependencies: { '@helixui/library': '^3.10.0', '@helixui/icons': '^1.0.0' },
@@ -97,8 +97,8 @@ describe('checkHelixIcons', () => {
     expect(result.message).toContain(HELIX_ICONS_VERSION);
   });
 
-  it('flags icons 1.0.1 when @helixui/library is 3.x (floor applies)', () => {
-    // library 3.x + icons 1.0.1 → 1.0.1 is below the 1.0.4 floor the 3.x
+  it('flags icons 1.0.1 when @helixui/library is 3.10+ (floor applies)', () => {
+    // library 3.10+ + icons 1.0.1 → 1.0.1 is below the 1.0.4 floor the 3.10
     // <hx-icon> peer needs → FLAGGED.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
@@ -114,10 +114,28 @@ describe('checkHelixIcons', () => {
     expect(result.message).toContain(HELIX_ICONS_VERSION);
   });
 
+  it('does NOT flag icons 1.0.1 when @helixui/library is 3.9.x (floor is 3.10+ only)', () => {
+    // library 3.9.x + icons 1.0.1 → the 1.0.4 floor was tightened in 3.10.0;
+    // the 3.9.x pins paired with icons 1.0.1, so an un-upgraded 3.9.x scaffold
+    // must NOT be flagged. This is the minor-aware boundary the major-only gate
+    // missed (codex re-review) — the regression that falsely failed doctor for
+    // existing 3.9.x projects.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      dependencies: { '@helixui/library': '^3.9.1', '@helixui/icons': '^1.0.1' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '1.0.1',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v1\.0\.1/);
+  });
+
   it('does NOT flag icons 1.0.1 when @helixui/library is 2.x (floor does not apply)', () => {
-    // library 2.x + icons 1.0.1 → the 1.0.4 floor is a 3.x requirement, so a
-    // pre-3.x project resolving icons 1.0.1 must NOT be flagged. This is the
-    // regression the unconditional floor caused (codex Finding 2).
+    // library 2.x + icons 1.0.1 → the 1.0.4 floor is a 3.10+ requirement, so a
+    // pre-3.x project resolving icons 1.0.1 must NOT be flagged.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       dependencies: { '@helixui/library': '^2.5.0', '@helixui/icons': '^1.0.1' },
@@ -147,7 +165,7 @@ describe('checkHelixIcons', () => {
     expect(result.message).toMatch(/v1\.0\.1/);
   });
 
-  it('passes when @helixui/icons resolves at or above the create-helix floor on library 3.x', () => {
+  it('passes when @helixui/icons resolves at or above the create-helix floor on library 3.10+', () => {
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       devDependencies: { '@helixui/library': '^3.10.0', '@helixui/icons': '^1.0.1' },

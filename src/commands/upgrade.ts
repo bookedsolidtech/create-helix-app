@@ -4,7 +4,11 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { validateDirectory } from '../validation.js';
 import { detectOffline, readRegistryCache, writeRegistryCache } from '../network.js';
-import { HELIX_LIBRARY_MAJOR, HELIX_ICONS_VERSION } from '../helix-versions.js';
+import {
+  HELIX_LIBRARY_MAJOR,
+  HELIX_LIBRARY_VERSION,
+  HELIX_ICONS_VERSION,
+} from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
@@ -119,6 +123,53 @@ function resolveInstalledMajor(dir: string, pkgName: string): number {
   } catch {
     return 0;
   }
+}
+
+/** Resolved version string of `pkgName` in `dir`'s node_modules, or undefined. */
+function resolveInstalledVersion(dir: string, pkgName: string): string | undefined {
+  const pkgJsonPath = path.join(dir, 'node_modules', ...pkgName.split('/'), 'package.json');
+  try {
+    const raw = fs.readFileSync(pkgJsonPath, 'utf-8');
+    return (JSON.parse(raw) as { version?: string }).version;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Is `spec` (a version or range leaf) >= `floor` on a minor-aware semver
+ * comparison? `compareSemver` parses leading `^`/`~`, so `^3.9.1` vs `3.10.0`
+ * correctly reports below-floor. Unparseable specs return false (conservative —
+ * the floor is not applied rather than risk a wrong rewrite).
+ */
+function specMeetsFloor(spec: string, floor: string): boolean {
+  return (compareSemver(spec, floor) ?? -1) >= 0;
+}
+
+/**
+ * Does `@helixui/library` resolve, declare, or upgrade-target >= `floor`
+ * (minor-aware, e.g. `^3.10.0`)? Gates the @helixui/icons 1.0.4 peer, which is
+ * required only from library 3.10.0 onward — NOT from the earlier 3.9.x pins,
+ * which paired with icons 1.0.1. A major-only `>= 3` gate would wrongly rewrite
+ * an un-upgraded 3.9.x scaffold. Over-approximates across resolved install,
+ * every declared range leaf (`||`-split), and the registry bump target so a
+ * range that merely permits 3.10 (`^1.0.0 || ^3.10.0`) is still caught.
+ */
+function libraryMeetsFloor(
+  pkg: PackageJson,
+  projectDir: string,
+  registryLatest: string | undefined,
+  floor: string,
+): boolean {
+  const installed = resolveInstalledVersion(projectDir, '@helixui/library');
+  if (installed !== undefined && specMeetsFloor(installed, floor)) return true;
+  if (registryLatest !== undefined && specMeetsFloor(registryLatest, floor)) return true;
+  return DEP_BUCKETS.some((b) => {
+    const range = pkg[b]?.['@helixui/library'];
+    return (
+      range !== undefined && range.split('||').some((leaf) => specMeetsFloor(leaf.trim(), floor))
+    );
+  });
 }
 
 /**
@@ -435,23 +486,17 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   // the floor) still wins; buildUpgradePlan's compareSemver guard refuses any
   // downgrade, so a project already above the floor is left untouched.
   //
-  // SCOPED to 3.x: this floor is only required once @helixui/library is (or is
-  // becoming) 3.x — that's the release whose <hx-icon> peer needs icons 1.0.4.
-  // For a project still on library 1.x/2.x, icons 1.0.1–1.0.3 are valid, so
-  // synthesizing a 1.0.4 "latest" there would rewrite a perfectly fine pin.
-  // Mirror doctor's gate using the pre-plan signals (declared major over every
-  // bucket, the resolved install, and the registry bump target for library).
-  const libraryFloorMajor = Math.max(
-    DEP_BUCKETS.reduce((max, b) => {
-      const range = pkg[b]?.['@helixui/library'];
-      return range !== undefined ? Math.max(max, leadingMajor(range)) : max;
-    }, 0),
-    resolveInstalledMajor(projectDir, '@helixui/library'),
-    latestVersions['@helixui/library'] !== undefined
-      ? leadingMajor(latestVersions['@helixui/library'])
-      : 0,
-  );
-  if (libraryFloorMajor >= HELIX_LIBRARY_MAJOR && installed['@helixui/icons'] !== undefined) {
+  // SCOPED to 3.10.0+: this floor is only required once @helixui/library is
+  // (or is becoming) 3.10.0+ — that's the release that tightened the <hx-icon>
+  // peer to icons 1.0.4. The earlier 3.9.x pins paired with icons 1.0.1, so a
+  // project on 3.9.x (or below 3.10.0, or on 1.x/2.x) must NOT have icons
+  // synthesized up to 1.0.4 — that would rewrite a perfectly valid pre-3.10
+  // pin. Mirror doctor's minor-aware gate across the resolved install, every
+  // declared range, and the registry bump target for library.
+  if (
+    libraryMeetsFloor(pkg, projectDir, latestVersions['@helixui/library'], HELIX_LIBRARY_VERSION) &&
+    installed['@helixui/icons'] !== undefined
+  ) {
     const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
     const knownIconsLatest = latestVersions['@helixui/icons'];
     if (knownIconsLatest === undefined || compareSemver(knownIconsLatest, iconsFloor) === -1) {

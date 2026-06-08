@@ -4,7 +4,12 @@ import path from 'node:path';
 import os from 'node:os';
 import https from 'node:https';
 import { TEMPLATES } from './templates.js';
-import { HELIX_LIBRARY_MAJOR, HELIX_TOKENS_MAJOR, HELIX_ICONS_VERSION } from './helix-versions.js';
+import {
+  HELIX_LIBRARY_MAJOR,
+  HELIX_LIBRARY_VERSION,
+  HELIX_TOKENS_MAJOR,
+  HELIX_ICONS_VERSION,
+} from './helix-versions.js';
 
 export interface CheckResult {
   name: string;
@@ -319,22 +324,21 @@ export function checkHelixIcons(cwd: string): CheckResult {
   }
   const { version, pkgJsonPath } = resolved;
   // The HELIX_ICONS_VERSION patch floor (1.0.4) is ONLY required once
-  // @helixui/library is on 3.x — that's the release whose <hx-icon> registry
-  // peer-requires icons 1.0.4 exactly. For a project still on library 1.x/2.x
-  // (or with no library at all), icons 1.0.1–1.0.3 are perfectly valid, so
-  // applying the 3.x floor there would wrongly fail doctor. Gate the floor on
-  // the resolved/declared library major; below 3.x, a resolvable icons install
-  // is enough. (Check both declared and installed so a broad/union range that
-  // reads pre-3.x but resolves at 3.x — e.g. `^1.0.0 || ^3.9.1` — is caught.)
-  const libMajor = Math.max(
-    declaredMaxMajor(dir, '@helixui/library'),
-    installedMajor(dir, '@helixui/library'),
-  );
-  if (libMajor >= HELIX_LIBRARY_MAJOR && !versionAtLeast(version, HELIX_ICONS_VERSION)) {
+  // @helixui/library is on 3.10.0+ — that's the release that tightened the
+  // <hx-icon> registry peer to icons 1.0.4 exactly. The earlier 3.9.x pins
+  // paired with icons 1.0.1, so an un-upgraded 3.9.x scaffold (or anything
+  // below 3.10.0, or no library at all) is fine on icons 1.0.1–1.0.3 and must
+  // NOT be flagged. Gate on a minor-aware library >= 3.10.0 floor, checking
+  // both the resolved install and every declared range so a broad/union range
+  // that permits 3.10 (e.g. `^1.0.0 || ^3.10.0`) is still caught.
+  if (
+    libraryAtLeast(dir, '@helixui/library', HELIX_LIBRARY_VERSION) &&
+    !versionAtLeast(version, HELIX_ICONS_VERSION)
+  ) {
     return {
       name: '@helixui/icons',
       status: 'fail',
-      message: `v${version} — below the ${HELIX_ICONS_VERSION} floor @helixui/library@${libMajor}.x requires; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
+      message: `v${version} — below the ${HELIX_ICONS_VERSION} floor @helixui/library@${HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '')}+ requires; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
     };
   }
   return {
@@ -368,6 +372,27 @@ function rangeMajor(range: string): number {
  */
 function declaredMaxMajor(dir: string, pkgName: string): number {
   return declaredRanges(dir, pkgName).reduce((max, range) => Math.max(max, rangeMajor(range)), 0);
+}
+
+/**
+ * Does `@helixui/library` resolve or declare at >= `floor` (a minor-aware
+ * semver floor, e.g. `^3.10.0`)? Used to gate the @helixui/icons 1.0.4 peer,
+ * which is required only from @helixui/library 3.10.0 onward — NOT from the
+ * earlier 3.9.x pins, which paired with icons 1.0.1. A major-only check would
+ * wrongly flag an un-upgraded 3.9.x scaffold.
+ *
+ * Checks the RESOLVED install first (the ground truth), then every declared
+ * range. Union/OR ranges (`^1.0.0 || ^3.9.1`) are split so each leaf's leading
+ * version is compared — so a project whose declared range merely PERMITS 3.10
+ * is treated as on-floor, matching how `installedMajor`/`declaredMaxMajor`
+ * already over-approximate to avoid false negatives.
+ */
+function libraryAtLeast(dir: string, pkgName: string, floor: string): boolean {
+  const resolved = readConsumerPackageVersion(dir, pkgName);
+  if (resolved !== null && versionAtLeast(resolved.version, floor)) return true;
+  return declaredRanges(dir, pkgName).some((range) =>
+    range.split('||').some((leaf) => versionAtLeast(leaf.trim(), floor)),
+  );
 }
 
 /** Does the consuming project declare `pkgName` in any deps bucket? */

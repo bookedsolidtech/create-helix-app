@@ -1227,16 +1227,17 @@ describe('upgrade command', () => {
       expect(updated.devDependencies['@helixui/icons']).toBe('^1.2.0');
     });
 
-    it('raises a stale but installed @helixui/icons range to the create-helix floor when offline', async () => {
+    it('raises a stale but installed @helixui/icons range to the create-helix floor when offline (library 3.10+)', async () => {
       // @helixui/icons already in `dependencies` at ^1.0.0 — below the ^1.0.4
-      // floor doctor enforces. Offline (no registry, no cache) the plan has no
-      // "latest" for it and would no-op, leaving doctor failing right after it
-      // pointed the user at `create-helix upgrade`. create-helix's own pinned
-      // floor stands in as the registry-independent minimum.
+      // floor library@3.10+ requires. Offline (no registry, no cache) the plan
+      // has no "latest" for it and would no-op, leaving doctor failing right
+      // after it pointed the user at `create-helix upgrade`. create-helix's own
+      // pinned floor stands in as the registry-independent minimum — but ONLY
+      // because the library is on 3.10+ here.
       const dir = makeTmpProject({
         name: 'stale-installed-icons',
         dependencies: {
-          '@helixui/library': '^3.9.1',
+          '@helixui/library': '^3.10.0',
           '@helixui/icons': '^1.0.0',
         },
       });
@@ -1256,7 +1257,7 @@ describe('upgrade command', () => {
       const dir = makeTmpProject({
         name: 'newer-installed-icons',
         dependencies: {
-          '@helixui/library': '^3.9.1',
+          '@helixui/library': '^3.10.0',
           '@helixui/icons': '^1.2.0',
         },
       });
@@ -1270,12 +1271,33 @@ describe('upgrade command', () => {
       expect(updated.dependencies['@helixui/icons']).toBe('^1.2.0');
     });
 
-    it('does NOT raise a stale icons range when @helixui/library is 2.x (floor is 3.x-only)', async () => {
-      // The 1.0.4 floor is a 3.x-library requirement. A project still on
-      // library 2.x with icons ^1.0.1 must be left alone offline — synthesizing
-      // a 1.0.4 "latest" here would rewrite a perfectly valid pre-3.x pin
-      // (codex Finding 2). Offline so the only floor signal is the synthetic
-      // one, which must now be gated on the library major.
+    it('does NOT raise a stale icons range when @helixui/library is 3.9.x (floor is 3.10+ only)', async () => {
+      // The 1.0.4 floor was tightened in library@3.10.0; the earlier 3.9.x pins
+      // paired with icons 1.0.1. An un-upgraded 3.9.x scaffold with icons
+      // ^1.0.1 must be left alone offline — synthesizing a 1.0.4 "latest" here
+      // would rewrite a perfectly valid pre-3.10 pin (codex re-review). This is
+      // the minor-aware boundary the major-only gate missed.
+      const dir = makeTmpProject({
+        name: 'library-39x-icons-untouched',
+        dependencies: {
+          '@helixui/library': '^3.9.1',
+          '@helixui/icons': '^1.0.1',
+        },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/icons']).toBe('^1.0.1');
+    });
+
+    it('does NOT raise a stale icons range when @helixui/library is 2.x (floor is 3.10+ only)', async () => {
+      // The 1.0.4 floor is a 3.10+ requirement. A project still on library 2.x
+      // with icons ^1.0.1 must be left alone offline — synthesizing a 1.0.4
+      // "latest" here would rewrite a perfectly valid pre-3.x pin.
       const dir = makeTmpProject({
         name: 'library-2x-icons-untouched',
         dependencies: {
