@@ -605,7 +605,7 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     // contract entry and seed a devDependencies copy so the package actually
     // installs into node_modules. Seed the NEWER of the peer range and the
     // create-helix floor: a stale peer (`^1.0.0`) copied verbatim would
-    // install a version that STILL fails doctor's `^1.0.1` floor, leaving
+    // install a version that STILL fails doctor's `^1.0.4` floor, leaving
     // the reported issue unresolved after `pnpm install`. An unparseable
     // peer range (compareSemver → null) also falls back to the known-good
     // floor rather than risk seeding something doctor can't accept.

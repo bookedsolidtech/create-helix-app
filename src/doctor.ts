@@ -320,7 +320,7 @@ export function checkHelixIcons(cwd: string): CheckResult {
   const { version, pkgJsonPath } = resolved;
   // @helixui/library@3.x peer-requires @helixui/icons at the
   // HELIX_ICONS_VERSION floor — a major-only check would wrongly pass a
-  // 1.0.0 install that doesn't satisfy the ^1.0.1 the scaffold pins.
+  // 1.0.0 install that doesn't satisfy the ^1.0.4 the scaffold pins.
   if (!versionAtLeast(version, HELIX_ICONS_VERSION)) {
     return {
       name: '@helixui/icons',
