@@ -16,8 +16,8 @@ importers:
         specifier: ^0.10.0
         version: 0.10.1
       '@helixui/tokens':
-        specifier: ^3.9.1
-        version: 3.9.1
+        specifier: ^3.9.4
+        version: 3.9.4
       fast-glob:
         specifier: ^3.3.3
         version: 3.3.3
@@ -487,8 +487,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@helixui/tokens@3.9.1':
-    resolution: {integrity: sha512-hKUpeQ5S7akV7sxqOIJ1BO2F/U52H56gXnq/Q1Q7NUlKbYWjlC0xHOCjcOq6kcICBiF5jtzkpRyVJYF2Hqcm5g==}
+  '@helixui/tokens@3.9.4':
+    resolution: {integrity: sha512-JE1RMcQw5FVXZVcrcsuGIawxvtoxTAheA5G8uID7mXyyk2Jw+T7gKnbEaAtnJ3QN7p32F2DpgQwF4i/LLjPd6w==}
 
   '@hono/node-server@1.19.14':
     resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
@@ -2996,7 +2996,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@helixui/tokens@3.9.1':
+  '@helixui/tokens@3.9.4':
     dependencies:
       lit: 3.3.2
 

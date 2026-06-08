@@ -7,6 +7,7 @@ import {
   HELIX_TOKENS_MAJOR,
   HELIX_ICONS_MAJOR,
   libraryProvablyAtLeast,
+  isResolvableRange,
 } from '../../src/helix-versions.js';
 import { TEMPLATES } from '../../src/templates.js';
 
@@ -152,5 +153,36 @@ describe('libraryProvablyAtLeast — fail-open icons-floor gate', () => {
   it('returns false when the floor itself is not a clean version', () => {
     // Defensive: a malformed floor must never enforce.
     expect(libraryProvablyAtLeast('3.11.0', 'not-a-version')).toBe(false);
+  });
+});
+
+describe('isResolvableRange — single-pin seed predicate', () => {
+  it.each([
+    // Clean single range leaves with a concrete minimum → seedable verbatim.
+    '^1.0.1',
+    '^1.0.4',
+    '^1.2.0',
+    '>=1.0.4',
+    '~1.0.0',
+    '1.0.0',
+    '*',
+    '1.x',
+    '<2.0.0',
+  ])('treats the single resolvable range %j as seedable', (spec) => {
+    expect(isResolvableRange(spec)).toBe(true);
+  });
+
+  it.each([
+    // `||` unions have no single installable pin — minVersion would collapse
+    // them to the lowest branch, so they must NOT be copied verbatim.
+    '^1.0.0 || ^2.0.0',
+    '^1.0.0 || ^1.5.0 || ^2.0.0',
+    // Non-version specs `new Range`/`minVersion` can't reduce → fall back.
+    'workspace:*',
+    'catalog:',
+    'npm:@scope/pkg@1.0.0',
+    'not-a-range',
+  ])('rejects the non-seedable spec %j', (spec) => {
+    expect(isResolvableRange(spec)).toBe(false);
   });
 });

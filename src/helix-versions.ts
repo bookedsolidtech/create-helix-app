@@ -111,3 +111,26 @@ export function versionMeetsFloor(version: string, floor: string): boolean {
     return false;
   }
 }
+
+/**
+ * True when `spec` is a SINGLE range leaf `semver` can reduce to a concrete
+ * minimum — i.e. a usable npm version range that can be copied verbatim as ONE
+ * installable dependency pin. False for `workspace:*`, `catalog:`, npm aliases,
+ * and unparseable specs (`minVersion`/`new Range` throw), AND for `||` unions
+ * (`^1.0.0 || ^2.0.0`): a union has no single pin and `minVersion` collapses it
+ * to the lowest branch's minimum, which would silently seed an installable
+ * devDependency below the range the project actually declared. Used by
+ * `upgrade`'s peer-only seed to decide whether a below-floor (pre-3.10) peer
+ * range can be copied verbatim or must fall back to the known-good floor pin.
+ */
+export function isResolvableRange(spec: string): boolean {
+  try {
+    // A `||` union (Range.set.length > 1) can't be seeded as a single pin.
+    if (new semver.Range(spec).set.length !== 1) return false;
+    return semver.minVersion(spec) != null;
+  } catch {
+    // new Range / minVersion throw on non-range specs (workspace:*, catalog:,
+    // aliases) — fail to the floor pin.
+    return false;
+  }
+}

@@ -1182,13 +1182,16 @@ describe('upgrade command', () => {
       expect(updated.dependencies['@helixui/icons']).toBeDefined();
     });
 
-    it('seeds @helixui/icons at the create-helix floor when the peer-only range is a union', async () => {
+    it('seeds @helixui/icons at the create-helix floor when the peer-only range is a union (library 3.9.x, below-floor branch)', async () => {
       // @helixui/icons declared ONLY in peerDependencies, as a `||` union
-      // (`^1.0.0 || ^2.0.0`). A union can't be cleanly copied as a single
-      // installable devDependency pin, so the seeded copy falls back to the
-      // known-good floor; the peer entry itself is left untouched.
+      // (`^1.0.0 || ^2.0.0`). Library is 3.9.x → the below-floor branch runs,
+      // which preserves a CLEAN resolvable peer verbatim — but a `||` union has
+      // no single installable pin (`isResolvableRange` rejects it; minVersion
+      // would otherwise collapse it to the lowest branch). So the seeded
+      // devDependencies copy falls back to the known-good floor; the peer entry
+      // itself is left untouched.
       const dir = makeTmpProject({
-        name: 'unparseable-peer-icons',
+        name: 'union-peer-icons',
         dependencies: { '@helixui/library': '^3.9.1' },
         peerDependencies: { '@helixui/icons': '^1.0.0 || ^2.0.0' },
       });
@@ -1200,9 +1203,56 @@ describe('upgrade command', () => {
         devDependencies: Record<string, string>;
         peerDependencies: Record<string, string>;
       };
-      // The unparseable peer entry is left as the project declared it...
+      // The union peer entry is left as the project declared it...
       expect(updated.peerDependencies['@helixui/icons']).toBe('^1.0.0 || ^2.0.0');
       // ...but the installable devDependencies copy falls back to the floor.
+      expect(updated.devDependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
+    });
+
+    it('preserves a below-floor peer-only @helixui/icons ^1.0.1 VERBATIM when library is 3.9.x (floor is 3.10+ only)', async () => {
+      // The 1.0.4 icons floor is a 3.10-ONLY requirement (the release that
+      // tightened the <hx-icon> peer). With library on 3.9.x the floor does NOT
+      // apply, so a valid pre-3.10 pin like ^1.0.1 (which paired with the 3.9.x
+      // line) must be seeded into devDependencies VERBATIM — NOT forced up to
+      // ^1.0.4. This is the library-version-aware below-floor branch: contrast
+      // with the 3.10+ case below, where ^1.0.1 IS raised to the floor.
+      const dir = makeTmpProject({
+        name: 'peer-only-icons-39x-verbatim',
+        dependencies: { '@helixui/library': '^3.9.1' },
+        peerDependencies: { '@helixui/icons': '^1.0.1' },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        devDependencies: Record<string, string>;
+        peerDependencies: Record<string, string>;
+      };
+      expect(updated.peerDependencies['@helixui/icons']).toBe('^1.0.1');
+      expect(updated.devDependencies['@helixui/icons']).toBe('^1.0.1');
+    });
+
+    it('seeds the floor for a below-floor peer-only @helixui/icons workspace:* when library is 3.9.x (unresolvable → floor)', async () => {
+      // Below the floor the branch preserves a CLEAN resolvable peer verbatim,
+      // but a `workspace:*` spec can't be seeded as an installable
+      // devDependency (`isResolvableRange` is false — `new Range`/`minVersion`
+      // throw on it). So even pre-3.10 it falls back to the known-good floor pin
+      // so the package actually installs; the peer entry is left untouched.
+      const dir = makeTmpProject({
+        name: 'peer-only-icons-39x-workspace',
+        dependencies: { '@helixui/library': '^3.9.1' },
+        peerDependencies: { '@helixui/icons': 'workspace:*' },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        devDependencies: Record<string, string>;
+        peerDependencies: Record<string, string>;
+      };
+      expect(updated.peerDependencies['@helixui/icons']).toBe('workspace:*');
       expect(updated.devDependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
     });
 
