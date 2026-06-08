@@ -8,6 +8,9 @@ import {
   HELIX_ICONS_MAJOR,
   libraryProvablyAtLeast,
   isResolvableRange,
+  iconsVersionCompatible,
+  iconsRangeWithinCompat,
+  ICONS_RANGE,
 } from '../../src/helix-versions.js';
 import { TEMPLATES } from '../../src/templates.js';
 
@@ -184,5 +187,64 @@ describe('isResolvableRange — single-pin seed predicate', () => {
     'not-a-range',
   ])('rejects the non-seedable spec %j', (spec) => {
     expect(isResolvableRange(spec)).toBe(false);
+  });
+});
+
+describe('icons compatibility range (^1.0.4 = >=1.0.4 <2.0.0)', () => {
+  it('ICONS_RANGE is the ^1.0.4 caret range, derived from HELIX_ICONS_VERSION', () => {
+    expect(ICONS_RANGE).toBe('^1.0.4');
+    expect(ICONS_RANGE).toBe(HELIX_ICONS_VERSION);
+  });
+
+  describe('iconsVersionCompatible — resolved-version satisfies(^1.0.4)', () => {
+    it.each(['1.0.4', '1.0.5', '1.2.3', '1.9.0', 'v1.0.4'])(
+      'accepts a resolved version %j inside the range',
+      (v) => {
+        expect(iconsVersionCompatible(v)).toBe(true);
+      },
+    );
+
+    it.each([
+      // Below the patch floor.
+      '1.0.0',
+      '1.0.1',
+      '1.0.3',
+      '0.9.0',
+      // INCOMPATIBLE MAJOR — a `>= 1.0.4` floor check wrongly accepts these.
+      '2.0.0',
+      '2.1.0',
+      '3.0.0',
+      // Unparseable → fail closed.
+      'not-a-version',
+    ])('rejects an out-of-range / unparseable version %j', (v) => {
+      expect(iconsVersionCompatible(v)).toBe(false);
+    });
+  });
+
+  describe('iconsRangeWithinCompat — declared-range subset of ^1.0.4', () => {
+    it.each(['^1.0.4', '^1.2.0', '^1.5.0', '~1.0.4', '1.0.5'])(
+      'preserves a range %j entirely within ^1.0.4',
+      (r) => {
+        expect(iconsRangeWithinCompat(r)).toBe(true);
+      },
+    );
+
+    it.each([
+      // Dips below the patch floor.
+      '^1.0.1',
+      // Admits a 2.x major — NOT a subset of ^1.0.4 (codex P1/P2).
+      '^2.0.0',
+      '>=2.0.0',
+      '>=1.0.4',
+      '*',
+      '1.x',
+      '<2.0.0',
+      // Union / non-range specs → subset throws or is false → fall back.
+      '^1.0.0 || ^2.0.0',
+      'workspace:*',
+      'catalog:',
+    ])('rejects a range %j that escapes ^1.0.4', (r) => {
+      expect(iconsRangeWithinCompat(r)).toBe(false);
+    });
   });
 });

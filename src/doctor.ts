@@ -10,7 +10,7 @@ import {
   HELIX_TOKENS_MAJOR,
   HELIX_ICONS_VERSION,
   libraryProvablyAtLeast,
-  versionMeetsFloor,
+  iconsVersionCompatible,
 } from './helix-versions.js';
 
 export interface CheckResult {
@@ -303,22 +303,26 @@ export function checkHelixIcons(cwd: string): CheckResult {
     };
   }
   const { version, pkgJsonPath } = resolved;
-  // The HELIX_ICONS_VERSION patch floor (1.0.4) is ONLY required once
-  // @helixui/library is a stable 3.10.0+ — that's the release that tightened
-  // the <hx-icon> registry peer to icons 1.0.4 exactly. The earlier 3.9.x pins
-  // paired with icons 1.0.1, so an un-upgraded 3.9.x scaffold (or anything
-  // below 3.10.0, an upper-bound/prerelease/workspace range, or no library at
-  // all) is fine on icons 1.0.1–1.0.3 and must NOT be flagged. The shared
-  // `libraryProvablyAtLeast` predicate fails open on every ambiguous form.
+  // The @helixui/icons compatibility RANGE (^1.0.4 = >=1.0.4 <2.0.0) is ONLY
+  // required once @helixui/library is a stable 3.10.0+ — that's the release
+  // that tightened the <hx-icon> registry peer to icons 1.0.4. The earlier
+  // 3.9.x pins paired with icons 1.0.1, so an un-upgraded 3.9.x scaffold (or
+  // anything below 3.10.0, an upper-bound/prerelease/workspace range, or no
+  // library at all) is fine on icons 1.0.1–1.0.3 and must NOT be flagged. The
+  // shared `libraryProvablyAtLeast` predicate fails open on every ambiguous
+  // form for the LIBRARY gate.
+  //
+  // Once that gate holds, the icons check is a RANGE match, not a floor: a
+  // resolved icons version is compatible iff it `satisfies` ^1.0.4. A 2.x major
+  // is a breaking change the 3.10 peer does NOT accept — a lower-bound `>=1.0.4`
+  // check wrongly passes `@helixui/icons@2.0.0`; `iconsVersionCompatible`
+  // rejects it (and still flags 1.0.1–1.0.3, below the patch floor).
   const libraryFloor = HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '');
-  if (
-    libraryAtLeast(dir, '@helixui/library', libraryFloor) &&
-    !versionMeetsFloor(version, HELIX_ICONS_VERSION)
-  ) {
+  if (libraryAtLeast(dir, '@helixui/library', libraryFloor) && !iconsVersionCompatible(version)) {
     return {
       name: '@helixui/icons',
       status: 'fail',
-      message: `v${version} — below the ${HELIX_ICONS_VERSION} floor @helixui/library@${libraryFloor}+ requires; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
+      message: `v${version} — incompatible with the ${HELIX_ICONS_VERSION} range @helixui/library@${libraryFloor}+ requires; run \`create-helix upgrade\` or \`pnpm update @helixui/icons\`.`,
     };
   }
   return {

@@ -253,7 +253,7 @@ describe('checkHelixIcons', () => {
     expect(result.message).toMatch(/v1\.0\.1/);
   });
 
-  it('passes when @helixui/icons resolves at or above the create-helix floor on library 3.10+', () => {
+  it('passes when @helixui/icons resolves within the ^1.0.4 range on library 3.10+', () => {
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       devDependencies: { '@helixui/library': '^3.10.0', '@helixui/icons': '^1.0.1' },
@@ -265,6 +265,57 @@ describe('checkHelixIcons', () => {
     const result = checkHelixIcons(tmp);
     expect(result.status).toBe('ok');
     expect(result.message).toMatch(/v1\.2\.3/);
+  });
+
+  it('passes when @helixui/icons resolves at exactly 1.0.4 (the range floor) on library 3.10+', () => {
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      devDependencies: { '@helixui/library': '^3.10.0', '@helixui/icons': '^1.0.4' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '1.0.4',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v1\.0\.4/);
+  });
+
+  it('FLAGS an incompatible @helixui/icons MAJOR (2.0.0) on library 3.10+ (range, not floor)', () => {
+    // codex P1: the icons peer is a RANGE (^1.0.4 = >=1.0.4 <2.0.0), not a
+    // lower-bound floor. icons 2.0.0 is a breaking major the 3.10 <hx-icon>
+    // peer does NOT accept. A `>= 1.0.4` floor check wrongly PASSED 2.0.0;
+    // the `satisfies(^1.0.4)` check must flag it.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      devDependencies: { '@helixui/library': '^3.10.0', '@helixui/icons': '^2.0.0' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '2.0.0',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('fail');
+    expect(result.message).toMatch(/2\.0\.0/);
+    expect(result.message).toMatch(/incompatible/);
+    expect(result.message).toContain(HELIX_ICONS_VERSION);
+  });
+
+  it('does NOT flag an incompatible @helixui/icons 2.0.0 when @helixui/library is 3.9.x (range is 3.10+ only)', () => {
+    // The ^1.0.4 compatibility range is a 3.10+ requirement. On a 3.9.x library
+    // the icons check must not fire at all — even for a 2.x icons major — so a
+    // pre-3.10 project is never falsely flagged by the new range gate.
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      dependencies: { '@helixui/library': '^3.9.1', '@helixui/icons': '^2.0.0' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'icons', 'package.json'), {
+      name: '@helixui/icons',
+      version: '2.0.0',
+    });
+    const result = checkHelixIcons(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v2\.0\.0/);
   });
 
   it('follows a monorepo scaffold into apps/web (declares + resolves there)', () => {

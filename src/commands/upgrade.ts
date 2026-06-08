@@ -11,6 +11,7 @@ import {
   libraryProvablyAtLeast,
   versionMeetsFloor,
   isResolvableRange,
+  iconsRangeWithinCompat,
 } from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
@@ -703,31 +704,32 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     // installs into node_modules (`pnpm install` does NOT place a bare
     // peerDependency into the package's own node_modules).
     //
-    // The 1.0.4 icons floor is a 3.10-ONLY requirement (the release that
-    // tightened the <hx-icon> peer). So the seed is library-version-aware:
+    // The @helixui/icons ^1.0.4 compatibility RANGE (>=1.0.4 <2.0.0) is a
+    // 3.10-ONLY requirement (the release that tightened the <hx-icon> peer). So
+    // the seed is library-version-aware:
     //   - library NOT provably >= 3.10 (3.9.x etc.) → preserve the peer's range
-    //     VERBATIM; the floor does not apply, and a valid pre-3.10 pin like
+    //     VERBATIM; the range does not apply, and a valid pre-3.10 pin like
     //     `^1.0.1` must not be forced up. (A peer we can't resolve at all —
-    //     `workspace:*`, an alias — still falls back to the floor pin, since it
-    //     can't be seeded as an installable devDependency.)
-    //   - library IS provably >= 3.10 → apply the floor: preserve the peer range
-    //     only when its minimum is at/above the floor (same semver predicate the
-    //     gate uses, `libraryProvablyAtLeast`), else seed the known-good floor
-    //     pin. This stops a broad / lower-bound-less range (`*` → 0.0.0, `1.x` →
-    //     1.0.0, `<2.0.0` → 0.0.0, a `||` union whose low branch is below floor)
-    //     from being copied verbatim where it could float below the peer.
+    //     `workspace:*`, an alias, a `||` union — still falls back to the floor
+    //     pin, since it can't be seeded as one installable devDependency.)
+    //   - library IS provably >= 3.10 → apply the range: preserve the peer range
+    //     only when it is ENTIRELY within `^1.0.4` (`semver.subset`), else seed
+    //     the known-good pin. This is a RANGE check, not a floor: a range that
+    //     admits a 2.x major (`^2.0.0`, `>=2.0.0`, `*`, `1.x`, `<2.0.0`) or dips
+    //     below the patch floor (`^1.0.1`) is NOT a subset of `^1.0.4`, so it is
+    //     replaced — a lower-bound `>= 1.0.4` check would wrongly preserve
+    //     `^2.0.0`/`>=2.0.0`, floating the devDep onto an incompatible major.
     const peerRange = pkg.peerDependencies?.['@helixui/icons'];
-    const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
     let seeded: string;
     if (peerRange === undefined) {
       seeded = HELIX_ICONS_VERSION;
     } else if (!libraryAtFloor) {
-      // Below 3.10: floor does not apply — preserve a resolvable peer verbatim;
-      // an unresolvable peer (workspace:/alias) falls back to the floor pin.
+      // Below 3.10: range does not apply — preserve a resolvable peer verbatim;
+      // an unresolvable peer (workspace:/alias/union) falls back to the pin.
       seeded = isResolvableRange(peerRange) ? peerRange : HELIX_ICONS_VERSION;
     } else {
-      // 3.10+: preserve only when the peer's minimum meets the floor.
-      seeded = libraryProvablyAtLeast(peerRange, iconsFloor) ? peerRange : HELIX_ICONS_VERSION;
+      // 3.10+: preserve only when the peer range is a subset of `^1.0.4`.
+      seeded = iconsRangeWithinCompat(peerRange) ? peerRange : HELIX_ICONS_VERSION;
     }
     (pkg.devDependencies ??= {})['@helixui/icons'] = seeded;
   }

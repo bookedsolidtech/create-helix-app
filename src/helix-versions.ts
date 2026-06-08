@@ -46,6 +46,19 @@ export const HELIX_TOKENS_VERSION = '^3.9.4';
 export const HELIX_ICONS_VERSION = '^1.0.4';
 
 /**
+ * The `@helixui/icons` COMPATIBILITY RANGE the library@3.10+ peer accepts —
+ * `^1.0.4` = `>=1.0.4 <2.0.0`. This is a RANGE, not a floor: the peer was
+ * tightened to icons 1.0.4 in library 3.10, and a 2.x major is a breaking
+ * change that is NOT compatible. A lower-bound-only check (`>= 1.0.4`) wrongly
+ * accepts `@helixui/icons@2.0.0`; every icons-compatibility decision (doctor's
+ * resolved-version check, `upgrade`'s peer-only seed) must instead ask whether
+ * a version `satisfies` this range, or whether a declared range is a `subset`
+ * of it. Derived from `HELIX_ICONS_VERSION` so the `^1.0.4` source of truth
+ * lives in one place.
+ */
+export const ICONS_RANGE = HELIX_ICONS_VERSION;
+
+/**
  * Major version `@helixui/library` is pinned/tested against. The `doctor`
  * drift check fails when an installed copy's major is below this.
  */
@@ -59,16 +72,20 @@ export const HELIX_ICONS_MAJOR = 1;
 
 /**
  * Shared, fail-OPEN "does this range's MINIMUM satisfy `floor`?" predicate —
- * the single gate behind every icons-floor decision.
+ * the single gate behind every LIBRARY-version decision.
  *
- * The `@helixui/icons@^1.0.4` peer floor is only required once
- * `@helixui/library` is a stable release >= 3.10.0 (the release that tightened
- * the `<hx-icon>` peer). EVERY icons-floor decision routes through this ONE
- * predicate so they can't drift: `doctor`'s `checkHelixIcons` (library spec vs
- * 3.10.0) and `upgrade`'s `libraryMeetsFloor` (library spec vs 3.10.0) AND its
- * peer-only devDep-seed (icons peer range vs 1.0.4). Backed by the `semver`
- * library — NOT hand-rolled range parsing, which leaked a new real edge
- * (`=3.10.0`, `<3.10.0`, prereleases, comparator ranges) every review round.
+ * The `@helixui/icons@^1.0.4` peer is only required once `@helixui/library` is
+ * a stable release >= 3.10.0 (the release that tightened the `<hx-icon>` peer).
+ * This predicate answers ONLY "is the LIBRARY provably >= 3.10?" — the gate
+ * that decides whether the icons requirement applies at all. Both library gates
+ * route through this ONE predicate so they can't drift: `doctor`'s
+ * `checkHelixIcons` (library spec vs 3.10.0) and `upgrade`'s `libraryMeetsFloor`
+ * (library spec vs 3.10.0). The ICONS-version decision itself is a RANGE check,
+ * NOT this floor — `iconsVersionCompatible` / `iconsRangeWithinCompat` test
+ * membership in `^1.0.4` so a 2.x major is rejected, which a lower-bound floor
+ * would wrongly accept. Backed by the `semver` library — NOT hand-rolled range
+ * parsing, which leaked a new real edge (`=3.10.0`, `<3.10.0`, prereleases,
+ * comparator ranges) every review round.
  *
  * `semver.minVersion(spec)` yields the lowest version a range can resolve to,
  * then `semver.gte(min, floor)` decides enforcement. This correctly handles
@@ -99,8 +116,11 @@ export function libraryProvablyAtLeast(spec: string, floor: string): boolean {
  * or a registry "latest") is >= the minimum of the `floor` range. The companion
  * to `libraryProvablyAtLeast` for when you hold an exact version rather than a
  * declared range. `semver.coerce` tolerates a leading `v`/loose form; any
- * unparseable input fails open to false. Shared so `doctor`'s icons-version
- * floor check and `upgrade`'s registry-latest-vs-floor override agree.
+ * unparseable input fails open to false. Used by `upgrade`'s
+ * registry-latest-vs-floor override (deciding whether to substitute the
+ * create-helix pin when the registry has no acceptable "latest"). NOT for the
+ * icons COMPATIBILITY check — that is a range membership test
+ * (`iconsVersionCompatible`), since a lower bound alone would accept a 2.x major.
  */
 export function versionMeetsFloor(version: string, floor: string): boolean {
   try {
@@ -131,6 +151,43 @@ export function isResolvableRange(spec: string): boolean {
   } catch {
     // new Range / minVersion throw on non-range specs (workspace:*, catalog:,
     // aliases) — fail to the floor pin.
+    return false;
+  }
+}
+
+/**
+ * Does a CONCRETE, RESOLVED `version` (an installed `package.json` version)
+ * satisfy the `@helixui/icons` compatibility RANGE (`^1.0.4` =
+ * `>=1.0.4 <2.0.0`)? Unlike a lower-bound floor check, this REJECTS an
+ * incompatible major: `2.0.0` → false (flagged), `1.0.5`/`1.9.0` → true (ok),
+ * `1.0.1` (below the patch floor) → false (flagged). `semver.coerce` tolerates
+ * a leading `v`/loose form; any unparseable input fails CLOSED to false (an
+ * un-checkable version can't be proven compatible). Drives doctor's resolved
+ * icons-version gate.
+ */
+export function iconsVersionCompatible(version: string): boolean {
+  try {
+    const coerced = semver.coerce(version);
+    return coerced != null && semver.satisfies(coerced, ICONS_RANGE);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Is a DECLARED `range` entirely contained within the `@helixui/icons`
+ * compatibility range (`^1.0.4`)? True only when EVERY version `range` permits
+ * is compatible — `semver.subset(range, '^1.0.4')`. So `^1.0.4` / `^1.5.0` /
+ * `~1.0.4` / `1.0.5` → true (preserve verbatim); `^1.0.1` (dips below the patch
+ * floor), `^2.0.0` / `>=2.0.0` / `*` / `1.x` (admit a 2.x major or below floor),
+ * a `||` union with an out-of-range branch → false (seed the known-good pin).
+ * `workspace:*` / `catalog:` / aliases make `subset` throw → false. Drives
+ * `upgrade`'s peer-only devDependency seed for a library already at 3.10+.
+ */
+export function iconsRangeWithinCompat(range: string): boolean {
+  try {
+    return semver.subset(range, ICONS_RANGE);
+  } catch {
     return false;
   }
 }

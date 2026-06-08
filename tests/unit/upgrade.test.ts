@@ -1294,18 +1294,31 @@ describe('upgrade command', () => {
       expect(updated.devDependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
     });
 
-    it.each(['*', '1.x', '<2.0.0'])(
-      'seeds the floor for a broad / lower-bound-less peer-only @helixui/icons %j',
-      async (broadRange) => {
-        // REGRESSION GUARD (codex P2): a broad range — `*` (min 0.0.0), `1.x`
-        // (min 1.0.0), `<2.0.0` (min 0.0.0) — must NOT be copied verbatim into
-        // devDependencies, where it could float to an incompatible future
-        // release. Its minimum is below the floor, so the seed falls back to the
-        // known-good floor pin.
+    it.each([
+      // Below the patch floor or lower-bound-less — admits a version < 1.0.4.
+      '*',
+      '1.x',
+      '<2.0.0',
+      '^1.0.1',
+      // INCOMPATIBLE MAJOR (codex P1): a range that admits a 2.x icons major is
+      // NOT a subset of `^1.0.4` (>=1.0.4 <2.0.0). A lower-bound `>= 1.0.4`
+      // check wrongly preserved these, floating the seeded devDependency onto an
+      // incompatible major the 3.10 peer rejects.
+      '^2.0.0',
+      '>=2.0.0',
+      '>=1.0.4',
+    ])(
+      'seeds the floor for a peer-only @helixui/icons %j NOT within ^1.0.4 (library 3.10+)',
+      async (badRange) => {
+        // REGRESSION GUARD: on library 3.10+ the seed preserves the peer range
+        // ONLY when it is entirely within the `^1.0.4` compatibility range
+        // (`semver.subset`). Anything that dips below 1.0.4 OR admits a 2.x major
+        // must NOT be copied verbatim into devDependencies — it falls back to the
+        // known-good `^1.0.4` pin.
         const dir = makeTmpProject({
-          name: `peer-only-icons-broad-${broadRange.replace(/[^a-z0-9]/gi, '')}`,
+          name: `peer-only-icons-bad-${badRange.replace(/[^a-z0-9]/gi, '')}`,
           dependencies: { '@helixui/library': '^3.10.0' },
-          peerDependencies: { '@helixui/icons': broadRange },
+          peerDependencies: { '@helixui/icons': badRange },
         });
         tmpDirs.push(dir);
 
@@ -1318,11 +1331,12 @@ describe('upgrade command', () => {
       },
     );
 
-    it.each(['^1.0.4', '^1.2.0', '>=1.0.4'])(
-      'preserves a peer-only @helixui/icons %j whose minimum is at/above the floor',
+    it.each(['^1.0.4', '^1.2.0', '^1.5.0', '~1.0.4', '1.0.5'])(
+      'preserves a peer-only @helixui/icons %j that is a subset of ^1.0.4 (library 3.10+)',
       async (goodRange) => {
-        // A range with a concrete lower bound >= the floor is seeded verbatim —
-        // it satisfies the tightened <hx-icon> peer and won't drift below it.
+        // A range entirely WITHIN `^1.0.4` (>=1.0.4 <2.0.0) is seeded verbatim —
+        // every version it permits satisfies the tightened <hx-icon> peer and
+        // none can drift below the floor or onto a 2.x major.
         const dir = makeTmpProject({
           name: `peer-only-icons-good-${goodRange.replace(/[^a-z0-9]/gi, '')}`,
           dependencies: { '@helixui/library': '^3.10.0' },
