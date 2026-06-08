@@ -111,18 +111,3 @@ export function versionMeetsFloor(version: string, floor: string): boolean {
     return false;
   }
 }
-
-/**
- * True when `spec` is a range `semver` can reduce to a concrete minimum — i.e.
- * a usable npm version range. False for `workspace:*`, `catalog:`, npm aliases,
- * and unparseable specs (`minVersion` returns null or throws). Used to decide
- * whether a declared range can be seeded verbatim or must fall back to a known
- * pin.
- */
-export function isResolvableRange(spec: string): boolean {
-  try {
-    return semver.minVersion(spec) != null;
-  } catch {
-    return false;
-  }
-}

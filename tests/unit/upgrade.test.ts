@@ -1224,35 +1224,13 @@ describe('upgrade command', () => {
       expect(updated.devDependencies['@helixui/icons']).toBe('^1.2.0');
     });
 
-    it('seeds a peer-only @helixui/icons ^1.0.1 verbatim on a 3.9.x library — does NOT raise to the floor', async () => {
-      // THE devDep-seed P2 (closed): the 1.0.4 floor is a 3.10+ requirement. On
-      // a library still at 3.9.x, a peer-only icons ^1.0.1 (a clean, below-floor
-      // range that is perfectly valid for 3.9.x) must be seeded VERBATIM, not
-      // raised to ^1.0.4. The seed only raises when the library is provably
-      // >= 3.10.0.
+    it('seeds the floor for a below-floor peer-only @helixui/icons ^1.0.1 (preserve only at/above floor)', async () => {
+      // The seed preserves the peer range verbatim ONLY when its minimum is at
+      // or above the icons floor (the same semver predicate the gate uses).
+      // ^1.0.1 has minimum 1.0.1 < 1.0.4, so the installable devDep is seeded at
+      // the known-good floor (^1.0.4 satisfies ^1.0.1 and won't drift).
       const dir = makeTmpProject({
-        name: 'peer-only-icons-39x-not-raised',
-        dependencies: { '@helixui/library': '^3.9.1' },
-        peerDependencies: { '@helixui/icons': '^1.0.1' },
-      });
-      tmpDirs.push(dir);
-
-      await runUpgrade(dir, { dryRun: false, offline: true });
-
-      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
-        devDependencies: Record<string, string>;
-        peerDependencies: Record<string, string>;
-      };
-      expect(updated.devDependencies['@helixui/icons']).toBe('^1.0.1');
-      expect(updated.peerDependencies['@helixui/icons']).toBe('^1.0.1');
-    });
-
-    it('raises a peer-only @helixui/icons ^1.0.1 to the floor when the library IS 3.10+', async () => {
-      // Counterpart: on a library provably >= 3.10.0, a below-floor peer-only
-      // icons ^1.0.1 IS raised to ^1.0.4 so the seeded devDep satisfies the
-      // tightened <hx-icon> peer.
-      const dir = makeTmpProject({
-        name: 'peer-only-icons-310-raised',
+        name: 'peer-only-icons-below-floor',
         dependencies: { '@helixui/library': '^3.10.0' },
         peerDependencies: { '@helixui/icons': '^1.0.1' },
       });
@@ -1265,6 +1243,51 @@ describe('upgrade command', () => {
       };
       expect(updated.devDependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
     });
+
+    it.each(['*', '1.x', '<2.0.0'])(
+      'seeds the floor for a broad / lower-bound-less peer-only @helixui/icons %j',
+      async (broadRange) => {
+        // REGRESSION GUARD (codex P2): a broad range — `*` (min 0.0.0), `1.x`
+        // (min 1.0.0), `<2.0.0` (min 0.0.0) — must NOT be copied verbatim into
+        // devDependencies, where it could float to an incompatible future
+        // release. Its minimum is below the floor, so the seed falls back to the
+        // known-good floor pin.
+        const dir = makeTmpProject({
+          name: `peer-only-icons-broad-${broadRange.replace(/[^a-z0-9]/gi, '')}`,
+          dependencies: { '@helixui/library': '^3.10.0' },
+          peerDependencies: { '@helixui/icons': broadRange },
+        });
+        tmpDirs.push(dir);
+
+        await runUpgrade(dir, { dryRun: false, offline: true });
+
+        const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+          devDependencies: Record<string, string>;
+        };
+        expect(updated.devDependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
+      },
+    );
+
+    it.each(['^1.0.4', '^1.2.0', '>=1.0.4'])(
+      'preserves a peer-only @helixui/icons %j whose minimum is at/above the floor',
+      async (goodRange) => {
+        // A range with a concrete lower bound >= the floor is seeded verbatim —
+        // it satisfies the tightened <hx-icon> peer and won't drift below it.
+        const dir = makeTmpProject({
+          name: `peer-only-icons-good-${goodRange.replace(/[^a-z0-9]/gi, '')}`,
+          dependencies: { '@helixui/library': '^3.10.0' },
+          peerDependencies: { '@helixui/icons': goodRange },
+        });
+        tmpDirs.push(dir);
+
+        await runUpgrade(dir, { dryRun: false, offline: true });
+
+        const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+          devDependencies: Record<string, string>;
+        };
+        expect(updated.devDependencies['@helixui/icons']).toBe(goodRange);
+      },
+    );
 
     it('raises a stale but installed @helixui/icons range to the create-helix floor when offline (library 3.10+)', async () => {
       // @helixui/icons already in `dependencies` at ^1.0.0 — below the ^1.0.4

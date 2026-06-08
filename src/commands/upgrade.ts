@@ -10,7 +10,6 @@ import {
   HELIX_ICONS_VERSION,
   libraryProvablyAtLeast,
   versionMeetsFloor,
-  isResolvableRange,
 } from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
@@ -703,24 +702,18 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     // installs into node_modules (`pnpm install` does NOT place a bare
     // peerDependency into the package's own node_modules).
     //
-    // The 1.0.4 icons floor is only required once @helixui/library is provably
-    // a stable >= 3.10.0 (libraryAtFloor) — the earlier 3.9.x pins paired with
-    // icons 1.0.1. So we only RAISE the seeded copy to the floor when BOTH the
-    // library is at the floor AND the peer range doesn't already meet it. The
-    // floor check runs through the shared semver predicate (NOT ad-hoc
-    // compareSemver). A clean single range we can seed verbatim (e.g. `^1.0.1`)
-    // is kept as-is on a 3.9.x project; a peer we can't cleanly copy — a `||`
-    // union (`^1.0.0 || ^2.0.0`) or an unparseable spec (`workspace:*`) — falls
-    // back to the known-good floor pin regardless.
+    // Preserve the peer range verbatim ONLY when it has a concrete lower bound
+    // at or above the icons floor — the SAME semver predicate the gate uses
+    // (`libraryProvablyAtLeast` = `minVersion(range) >= floor`). Otherwise seed
+    // the known-good floor pin. This stops a broad / lower-bound-less range
+    // (`*` → 0.0.0, `1.x` → 1.0.0, `<2.0.0` → 0.0.0, a `||` union whose low
+    // branch is below floor, `workspace:`/unparseable) from being copied
+    // verbatim into devDependencies, where it could float to an incompatible
+    // future release. A clean `^1.0.4` / `^1.2.0` / `>=1.0.4` is preserved.
     const peerRange = pkg.peerDependencies?.['@helixui/icons'];
     const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
-    const peerCleanlySeedable =
-      peerRange !== undefined && !peerRange.includes('||') && isResolvableRange(peerRange);
-    const peerMeetsFloor = peerRange !== undefined && libraryProvablyAtLeast(peerRange, iconsFloor);
-    // Raise to the floor when the library needs it (3.10+) and the peer is
-    // below it, OR when the peer can't be seeded verbatim at all.
-    const raiseToFloor = !peerCleanlySeedable || (libraryAtFloor && !peerMeetsFloor);
-    (pkg.devDependencies ??= {})['@helixui/icons'] = raiseToFloor ? HELIX_ICONS_VERSION : peerRange;
+    const preservePeer = peerRange !== undefined && libraryProvablyAtLeast(peerRange, iconsFloor);
+    (pkg.devDependencies ??= {})['@helixui/icons'] = preservePeer ? peerRange : HELIX_ICONS_VERSION;
   }
 
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
