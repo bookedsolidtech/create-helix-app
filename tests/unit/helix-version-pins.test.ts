@@ -113,7 +113,10 @@ describe('libraryProvablyAtLeast — fail-open icons-floor gate', () => {
     '~3.10',
     '>=3.10.0',
     '>3.10.0',
-    '>=3.10.0 <4.0.0', // compound: first clause is a clean >= 3.10 lower bound
+    // Compound intersection ranges — semver computes the TRUE minimum of the
+    // intersection regardless of clause order, so both forms resolve to 3.10.0.
+    '>=3.10.0 <4.0.0',
+    '<4.0.0 >=3.10.0',
   ])('enforces for the provable >=3.10 form %j', (spec) => {
     expect(libraryProvablyAtLeast(spec, FLOOR)).toBe(true);
   });
@@ -126,15 +129,15 @@ describe('libraryProvablyAtLeast — fail-open icons-floor gate', () => {
     '3.9.4',
     '^2.5.0',
     '2.x',
-    // Upper-bound-bearing / no lower bound → ambiguous.
+    // Upper-bound-only / no lower bound at/above 3.10 → minimum < floor.
     '<3.10.0',
     '<=3.10.0',
     '<4.0.0',
-    '<4.0.0 >=3.10.0', // leads with an upper bound → reject
-    // Prerelease tag → ambiguous (may predate the tightened peer).
+    // Prerelease tag → semver treats it as below the stable release → not
+    // enforced (may predate the tightened peer).
     '3.10.0-next.5',
     '^3.10.0-next.1',
-    // Non-version specs / wildcards / unparseable.
+    // Non-version specs / wildcards / unparseable → minVersion null or throws.
     'workspace:*',
     'catalog:',
     'npm:@x/y@3.10.0',

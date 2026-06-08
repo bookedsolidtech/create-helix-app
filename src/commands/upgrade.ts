@@ -9,6 +9,8 @@ import {
   HELIX_LIBRARY_VERSION,
   HELIX_ICONS_VERSION,
   libraryProvablyAtLeast,
+  versionMeetsFloor,
+  isResolvableRange,
 } from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
@@ -516,13 +518,23 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   // `libraryProvablyAtLeast` predicate (same one doctor uses) fails open on
   // every ambiguous form.
   const libraryFloor = HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '');
-  if (
-    libraryMeetsFloor(pkg, projectDir, latestVersions['@helixui/library'], libraryFloor) &&
-    installed['@helixui/icons'] !== undefined
-  ) {
+  // Is @helixui/library provably a stable >= 3.10.0 (resolved/declared/being
+  // moved there)? Computed ONCE and reused by both the synthetic-latest block
+  // below and the peer-only devDep-seed — both raise icons to the 1.0.4 floor
+  // ONLY when this holds.
+  const libraryAtFloor = libraryMeetsFloor(
+    pkg,
+    projectDir,
+    latestVersions['@helixui/library'],
+    libraryFloor,
+  );
+  if (libraryAtFloor && installed['@helixui/icons'] !== undefined) {
     const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
     const knownIconsLatest = latestVersions['@helixui/icons'];
-    if (knownIconsLatest === undefined || compareSemver(knownIconsLatest, iconsFloor) === -1) {
+    // Override the registry "latest" with the floor when there's no known
+    // latest OR the known latest is below the floor — a semver floor check
+    // (not ad-hoc compareSemver), consistent with doctor's icons-floor gate.
+    if (knownIconsLatest === undefined || !versionMeetsFloor(knownIconsLatest, iconsFloor)) {
       latestVersions['@helixui/icons'] = iconsFloor;
     }
   }
@@ -688,18 +700,27 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
   } else if (iconsMigrationNeeded && iconsPeerOnly) {
     // @helixui/icons is declared, but only in peerDependencies — keep that
     // contract entry and seed a devDependencies copy so the package actually
-    // installs into node_modules. Seed the NEWER of the peer range and the
-    // create-helix floor: a stale peer (`^1.0.0`) copied verbatim would
-    // install a version that STILL fails doctor's `^1.0.4` floor, leaving
-    // the reported issue unresolved after `pnpm install`. An unparseable
-    // peer range (compareSemver → null) also falls back to the known-good
-    // floor rather than risk seeding something doctor can't accept.
+    // installs into node_modules (`pnpm install` does NOT place a bare
+    // peerDependency into the package's own node_modules).
+    //
+    // The 1.0.4 icons floor is only required once @helixui/library is provably
+    // a stable >= 3.10.0 (libraryAtFloor) — the earlier 3.9.x pins paired with
+    // icons 1.0.1. So we only RAISE the seeded copy to the floor when BOTH the
+    // library is at the floor AND the peer range doesn't already meet it. The
+    // floor check runs through the shared semver predicate (NOT ad-hoc
+    // compareSemver). A clean single range we can seed verbatim (e.g. `^1.0.1`)
+    // is kept as-is on a 3.9.x project; a peer we can't cleanly copy — a `||`
+    // union (`^1.0.0 || ^2.0.0`) or an unparseable spec (`workspace:*`) — falls
+    // back to the known-good floor pin regardless.
     const peerRange = pkg.peerDependencies?.['@helixui/icons'];
-    const peerMeetsFloor =
-      peerRange !== undefined && (compareSemver(peerRange, HELIX_ICONS_VERSION) ?? -1) >= 0;
-    (pkg.devDependencies ??= {})['@helixui/icons'] = peerMeetsFloor
-      ? peerRange
-      : HELIX_ICONS_VERSION;
+    const iconsFloor = HELIX_ICONS_VERSION.replace(/^[\^~]/, '');
+    const peerCleanlySeedable =
+      peerRange !== undefined && !peerRange.includes('||') && isResolvableRange(peerRange);
+    const peerMeetsFloor = peerRange !== undefined && libraryProvablyAtLeast(peerRange, iconsFloor);
+    // Raise to the floor when the library needs it (3.10+) and the peer is
+    // below it, OR when the peer can't be seeded verbatim at all.
+    const raiseToFloor = !peerCleanlySeedable || (libraryAtFloor && !peerMeetsFloor);
+    (pkg.devDependencies ??= {})['@helixui/icons'] = raiseToFloor ? HELIX_ICONS_VERSION : peerRange;
   }
 
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');

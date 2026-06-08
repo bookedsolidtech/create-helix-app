@@ -10,6 +10,7 @@ import {
   HELIX_TOKENS_MAJOR,
   HELIX_ICONS_VERSION,
   libraryProvablyAtLeast,
+  versionMeetsFloor,
 } from './helix-versions.js';
 
 export interface CheckResult {
@@ -216,28 +217,6 @@ function projectDeclaresIcons(dir: string): boolean {
 }
 
 /**
- * Compare two semver-ish strings — true when `actual` >= `floor`. Range
- * prefixes (`^`, `~`, `v`) are stripped and prerelease/build metadata is
- * ignored; unparseable input returns false so a malformed version surfaces
- * as a failure rather than silently passing. Enough precision for a
- * minor/patch floor check without pulling in a full semver lib.
- */
-function versionAtLeast(actual: string, floor: string): boolean {
-  const parse = (v: string): [number, number, number] | null => {
-    const m = /^[v^~]*(\d+)\.(\d+)\.(\d+)/.exec(v.trim());
-    return m ? [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)] : null;
-  };
-  const a = parse(actual);
-  const f = parse(floor);
-  if (a === null || f === null) return false;
-  for (let i = 0; i < 3; i++) {
-    if (a[i] > f[i]) return true;
-    if (a[i] < f[i]) return false;
-  }
-  return true; // exactly equal
-}
-
-/**
  * Read the package.json of `pkgName` as installed in the CONSUMER's tree.
  *
  * Uses a direct `node_modules/<pkg>/package.json` read rather than
@@ -334,7 +313,7 @@ export function checkHelixIcons(cwd: string): CheckResult {
   const libraryFloor = HELIX_LIBRARY_VERSION.replace(/^[\^~]/, '');
   if (
     libraryAtLeast(dir, '@helixui/library', libraryFloor) &&
-    !versionAtLeast(version, HELIX_ICONS_VERSION)
+    !versionMeetsFloor(version, HELIX_ICONS_VERSION)
   ) {
     return {
       name: '@helixui/icons',

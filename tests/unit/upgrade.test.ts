@@ -1182,14 +1182,11 @@ describe('upgrade command', () => {
       expect(updated.dependencies['@helixui/icons']).toBeDefined();
     });
 
-    it('seeds @helixui/icons at the create-helix floor when the peer-only range is unparseable', async () => {
-      // @helixui/icons declared ONLY in peerDependencies, as an unparseable
-      // union range `^1.0.0 || ^2.0.0`. The version-bump write-back can't
-      // reason about it (compareSemver → null), so it survives un-raised — and
-      // copying it verbatim into devDependencies could install a version that
-      // still fails doctor's HELIX_ICONS_VERSION floor. The seeded copy must
-      // fall back to the known-good floor; the peer entry itself is left
-      // untouched.
+    it('seeds @helixui/icons at the create-helix floor when the peer-only range is a union', async () => {
+      // @helixui/icons declared ONLY in peerDependencies, as a `||` union
+      // (`^1.0.0 || ^2.0.0`). A union can't be cleanly copied as a single
+      // installable devDependency pin, so the seeded copy falls back to the
+      // known-good floor; the peer entry itself is left untouched.
       const dir = makeTmpProject({
         name: 'unparseable-peer-icons',
         dependencies: { '@helixui/library': '^3.9.1' },
@@ -1225,6 +1222,48 @@ describe('upgrade command', () => {
         devDependencies: Record<string, string>;
       };
       expect(updated.devDependencies['@helixui/icons']).toBe('^1.2.0');
+    });
+
+    it('seeds a peer-only @helixui/icons ^1.0.1 verbatim on a 3.9.x library — does NOT raise to the floor', async () => {
+      // THE devDep-seed P2 (closed): the 1.0.4 floor is a 3.10+ requirement. On
+      // a library still at 3.9.x, a peer-only icons ^1.0.1 (a clean, below-floor
+      // range that is perfectly valid for 3.9.x) must be seeded VERBATIM, not
+      // raised to ^1.0.4. The seed only raises when the library is provably
+      // >= 3.10.0.
+      const dir = makeTmpProject({
+        name: 'peer-only-icons-39x-not-raised',
+        dependencies: { '@helixui/library': '^3.9.1' },
+        peerDependencies: { '@helixui/icons': '^1.0.1' },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        devDependencies: Record<string, string>;
+        peerDependencies: Record<string, string>;
+      };
+      expect(updated.devDependencies['@helixui/icons']).toBe('^1.0.1');
+      expect(updated.peerDependencies['@helixui/icons']).toBe('^1.0.1');
+    });
+
+    it('raises a peer-only @helixui/icons ^1.0.1 to the floor when the library IS 3.10+', async () => {
+      // Counterpart: on a library provably >= 3.10.0, a below-floor peer-only
+      // icons ^1.0.1 IS raised to ^1.0.4 so the seeded devDep satisfies the
+      // tightened <hx-icon> peer.
+      const dir = makeTmpProject({
+        name: 'peer-only-icons-310-raised',
+        dependencies: { '@helixui/library': '^3.10.0' },
+        peerDependencies: { '@helixui/icons': '^1.0.1' },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        devDependencies: Record<string, string>;
+      };
+      expect(updated.devDependencies['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
     });
 
     it('raises a stale but installed @helixui/icons range to the create-helix floor when offline (library 3.10+)', async () => {
