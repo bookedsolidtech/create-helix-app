@@ -1,0 +1,99 @@
+import { describe, it, expect } from 'vitest';
+import {
+  HELIX_LIBRARY_VERSION,
+  HELIX_TOKENS_VERSION,
+  HELIX_ICONS_VERSION,
+  HELIX_LIBRARY_MAJOR,
+  HELIX_TOKENS_MAJOR,
+  HELIX_ICONS_MAJOR,
+} from '../../src/helix-versions.js';
+import { TEMPLATES } from '../../src/templates.js';
+
+/**
+ * Pin-coherence guard for the centralized HELiX version constants.
+ *
+ * The 3.10 release introduced a real trap: `@helixui/library@3.10.0` exists and
+ * depends on `@helixui/tokens` `3.9.4` EXACTLY — but `@helixui/tokens@3.10.0`
+ * was never published. A naive "bump everything to 3.10" would pin the tokens
+ * floor at `^3.10.0`, which is unsatisfiable and breaks a fresh install. These
+ * assertions fail fast if a future bump reintroduces that incoherence (or lets
+ * the floors drift stale), instead of letting it slip through to a scaffolded
+ * project's first `pnpm install`.
+ *
+ * Verified against npm on 2026-06-07:
+ *   - @helixui/library@3.10.0  → deps { @helixui/tokens: "3.9.4" },
+ *                                 peerDeps { @helixui/icons: "1.0.4" }
+ *   - @helixui/tokens@3.9.4     → published; @helixui/tokens@3.10.0 → NOT published
+ *   - @helixui/icons@1.0.4      → published
+ */
+
+/** Parse the leading semver from a range like `^3.10.0` → [3, 10, 0]. */
+function parseRange(range: string): [number, number, number] {
+  const match = range.match(/^[\^~]?(\d+)\.(\d+)\.(\d+)/);
+  if (!match) {
+    throw new Error(`unparseable version range: ${range}`);
+  }
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+describe('HELiX version pin coherence', () => {
+  it('all three floors are caret ranges with a parseable semver', () => {
+    for (const range of [HELIX_LIBRARY_VERSION, HELIX_TOKENS_VERSION, HELIX_ICONS_VERSION]) {
+      expect(range).toMatch(/^\^\d+\.\d+\.\d+$/);
+    }
+  });
+
+  it('library floor tracks 3.10 (major 3)', () => {
+    const [major, minor] = parseRange(HELIX_LIBRARY_VERSION);
+    expect(major).toBe(3);
+    expect(major).toBe(HELIX_LIBRARY_MAJOR);
+    // Floor must be at least 3.10 so the scaffold tracks the current release.
+    expect(major * 1000 + minor).toBeGreaterThanOrEqual(3 * 1000 + 10);
+  });
+
+  it('tokens floor is 3.9.4 and NOT a nonexistent 3.10.x (the 3.10 trap)', () => {
+    const [major, minor, patch] = parseRange(HELIX_TOKENS_VERSION);
+    expect(major).toBe(3);
+    expect(major).toBe(HELIX_TOKENS_MAJOR);
+    // @helixui/tokens@3.10.0 was never published — library@3.10.0 depends on
+    // tokens 3.9.4 exactly. A 3.10.x tokens floor is unsatisfiable.
+    expect(`${major}.${minor}`).not.toBe('3.10');
+    expect(HELIX_TOKENS_VERSION).toBe('^3.9.4');
+    expect(patch).toBeGreaterThanOrEqual(4);
+  });
+
+  it('icons floor is 1.0.4 (the exact peer library@3.x requires) at major 1', () => {
+    const [major, minor, patch] = parseRange(HELIX_ICONS_VERSION);
+    expect(major).toBe(1);
+    expect(major).toBe(HELIX_ICONS_MAJOR);
+    // library@3.x peer-requires @helixui/icons 1.0.4 exactly.
+    expect(minor).toBe(0);
+    expect(patch).toBeGreaterThanOrEqual(4);
+  });
+
+  it('every template emits the centralized constants, never a hardcoded HELiX pin', () => {
+    const buckets = ['dependencies', 'devDependencies', 'peerDependencies'] as const;
+    let assertions = 0;
+    for (const template of TEMPLATES) {
+      for (const bucket of buckets) {
+        const deps = template[bucket];
+        if (!deps) continue;
+        if ('@helixui/library' in deps) {
+          expect(deps['@helixui/library']).toBe(HELIX_LIBRARY_VERSION);
+          assertions++;
+        }
+        if ('@helixui/tokens' in deps) {
+          expect(deps['@helixui/tokens']).toBe(HELIX_TOKENS_VERSION);
+          assertions++;
+        }
+        if ('@helixui/icons' in deps) {
+          expect(deps['@helixui/icons']).toBe(HELIX_ICONS_VERSION);
+          assertions++;
+        }
+      }
+    }
+    // Guard the guard: at least one template must declare a HELiX pin, otherwise
+    // a refactor that stops emitting them would make this test vacuously pass.
+    expect(assertions).toBeGreaterThan(0);
+  });
+});

@@ -4,6 +4,7 @@ import fs from 'fs-extra';
 import { scaffoldProject } from '../../../src/scaffold.js';
 import type { ProjectOptions } from '../../../src/types.js';
 import { makeTmpRoot, removeTempDir, assertFilesExist, readJson, readText } from '../setup.js';
+import { HELIX_LIBRARY_VERSION, HELIX_TOKENS_VERSION } from '../../../src/helix-versions.js';
 
 const ROOT = makeTmpRoot('wc-storybook');
 
@@ -678,37 +679,39 @@ describe('wc-storybook integration', () => {
       peerDependencies?: Record<string, string>;
     }>(o.directory, 'package.json');
     // The @helixui/* pins come from the centralized helix-versions.ts
-    // (single source of truth — ^3.9.1 as of v0.9.2). The cascade tokens
-    // this scaffold expects (action.* semantic tier, on-{role}-strong text
-    // tokens, on-dark-* border family) landed in Helix 3.3.1, so ^3.9.1
-    // comfortably satisfies the contract. The library-mode template pins
-    // it via peerDependencies (consumer-host requirement) + devDependencies
-    // (local pipeline). NOT runtime dependencies — putting Helix in
-    // `dependencies` would let downstream apps install a duplicate runtime
-    // alongside the host's own copy.
+    // (single source of truth). Asserting against the constants — not a
+    // hardcoded literal — keeps this test from going stale every HELiX bump
+    // (the helix-version-pins unit test guards the constants' coherence).
+    // The cascade tokens this scaffold expects (action.* semantic tier,
+    // on-{role}-strong text tokens, on-dark-* border family) are satisfied by
+    // the current floors. The library-mode template pins them via
+    // peerDependencies (consumer-host requirement) + devDependencies (local
+    // pipeline). NOT runtime dependencies — putting Helix in `dependencies`
+    // would let downstream apps install a duplicate runtime alongside the
+    // host's own copy.
     expect(pkg.dependencies['@helixui/library']).toBeUndefined();
-    expect(pkg.peerDependencies?.['@helixui/library']).toBe('^3.9.1');
-    expect(pkg.devDependencies['@helixui/library']).toBe('^3.9.1');
-    expect(pkg.peerDependencies?.['@helixui/tokens']).toBe('^3.9.1');
-    expect(pkg.devDependencies['@helixui/tokens']).toBe('^3.9.1');
+    expect(pkg.peerDependencies?.['@helixui/library']).toBe(HELIX_LIBRARY_VERSION);
+    expect(pkg.devDependencies['@helixui/library']).toBe(HELIX_LIBRARY_VERSION);
+    expect(pkg.peerDependencies?.['@helixui/tokens']).toBe(HELIX_TOKENS_VERSION);
+    expect(pkg.devDependencies['@helixui/tokens']).toBe(HELIX_TOKENS_VERSION);
   });
 
-  it('pins @helixui/library as a peerDependency at the centralized version (^3.9.1)', async () => {
+  it('pins @helixui/library + tokens as peerDependencies at the centralized versions', async () => {
     const o = opts('wcs-peerdep');
     await scaffoldProject(o);
     const pkg = await readJson<{
       peerDependencies?: Record<string, string>;
     }>(o.directory, 'package.json');
     // wc-storybook ships components that bridge --{prefix}-* tokens into
-    // Helix's --hx-* names. That bridge ASSUMES the cascade contract that
-    // landed in Helix 3.3.1 (action.* semantic tier, on-{role}-strong text
-    // tokens, on-dark-* border family); the pin tracks current Helix
-    // (^3.9.1) via helix-versions.ts. The peerDep surfaces this version
-    // floor in `npm ls` output and trips pnpm's strict-peer-deps check if a
-    // downstream installs an older Helix that doesn't export the cascade.
+    // Helix's --hx-* names. That bridge ASSUMES the action.* semantic tier,
+    // on-{role}-strong text tokens, and on-dark-* border family; the pins
+    // track current Helix via helix-versions.ts. The peerDep surfaces this
+    // version floor in `npm ls` output and trips pnpm's strict-peer-deps
+    // check if a downstream installs an older Helix that doesn't export the
+    // cascade. Asserting against the constants keeps the test bump-proof.
     expect(pkg.peerDependencies).toBeDefined();
-    expect(pkg.peerDependencies?.['@helixui/library']).toBe('^3.9.1');
-    expect(pkg.peerDependencies?.['@helixui/tokens']).toBe('^3.9.1');
+    expect(pkg.peerDependencies?.['@helixui/library']).toBe(HELIX_LIBRARY_VERSION);
+    expect(pkg.peerDependencies?.['@helixui/tokens']).toBe(HELIX_TOKENS_VERSION);
   });
 
   it('does not scaffold the ${ds}-card demo component', async () => {
