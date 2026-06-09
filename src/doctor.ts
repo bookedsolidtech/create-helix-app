@@ -4,7 +4,12 @@ import path from 'node:path';
 import os from 'node:os';
 import https from 'node:https';
 import { TEMPLATES } from './templates.js';
-import { HELIX_LIBRARY_MAJOR, HELIX_TOKENS_MAJOR, HELIX_ICONS_VERSION } from './helix-versions.js';
+import {
+  HELIX_LIBRARY_MAJOR,
+  HELIX_LIBRARY_MIN,
+  HELIX_TOKENS_MAJOR,
+  HELIX_ICONS_VERSION,
+} from './helix-versions.js';
 
 export interface CheckResult {
   name: string;
@@ -378,7 +383,12 @@ function projectDeclares(dir: string, pkgName: string): boolean {
  * has silently fallen majors behind now gets told, instead of finding out
  * when the design tooling targets an API the installed major doesn't have.
  */
-function checkHelixDrift(cwd: string, pkgName: string, floorMajor: number): CheckResult {
+function checkHelixDrift(
+  cwd: string,
+  pkgName: string,
+  floorMajor: number,
+  floorVersion?: string,
+): CheckResult {
   // Follow the scaffold's manifest — the flat scaffold root, or apps/web for
   // a monorepo scaffold (see resolveHelixManifestDir). Without this, doctor
   // run from a monorepo root would skip the drift check entirely.
@@ -438,6 +448,19 @@ function checkHelixDrift(cwd: string, pkgName: string, floorMajor: number): Chec
       message: `v${version} at ${path.relative(cwd, pkgJsonPath)} — ${behind} major version${behind === 1 ? '' : 's'} behind (create-helix pins ^${floorMajor}.x); run \`create-helix upgrade\` or \`pnpm update ${pkgName}\`.`,
     };
   }
+  // Minor/patch floor: a same-major install can still be behind the version
+  // whose APIs the scaffolded templates emit (e.g. library 3.9.x vs the 3.10
+  // `slot="heading"`/`hx-size` markup). A major-only check would pass it.
+  // `create-helix upgrade` now carries this floor (the @helixui/library floor
+  // in runUpgrade), so it — and `pnpm update`, which keeps the existing bucket
+  // — both lift the drift; no bucket-changing `pnpm add` needed.
+  if (floorVersion !== undefined && !versionAtLeast(version, floorVersion)) {
+    return {
+      name: pkgName,
+      status: 'fail',
+      message: `v${version} at ${path.relative(cwd, pkgJsonPath)} — below the ${floorVersion} floor create-helix scaffolds against (the templates emit ${pkgName}@${floorVersion}+ APIs); run \`create-helix upgrade\` or \`pnpm update ${pkgName}\`.`,
+    };
+  }
   return {
     name: pkgName,
     status: 'ok',
@@ -450,7 +473,7 @@ function checkHelixDrift(cwd: string, pkgName: string, floorMajor: number): Chec
  * major create-helix scaffolds/tests against. See checkHelixDrift.
  */
 export function checkHelixLibrary(cwd: string): CheckResult {
-  return checkHelixDrift(cwd, '@helixui/library', HELIX_LIBRARY_MAJOR);
+  return checkHelixDrift(cwd, '@helixui/library', HELIX_LIBRARY_MAJOR, HELIX_LIBRARY_MIN);
 }
 
 /**

@@ -27,6 +27,15 @@
 export const HELIX_LIBRARY_VERSION = '^3.10.0';
 
 /**
+ * Minimum `@helixui/library` version a scaffolded project must RESOLVE to. The
+ * emitted templates use 3.10-only APIs (`slot="heading"`, `hx-size`), so an
+ * install below this floor — even on the same 3.x major — no longer matches the
+ * generated markup. `doctor` fails it and `upgrade` lifts the pin past it. Keep
+ * in lockstep with HELIX_LIBRARY_VERSION.
+ */
+export const HELIX_LIBRARY_MIN = '3.10.0';
+
+/**
  * `@helixui/tokens` range emitted into scaffolded package.json files.
  *
  * Floor is `^3.9.4`, NOT `^3.10.0`: `@helixui/tokens@3.10.0` does not exist on

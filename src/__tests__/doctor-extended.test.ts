@@ -245,7 +245,24 @@ describe('checkHelixLibrary / checkHelixTokens drift', () => {
     expect(result.message).toMatch(/create-helix upgrade/);
   });
 
-  it('passes when the installed @helixui/library major is current', () => {
+  it('passes when the installed @helixui/library is at or above the pinned floor', () => {
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      dependencies: { '@helixui/library': '^3.10.0' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'library', 'package.json'), {
+      name: '@helixui/library',
+      version: '3.10.0',
+    });
+    const result = checkHelixLibrary(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v3\.10\.0/);
+  });
+
+  it('fails when the installed @helixui/library is on the pinned major but below the 3.10 floor', () => {
+    // The scaffold templates emit 3.10-only APIs (slot="heading", hx-size); a
+    // same-major 3.9.x install no longer matches the generated markup, so doctor
+    // must flag it even though it clears the major check.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       dependencies: { '@helixui/library': '^3.9.1' },
@@ -255,8 +272,8 @@ describe('checkHelixLibrary / checkHelixTokens drift', () => {
       version: '3.9.1',
     });
     const result = checkHelixLibrary(tmp);
-    expect(result.status).toBe('ok');
-    expect(result.message).toMatch(/v3\.9\.1/);
+    expect(result.status).toBe('fail');
+    expect(result.message).toMatch(/below the 3\.10\.0 floor/);
   });
 
   it('fails when @helixui/tokens is majors behind', () => {

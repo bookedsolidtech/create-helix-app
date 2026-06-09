@@ -24,7 +24,7 @@ import {
   runUpgrade,
 } from '../../src/commands/upgrade.js';
 import { detectOffline, readRegistryCache } from '../../src/network.js';
-import { HELIX_ICONS_VERSION } from '../../src/helix-versions.js';
+import { HELIX_ICONS_VERSION, HELIX_LIBRARY_VERSION } from '../../src/helix-versions.js';
 
 /** Helper: create a temp directory with a package.json. */
 function makeTmpProject(pkgJson: Record<string, unknown>): string {
@@ -1268,6 +1268,58 @@ describe('upgrade command', () => {
         dependencies: Record<string, string>;
       };
       expect(updated.dependencies['@helixui/icons']).toBe('^1.2.0');
+    });
+
+    it('raises a stale but installed @helixui/library range to the 3.10 floor when offline', async () => {
+      // @helixui/library at ^3.9.1 — same major, below the 3.10 template floor.
+      // Offline (no registry, no cache) the plan would otherwise no-op, leaving
+      // doctor failing right after it pointed the user at `create-helix upgrade`.
+      const dir = makeTmpProject({
+        name: 'stale-installed-library',
+        dependencies: { '@helixui/library': '^3.9.1' },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/library']).toBe(HELIX_LIBRARY_VERSION);
+    });
+
+    it('leaves an @helixui/library range already above the 3.10 floor untouched when offline', async () => {
+      // The floor is a minimum, not a target — it must never drag a newer pin
+      // backward.
+      const dir = makeTmpProject({
+        name: 'newer-installed-library',
+        dependencies: { '@helixui/library': '^3.11.0' },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/library']).toBe('^3.11.0');
+    });
+
+    it('does not force a pre-3.x @helixui/library across the major boundary when offline', async () => {
+      // A 2.x library is a major migration the user opts into — the floor must
+      // not silently jump it two majors to 3.10.
+      const dir = makeTmpProject({
+        name: 'pre-3x-library',
+        dependencies: { '@helixui/library': '^2.5.0' },
+      });
+      tmpDirs.push(dir);
+
+      await runUpgrade(dir, { dryRun: false, offline: true });
+
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(updated.dependencies['@helixui/library']).toBe('^2.5.0');
     });
   });
 
