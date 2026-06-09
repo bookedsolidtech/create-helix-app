@@ -5,9 +5,13 @@
  * Usage:
  *   node scripts/bench-ci.mjs [--baseline tests/benchmarks/baselines.json] [--results bench-results.json]
  *
- * Reads vitest bench JSON output (via `--reporter=json --outputFile=<path>`) and
- * compares each benchmark's mean time against the stored baselines. Emits a
- * warning (not an error) when any benchmark regresses by more than 20%.
+ * Reads vitest bench JSON output (via `--outputJson=<path>`) and compares each
+ * benchmark's mean time against the stored baselines. Emits a warning (not an
+ * error) when a benchmark exceeds REGRESSION_THRESHOLD above its baseline mean.
+ *
+ * Baselines are raw means from the machine that regenerated them, so the
+ * threshold is deliberately generous: it absorbs the dev-laptop-vs-CI-runner
+ * speed gap while still flagging egregious slowdowns.
  *
  * Exit code: 0 always (warn-only — regressions never block CI).
  *
@@ -18,6 +22,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { parseBenchResults } from './lib/parse-bench-json.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -37,7 +43,14 @@ function getArg(flag, defaultValue) {
 const baselinePath = path.resolve(ROOT, getArg('--baseline', 'tests/benchmarks/baselines.json'));
 const resultsPath = path.resolve(ROOT, getArg('--results', 'bench-results.json'));
 
-const REGRESSION_THRESHOLD = 0.2; // 20%
+// Warn only when a run is >6x its baseline mean. Baselines are raw means
+// captured on whatever machine regenerated them (typically a fast dev laptop),
+// and CI runners are routinely 2-3x slower on this I/O-bound scaffolding work —
+// so the threshold has to clear that environment gap with margin to spare, or
+// ordinary CI variance reads as a "regression." 5.0 (warn at >6x baseline)
+// keeps ~2x headroom over the worst expected CI slowdown while still surfacing
+// the order-of-magnitude regressions this coarse, warn-only check exists for.
+const REGRESSION_THRESHOLD = 5.0;
 
 // ---------------------------------------------------------------------------
 // Load files
@@ -51,7 +64,7 @@ if (!fs.existsSync(baselinePath)) {
 if (!fs.existsSync(resultsPath)) {
   console.warn(`[bench-ci] Results file not found: ${resultsPath} — skipping regression check`);
   console.warn(
-    `[bench-ci] Run: pnpm run bench -- --reporter=json --outputFile=${path.relative(ROOT, resultsPath)}`,
+    `[bench-ci] Run: pnpm run bench -- --outputJson=${path.relative(ROOT, resultsPath)}`,
   );
   process.exit(0);
 }
@@ -62,37 +75,13 @@ const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf-8'));
 /** @type {unknown} */
 const results = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
 
-// ---------------------------------------------------------------------------
-// Parse vitest bench JSON output
-//
-// Vitest bench JSON format (v3.x):
-//   { testResults: [ { testFilePath, assertionResults: [ { fullName, duration, ... } ] } ] }
-//
-// We extract (fullName, duration) pairs. "duration" is the mean time in ms.
-// ---------------------------------------------------------------------------
-
-/** @type {Map<string, number>} */
-const currentResults = new Map();
-
-if (
-  results &&
-  typeof results === 'object' &&
-  'testResults' in results &&
-  Array.isArray(results.testResults)
-) {
-  for (const fileResult of results.testResults) {
-    if (!Array.isArray(fileResult.assertionResults)) continue;
-    for (const assertion of fileResult.assertionResults) {
-      if (typeof assertion.fullName === 'string' && typeof assertion.duration === 'number') {
-        currentResults.set(assertion.fullName, assertion.duration);
-      }
-    }
-  }
-}
+// Parse vitest 4 bench JSON (see scripts/lib/parse-bench-json.mjs) into a
+// "<describe> > <name>" -> mean (ms) map, keyed to match baselines.json.
+const currentResults = parseBenchResults(results);
 
 if (currentResults.size === 0) {
   console.warn('[bench-ci] No benchmark results found in results file — skipping regression check');
-  console.warn('[bench-ci] Ensure vitest bench ran with --reporter=json');
+  console.warn('[bench-ci] Ensure vitest bench ran with --outputJson');
   process.exit(0);
 }
 
@@ -110,6 +99,13 @@ for (const [name, { meanMs: baselineMean }] of Object.entries(baseline.benchmark
   const current = currentResults.get(name);
   if (current === undefined) {
     console.warn(`[bench-ci] MISSING  "${name}" — not present in results (skipped)`);
+    continue;
+  }
+
+  if (!(baselineMean > 0)) {
+    console.warn(
+      `[bench-ci] SKIP     "${name}" — non-positive baseline (${baselineMean}); cannot compute a ratio`,
+    );
     continue;
   }
 

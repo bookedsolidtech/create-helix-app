@@ -6,13 +6,21 @@
  *   pnpm run bench:update-baselines
  *
  * This script is called automatically by the bench:update-baselines npm script,
- * which first runs `vitest bench --reporter=json --outputFile=bench-results.json`
- * then invokes this script to extract mean times and write baselines.json.
+ * which first runs `vitest bench --outputJson=bench-results.json` then invokes
+ * this script to extract each benchmark's mean time and write baselines.json.
+ *
+ * Baselines store the raw measured mean (not a padded ceiling) so bench-ci's
+ * regression math stays meaningful. Cross-machine headroom — a dev laptop is
+ * faster than a CI runner — lives in bench-ci's deliberately generous
+ * REGRESSION_THRESHOLD instead, so regenerating here can never shrink a ceiling
+ * and start false-tripping CI.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { parseBenchResults } from './lib/parse-bench-json.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -22,9 +30,7 @@ const baselinePath = path.resolve(ROOT, 'tests/benchmarks/baselines.json');
 
 if (!fs.existsSync(resultsPath)) {
   console.error(`[update-baselines] Results file not found: ${resultsPath}`);
-  console.error(
-    '[update-baselines] Run: vitest bench --reporter=json --outputFile=bench-results.json',
-  );
+  console.error('[update-baselines] Run: vitest bench --outputJson=bench-results.json');
   process.exit(1);
 }
 
@@ -34,25 +40,16 @@ const results = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
 /** @type {Record<string, { meanMs: number }>} */
 const benchmarks = {};
 
-if (
-  results &&
-  typeof results === 'object' &&
-  'testResults' in results &&
-  Array.isArray(results.testResults)
-) {
-  for (const fileResult of results.testResults) {
-    if (!Array.isArray(fileResult.assertionResults)) continue;
-    for (const assertion of fileResult.assertionResults) {
-      if (typeof assertion.fullName === 'string' && typeof assertion.duration === 'number') {
-        benchmarks[assertion.fullName] = { meanMs: Math.round(assertion.duration * 1000) / 1000 };
-      }
-    }
-  }
+for (const [name, mean] of parseBenchResults(results)) {
+  // Round to 3 significant figures, not 3 decimals — the sub-microsecond
+  // micro-benchmarks (~0.0002ms) would otherwise floor to 0 and make bench-ci
+  // divide by zero.
+  benchmarks[name] = { meanMs: mean > 0 ? Number(mean.toPrecision(3)) : 0 };
 }
 
 if (Object.keys(benchmarks).length === 0) {
   console.error('[update-baselines] No benchmark results found in results file.');
-  console.error('[update-baselines] Ensure vitest bench ran with --reporter=json');
+  console.error('[update-baselines] Ensure vitest bench ran with --outputJson');
   process.exit(1);
 }
 
@@ -63,9 +60,9 @@ const baseline = {
   _meta: {
     description: 'Baseline benchmark results for create-helix scaffold performance.',
     generated: today,
-    vitest: '3.x',
+    vitest: '4.x',
     node: process.version,
-    note: 'Values are mean iteration times in milliseconds. CI warns (does not fail) if any benchmark regresses >20% from these baselines. Regenerate with: pnpm run bench:update-baselines',
+    note: 'Values are raw measured mean iteration times in milliseconds from the machine that regenerated them. bench-ci compares against these with a deliberately generous, cross-machine REGRESSION_THRESHOLD (warn-only, never fails) so a slower CI runner does not false-trip. Regenerate with: pnpm run bench:update-baselines.',
   },
   benchmarks,
 };
