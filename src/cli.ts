@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { TEMPLATES, COMPONENT_BUNDLES } from './templates.js';
-import { scaffoldProject, getDryRunEntries } from './scaffold.js';
+import { scaffoldProject, getDryRunEntries, getLastScaffoldTiming } from './scaffold.js';
 import type { Framework, ComponentBundle, ProjectOptions } from './types.js';
 import { isValidPreset, PRESETS } from './presets/loader.js';
 import { scaffoldDrupalTheme } from './generators/drupal-theme.js';
@@ -14,49 +14,43 @@ import {
   validateFramework,
   validatePreset,
   validateDirectory,
+  validateDsName,
+  validateTokenPrefix,
+  unscopeName,
+  validateScopedNameForFramework,
 } from './validation.js';
 import { parseArgs } from './args.js';
-import { loadConfig, readEnvVars } from './config.js';
+import { loadConfig, listProfiles, readEnvVars } from './config.js';
+import { auditDependencies } from './security/dep-audit.js';
+import { checkForUpdate, getCachedLatestVersion } from './version-check.js';
+import { logger } from './logger.js';
 import { runDoctor, formatDoctorOutput } from './doctor.js';
 import { showTemplateInfo } from './commands/info.js';
+import { helixBanner } from './cli/banner.js';
 
 const _require = createRequire(import.meta.url);
 const pkg = _require('../package.json') as { version: string };
 const HELIX_VERSION = pkg.version;
 
-function banner(): void {
-  console.log();
-  console.log(pc.bold(pc.cyan('  ╭─────────────────────────────────────╮')));
-  console.log(pc.bold(pc.cyan('  │                                     │')));
-  console.log(
-    pc.bold(
-      pc.cyan('  │') +
-        '   ' +
-        pc.white('H E L i X') +
-        '  ' +
-        pc.dim('create') +
-        '              ' +
-        pc.cyan('│'),
-    ),
-  );
-  console.log(
-    pc.bold(pc.cyan('  │') + pc.dim('   Enterprise Web Components           ') + pc.cyan('│')),
-  );
-  console.log(
-    pc.bold(
-      pc.cyan('  │') +
-        pc.dim(`   v${HELIX_VERSION}`) +
-        '                              ' +
-        pc.cyan('│'),
-    ),
-  );
-  console.log(pc.bold(pc.cyan('  │                                     │')));
-  console.log(pc.bold(pc.cyan('  ╰─────────────────────────────────────╯')));
-  console.log();
+/**
+ * Render the create-helix banner via the extracted helixBanner() helper
+ * (v0.6.0 Phase D). Suppression contract is enforced inside the helper:
+ * returns [] under --quiet, --json, or non-TTY pipes.
+ */
+function banner(
+  opts: {
+    asJson?: boolean;
+    suppressed?: boolean;
+    latestNpmVersion?: string;
+  } = {},
+): void {
+  helixBanner(opts).forEach((line) => {
+    console.log(line);
+  });
 }
 
 async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise<void> {
-  if (!isQuiet) banner();
+  banner({ suppressed: isQuiet, latestNpmVersion: getCachedLatestVersion() ?? undefined });
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix — Drupal theme ')));
 
@@ -72,6 +66,7 @@ async function runDrupalCLI(presetArg: string | null, isQuiet: boolean): Promise
   const themeName = await p.text({
     message: 'Drupal theme machine name',
     placeholder: 'my-helix-theme',
+    /* istanbul ignore next -- validate callback is never invoked when @clack/prompts is mocked */
     validate(value) {
       if (!value) return 'Theme name is required';
       // SECURITY: Whitelist-only validation — enforces a valid Drupal machine
@@ -156,16 +151,32 @@ export function runInfoCommand(templateId: string | null, isJson: boolean): void
   showTemplateInfo(templateId, isJson);
 }
 
-export function runListCommand(isJson: boolean, configFile?: string | null): void {
+export function runListCommand(
+  isJson: boolean,
+  configFile?: string | null,
+  showExperimental = false,
+): void {
+  const productionTemplates = TEMPLATES.filter((t) => !t.experimental);
+  const experimentalTemplates = TEMPLATES.filter((t) => t.experimental);
   if (isJson) {
+    const visibleTemplates = showExperimental ? TEMPLATES : productionTemplates;
     const output: {
-      templates: { id: string; name: string; hint: string }[];
+      templates: { id: string; name: string; hint: string; experimental?: boolean }[];
       presets: { id: string; name: string; description: string }[];
+      experimentalHidden?: number;
       configFile?: string | null;
     } = {
-      templates: TEMPLATES.map((t) => ({ id: t.id, name: t.name, hint: t.hint })),
+      templates: visibleTemplates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        hint: t.hint,
+        ...(t.experimental ? { experimental: true as const } : {}),
+      })),
       presets: PRESETS.map((pr) => ({ id: pr.id, name: pr.name, description: pr.description })),
     };
+    if (!showExperimental && experimentalTemplates.length > 0) {
+      output.experimentalHidden = experimentalTemplates.length;
+    }
     if (configFile !== undefined) {
       output.configFile = configFile;
     }
@@ -174,10 +185,27 @@ export function runListCommand(isJson: boolean, configFile?: string | null): voi
   }
 
   console.log('');
-  console.log(pc.bold('  Framework Templates'));
-  console.log('');
-  for (const t of TEMPLATES) {
-    console.log(`  ${pc.cyan(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`);
+  if (showExperimental) {
+    console.log(pc.bold('  Framework Templates — Production'));
+    console.log('');
+    for (const t of productionTemplates) {
+      console.log(`  ${pc.cyan(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`);
+    }
+    console.log('');
+    console.log(pc.bold('  Framework Templates — Experimental'));
+    console.log(pc.dim('  (stub-quality scaffolders; surfaced via --show-experimental)'));
+    console.log('');
+    for (const t of experimentalTemplates) {
+      console.log(
+        `  ${pc.yellow(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`,
+      );
+    }
+  } else {
+    console.log(pc.bold('  Framework Templates'));
+    console.log('');
+    for (const t of productionTemplates) {
+      console.log(`  ${pc.cyan(t.id.padEnd(18))} ${pc.white(t.name.padEnd(26))} ${pc.dim(t.hint)}`);
+    }
   }
   console.log('');
   console.log(pc.bold('  Drupal Presets'));
@@ -188,6 +216,16 @@ export function runListCommand(isJson: boolean, configFile?: string | null): voi
     );
   }
   console.log('');
+  if (!showExperimental && experimentalTemplates.length > 0) {
+    // DXA Q3 triple-discoverability point #1 — footer hint at the bottom
+    // of the default list output. Pinned by cli-list-experimental tests.
+    console.log(
+      pc.dim(
+        `  ${String(experimentalTemplates.length)} experimental templates hidden. Use --show-experimental to see them.`,
+      ),
+    );
+    console.log('');
+  }
 }
 
 interface ScaffoldJsonResult {
@@ -204,6 +242,18 @@ interface ScaffoldJsonResult {
   };
   files?: string[];
   dryRun?: boolean;
+  timing?: {
+    totalMs: number;
+    fileCount: number;
+    bytesWritten: number;
+    dependencyCount: number;
+    phases: {
+      validationMs: number;
+      templateResolutionMs: number;
+      fileGenerationMs: number;
+      fileWritingMs: number;
+    };
+  };
   error?: string;
 }
 
@@ -221,6 +271,10 @@ export async function runJsonScaffold(
     tokensFlag: boolean;
     bundlesFromFlag: ComponentBundle[] | null;
     outputDirArg: string | null;
+    dsNameFromArgs?: string | null;
+    tokenPrefixFromArgs?: string | null;
+    brandTaglineFromArgs?: string | null;
+    brandVerticalsFromArgs?: string[] | null;
   },
 ): Promise<void> {
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
@@ -235,27 +289,147 @@ export async function runJsonScaffold(
     process.exit(1);
   }
 
+  // Reject scoped names for frameworks that can't consume them (Stencil's
+  // namespace, Ember's modulePrefix and asset URLs both choke on `/` /
+  // `@`). validateProjectName itself permits scoped shapes for library
+  // templates; the framework gate runs after we know which template was
+  // picked.
+  const scopeErr = validateScopedNameForFramework(name, templateArg);
+  if (scopeErr) {
+    const result: ScaffoldJsonResult = { success: false, error: scopeErr };
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(1);
+  }
+
+  // Default the output directory to the UNSCOPED name. `@acme/design-system`
+  // would otherwise create `./@acme/design-system/` as nested directories;
+  // unscoping yields `./design-system/`. The package.json still records
+  // the full scoped name; this only affects the on-disk folder layout.
   const directory =
     opts.outputDirArg !== null
       ? path.resolve(process.cwd(), opts.outputDirArg)
-      : path.resolve(process.cwd(), name);
+      : path.resolve(process.cwd(), unscopeName(name));
 
-  const bundles: ComponentBundle[] =
-    opts.bundlesFromFlag ?? (['core', 'forms'] as ComponentBundle[]);
+  // wc-storybook now seeds helix.storybook.config.ts.components.include
+  // from these bundles, so a no-flag scaffold with the old ['core', 'forms']
+  // default would hide every non-core/non-forms tag (navigation, layout,
+  // feedback, etc.) until the consumer manually edited the config file.
+  // Default to 'all' for wc-storybook so the catalog matches the
+  // "full catalog out of the box" advertised behavior; other framework
+  // templates keep the smaller default since they don't surface a catalog.
+  const bundleDefault: ComponentBundle[] =
+    templateArg === 'wc-storybook'
+      ? (['all'] as ComponentBundle[])
+      : (['core', 'forms'] as ComponentBundle[]);
+  const bundles: ComponentBundle[] = opts.bundlesFromFlag ?? bundleDefault;
 
+  // JSON-mode bypasses the interactive prompt entirely — apply the same
+  // dsName / tokenPrefix regex here so wc-storybook scaffolds can't get a
+  // path-traversal-shaped or invalid-identifier-shaped value through JSON
+  // inputs that the interactive flow would have rejected.
+  if (templateArg === 'wc-storybook') {
+    if (opts.dsNameFromArgs !== null && opts.dsNameFromArgs !== undefined) {
+      const err = validateDsName(opts.dsNameFromArgs);
+      if (err) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --ds-name "${opts.dsNameFromArgs}": ${err}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+    if (opts.tokenPrefixFromArgs !== null && opts.tokenPrefixFromArgs !== undefined) {
+      const err = validateTokenPrefix(opts.tokenPrefixFromArgs);
+      if (err) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --token-prefix "${opts.tokenPrefixFromArgs}": ${err}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+    // When --ds-name is omitted in JSON mode, fall back to the project
+    // name only IF it passes validateDsName. Project names like '123-ui'
+    // or 'foo_bar' are valid npm names but invalid dsNames (leading
+    // digit / underscore). The interactive + API paths gracefully
+    // degrade to 'my-ds' — JSON mode now does the same so the supported
+    // project-name surface is consistent across entry points. Explicit
+    // --ds-name still validates strictly: when the caller supplies a
+    // value, they get a real error, not a silent default.
+    if (opts.dsNameFromArgs !== null && opts.dsNameFromArgs !== undefined) {
+      const dsErr = validateDsName(opts.dsNameFromArgs);
+      if (dsErr) {
+        const result: ScaffoldJsonResult = {
+          success: false,
+          error: `Invalid --ds-name "${opts.dsNameFromArgs}": ${dsErr}`,
+        };
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(1);
+      }
+    }
+    // Note: the scaffolder itself falls back to 'my-ds' when name is not
+    // a valid dsName (see scaffoldWcStorybook entry), so JSON mode no
+    // longer rejects those project names — automation gets the same
+    // forgiveness as interactive/API.
+  }
+
+  // wc-storybook is a TypeScript + token-pipeline factory. The interactive
+  // CLI and API both coerce typescript / designTokens to true regardless of
+  // user input — JSON mode must do the same so `--json --template
+  // wc-storybook --no-typescript` doesn't produce a broken scaffold where
+  // tsconfig.json / token files are skipped while the generator still
+  // emits .ts components.
+  const isWcStorybook = templateArg === 'wc-storybook';
   const options: import('./types.js').ProjectOptions = {
     name,
     directory,
     framework: templateArg as Framework,
     componentBundles: bundles,
-    typescript: opts.typescriptFlag,
+    typescript: isWcStorybook ? true : opts.typescriptFlag,
     eslint: opts.eslintFlag,
-    designTokens: opts.tokensFlag,
+    designTokens: isWcStorybook ? true : opts.tokensFlag,
     darkMode: opts.darkModeFlag,
     installDeps: !opts.isNoInstall,
     dryRun: opts.isDryRun,
     force: opts.isForce,
     verbose: opts.isVerbose,
+    // dsName: pass through explicit --ds-name when valid; otherwise
+    // strip the @scope/ prefix and pass the basename when it's a valid
+    // dsName, else undefined so the scaffolder falls back to 'my-ds'.
+    // Same forgiveness as interactive + API paths — `@acme/design-system`
+    // resolves to dsName='design-system', not 'my-ds'.
+    dsName: (() => {
+      if (opts.dsNameFromArgs) return opts.dsNameFromArgs;
+      const candidate = unscopeName(name);
+      return validateDsName(candidate) === undefined ? candidate : undefined;
+    })(),
+    // For wc-storybook, default tokenPrefix to --{validDsName} so the
+    // consumer's brand layer gets its own namespace; defaulting to --hx
+    // caused cyclic self-references in the bridge layer and dropped the
+    // override surface. Other frameworks keep --hx (they don't emit a
+    // brand bridge). Falls back to undefined when neither --token-prefix
+    // nor a valid name is available — scaffolder then derives from its
+    // resolved dsName ('my-ds' worst case).
+    tokenPrefix: (() => {
+      if (opts.tokenPrefixFromArgs) return opts.tokenPrefixFromArgs;
+      if (templateArg !== 'wc-storybook') return '--hx';
+      const candidate = opts.dsNameFromArgs ?? unscopeName(name);
+      if (validateDsName(candidate) !== undefined) return undefined;
+      // dsName='hx' would derive '--hx', which validateTokenPrefix rejects
+      // as reserved. Match the scaffolder's special-case fallback so
+      // `create-helix hx --json --template wc-storybook` succeeds.
+      return candidate === 'hx' ? `--${candidate}-ds` : `--${candidate}`;
+    })(),
+    // Brand-storytelling fields — wc-storybook factory only. Optional with
+    // cross-domain neutral defaults so JSON / --yes flows don't break and
+    // sample copy honors the realistic-sample-data rule (no domain lock).
+    brandTagline: opts.brandTaglineFromArgs ?? undefined,
+    brandVerticals: opts.brandVerticalsFromArgs ?? undefined,
+    // heroScenarios is too complex for a CLI flag in v1; consumers edit
+    // helix.storybook.config.ts post-scaffold to populate scenes.
+    heroScenarios: undefined,
   };
 
   try {
@@ -268,20 +442,43 @@ export async function runJsonScaffold(
       files = await collectFiles(directory);
     }
 
+    const timing = getLastScaffoldTiming();
     const result: ScaffoldJsonResult = {
       success: true,
       project: {
         name,
         directory,
         framework: templateArg,
-        typescript: opts.typescriptFlag,
-        eslint: opts.eslintFlag,
-        darkMode: opts.darkModeFlag,
-        designTokens: opts.tokensFlag,
+        // Echo the EFFECTIVE flags (after wc-storybook coercion) so JSON
+        // consumers see what was actually scaffolded, not the raw CLI
+        // input. wc-storybook always emits TypeScript + tokens
+        // regardless of --no-typescript / --no-tokens; reporting
+        // `typescript: false` while the project contains tsconfig.json
+        // and .ts sources misleads any tooling that reads this payload.
+        typescript: options.typescript,
+        eslint: options.eslint,
+        darkMode: options.darkMode,
+        designTokens: options.designTokens,
         bundles: bundles,
       },
       files,
       dryRun: opts.isDryRun,
+      ...(timing !== null
+        ? {
+            timing: {
+              totalMs: timing.totalMs,
+              fileCount: timing.fileCount,
+              bytesWritten: timing.bytesWritten,
+              dependencyCount: timing.dependencyCount,
+              phases: {
+                validationMs: timing.phases.validationMs,
+                templateResolutionMs: timing.phases.templateResolutionMs,
+                fileGenerationMs: timing.phases.fileGenerationMs,
+                fileWritingMs: timing.phases.fileWritingMs,
+              },
+            },
+          }
+        : {}),
     };
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {
@@ -351,11 +548,29 @@ export async function runCLI(): Promise<void> {
     tokens: tokensFlagRaw,
     explicitFlags,
     projectName,
+    skipAudit,
+    dsName: dsNameFromArgs,
+    tokenPrefix: tokenPrefixFromArgs,
+    brandTagline: brandTaglineFromArgs,
+    brandVerticals: brandVerticalsFromArgs,
+    showExperimental,
+    doctorQuick,
+    offline: isOfflineFromArgs,
+    monorepo: monorepoFlag,
+    noDesignSystem: noDesignSystemFlag,
   } = parsed;
 
   // Load config file and environment variables
   // Precedence: CLI flags > env vars > .helixrc.json > defaults
-  const { config: helixConfig } = loadConfig(noConfig);
+  let helixConfigResult: ReturnType<typeof loadConfig>;
+  try {
+    helixConfigResult = loadConfig(noConfig);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(msg);
+    process.exit(1);
+  }
+  const { config: helixConfig } = helixConfigResult;
   const cfgDefaults = helixConfig.defaults ?? {};
   const envVars = readEnvVars();
 
@@ -378,6 +593,12 @@ export async function runCLI(): Promise<void> {
   const isVerbose = isVerboseFromArgs || (envVars.verbose ?? false);
   const isNoInstall = isNoInstallFromArgs || (envVars.offline ?? false);
 
+  // Start version check in background (non-blocking); display after prompts
+  const updateCheckPromise: Promise<string | null> =
+    !isJson && !isNoInstall
+      ? checkForUpdate({ offline: isNoInstall, json: isJson })
+      : Promise.resolve(null);
+
   if (showVersion) {
     console.log(`create-helix v${HELIX_VERSION}`);
     process.exit(0);
@@ -385,7 +606,7 @@ export async function runCLI(): Promise<void> {
 
   if (subcommand === 'list') {
     const { listAll } = await import('./commands/list.js');
-    listAll(isJson);
+    listAll(isJson, showExperimental);
     process.exit(0);
   }
 
@@ -395,7 +616,7 @@ export async function runCLI(): Promise<void> {
   }
 
   if (subcommand === 'doctor') {
-    const result = await runDoctor(HELIX_VERSION);
+    const result = await runDoctor(HELIX_VERSION, { quick: doctorQuick });
     if (isJson) {
       console.log(JSON.stringify(result, null, 2));
     } else {
@@ -406,14 +627,26 @@ export async function runCLI(): Promise<void> {
 
   if (subcommand === 'upgrade') {
     const { runUpgrade } = await import('./commands/upgrade.js');
-    await runUpgrade(process.cwd(), { dryRun: isDryRun });
+    await runUpgrade(process.cwd(), {
+      dryRun: isDryRun,
+      offline: isOfflineFromArgs || (envVars.offline ?? false),
+    });
     process.exit(0);
   }
 
   if (subcommand === 'config') {
     if (subcommandArg === 'validate') {
-      const { runConfigValidate } = await import('./commands/config-validate.js');
-      runConfigValidate({ json: isJson });
+      const { runConfigValidateCommand } = await import('./commands/config-validate.js');
+      runConfigValidateCommand(process.cwd());
+    } else if (subcommandArg === 'list-profiles') {
+      const profiles = listProfiles();
+      if (profiles.length === 0) {
+        console.log('No profiles defined in .helixrc.json');
+      } else {
+        for (const name of profiles) {
+          console.log(name);
+        }
+      }
     } else {
       console.error(
         `Unknown config subcommand: "${subcommandArg ?? ''}". Usage: create-helix config validate`,
@@ -424,7 +657,17 @@ export async function runCLI(): Promise<void> {
   }
 
   if (showHelp) {
-    const frameworkList = TEMPLATES.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
+    // v0.6.0 Phase C — help lists production frameworks by default; an
+    // experimental section is appended when --show-experimental is passed
+    // so consumers can discover the full registry without the prompt.
+    const productionList = TEMPLATES.filter((t) => !t.experimental);
+    const experimentalList = TEMPLATES.filter((t) => t.experimental);
+    const frameworkList = productionList.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n');
+    const experimentalSection = showExperimental
+      ? `\n  Experimental frameworks (stub-quality; surfaced via --show-experimental):\n` +
+        experimentalList.map((t) => `    ${t.id.padEnd(16)} ${t.hint}`).join('\n') +
+        '\n'
+      : `\n  ${String(experimentalList.length)} experimental templates hidden. Use --show-experimental to see them.\n`;
     const presetList = PRESETS.map((pr) => `    ${pr.id.padEnd(16)} ${pr.description}`).join('\n');
     console.log(`
   create-helix v${HELIX_VERSION}
@@ -444,9 +687,23 @@ export async function runCLI(): Promise<void> {
 
   Framework Selection:
     --template <name>       Select a framework directly (skips prompt)
+    --show-experimental     Surface 13 stub-quality framework templates in
+                            the interactive prompt, the 'list' subcommand,
+                            and as valid --template values. Off by default.
+    --monorepo              For react-next / react-vite, scaffold a
+                            pnpm + turbo monorepo (apps/web + packages/
+                            design-system + packages/types + packages/
+                            utils). Skips the "Include @{scope}/design-
+                            system?" prompt. Default for app frameworks
+                            in interactive mode. Ignored for wc-storybook.
+    --no-design-system      Opposite of --monorepo. Skip the prompt and
+                            scaffold the flat (single-app) shape with no
+                            packages/design-system alongside. Ignored
+                            for wc-storybook.
 
   Available frameworks:
 ${frameworkList}
+${experimentalSection}
 
   Drupal Options:
     --drupal                Scaffold a Drupal theme instead of a web app
@@ -491,6 +748,7 @@ ${presetList}
     create-helix upgrade                         # Upgrade HELiX deps
     create-helix upgrade --dry-run               # Preview upgrade without writing
     create-helix doctor                          # Run environment health checks
+    create-helix doctor --quick                  # Skip slow/filesystem-probe checks (CI)
     HELIX_TEMPLATE=react-vite create-helix app   # Use env var for template
 `);
     process.exit(0);
@@ -548,11 +806,19 @@ ${presetList}
       tokensFlag,
       bundlesFromFlag,
       outputDirArg,
+      dsNameFromArgs,
+      tokenPrefixFromArgs,
+      brandTaglineFromArgs,
+      brandVerticalsFromArgs,
     });
     return;
   }
 
-  if (!isQuiet) banner();
+  banner({
+    asJson: isJson,
+    suppressed: isQuiet,
+    latestNpmVersion: getCachedLatestVersion() ?? undefined,
+  });
 
   if (!isQuiet) p.intro(pc.bgCyan(pc.black(' create-helix ')));
 
@@ -566,31 +832,110 @@ ${presetList}
           validate: validateProjectName,
         }),
 
-      framework: () =>
-        templateArg !== null
-          ? Promise.resolve(templateArg as Framework)
-          : p.select({
-              message: 'Which framework?',
-              options: TEMPLATES.map((t) => ({
-                value: t.id as Framework,
-                label: t.color(t.name),
-                hint: t.hint,
-              })),
-            }),
+      framework: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const resolveFramework = async (): Promise<Framework> => {
+          // v0.7.0 Phase B — "Pick a starter kit" two-step prompt.
+          //   Q1: What does this project build?
+          //     wc-storybook (default) | react-next | react-vite
+          //   Q2 (only when Q1 ∈ {react-next, react-vite}):
+          //     Include @{scope}/design-system package?  (Y/n)
+          //
+          // Experimental gate (v0.6.0 Phase C) is preserved when
+          // --show-experimental is passed: the extra templates are
+          // appended to Q1 as a secondary group. The default 3-option
+          // shape stays in place for the common case.
+          // templateArg (--template=<id>) bypasses Q1 entirely; args.ts
+          // already rejects hidden ids at parse time with a friendly hint.
+          const promptTemplates = showExperimental
+            ? TEMPLATES
+            : TEMPLATES.filter((t) => !t.experimental);
+          const fw =
+            templateArg !== null
+              ? (templateArg as Framework)
+              : ((await p.select({
+                  message: 'What does this project build?',
+                  options: promptTemplates.map((t) => ({
+                    value: t.id as Framework,
+                    label: t.color(t.name),
+                    hint:
+                      t.id === 'wc-storybook'
+                        ? 'Design system + Storybook (recommended for new projects)'
+                        : t.id === 'react-next'
+                          ? 'Next.js app'
+                          : t.id === 'react-vite'
+                            ? 'Vite SPA'
+                            : t.id === 'astro'
+                              ? 'Astro (web-components-native, static-first)'
+                              : t.id === 'svelte-kit'
+                                ? 'SvelteKit (web-components-native, runes + adapter-static)'
+                                : t.hint,
+                  })),
+                  initialValue: 'wc-storybook' as Framework,
+                })) as Framework);
+          // Reject scoped names paired with non-library frameworks. By
+          // the time the framework prompt resolves we know both pieces;
+          // emit a clear error rather than letting Stencil/Ember choke
+          // downstream on `@scope/...` interpolation in their config.
+          const enteredName = (ctx.results.name as string | undefined) ?? '';
+          const scopeErr = validateScopedNameForFramework(enteredName, fw);
+          if (scopeErr) {
+            p.cancel(scopeErr);
+            process.exit(1);
+          }
+          return fw;
+        };
+        return resolveFramework();
+      },
 
-      componentBundles: () =>
-        bundlesFromFlag !== null
-          ? Promise.resolve(bundlesFromFlag as ComponentBundle[])
-          : p.multiselect({
-              message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
-              options: COMPONENT_BUNDLES.map((b) => ({
-                value: b.id as ComponentBundle,
-                label: b.name,
-                hint: b.description,
-              })),
-              initialValues: ['core', 'forms'] as ComponentBundle[],
-              required: true,
-            }),
+      // v0.7.0 Phase B — Q2: "Include @{scope}/design-system package?"
+      // Only shown for app frameworks (react-next, react-vite). Default
+      // is yes — every consumer building a Helix app wants the DS
+      // alongside. --monorepo / --no-design-system skip the question.
+      // wc-storybook (or any other framework) resolves to false (DS-only
+      // scaffold isn't a monorepo wrap, and other frameworks have no
+      // monorepo emitter yet in v0.7.0).
+      includeDesignSystem: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as Framework | undefined) ?? null;
+        const isAppFramework =
+          fw === 'react-next' || fw === 'react-vite' || fw === 'astro' || fw === 'svelte-kit';
+        if (!isAppFramework) {
+          return Promise.resolve(false);
+        }
+        if (monorepoFlag) {
+          return Promise.resolve(true);
+        }
+        if (noDesignSystemFlag) {
+          return Promise.resolve(false);
+        }
+        return p.confirm({
+          message: 'Include @{scope}/design-system package alongside?',
+          initialValue: true,
+        });
+      },
+
+      componentBundles: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        if (bundlesFromFlag !== null) return Promise.resolve(bundlesFromFlag as ComponentBundle[]);
+        // wc-storybook seeds helix.storybook.config.ts.components.include
+        // from this selection, so default to 'all' there — otherwise an
+        // Enter-through-the-defaults scaffold would hide every non-core/
+        // non-forms tag. Other framework templates keep ['core', 'forms']
+        // since they don't surface a runtime catalog.
+        const fw = ctx.results.framework as Framework | undefined;
+        const initial: ComponentBundle[] =
+          fw === 'wc-storybook'
+            ? (['all'] as ComponentBundle[])
+            : (['core', 'forms'] as ComponentBundle[]);
+        return p.multiselect({
+          message: 'Which component bundles? ' + pc.dim('(space to toggle, enter to confirm)'),
+          options: COMPONENT_BUNDLES.map((b) => ({
+            value: b.id as ComponentBundle,
+            label: b.name,
+            hint: b.description,
+          })),
+          initialValues: initial,
+          required: true,
+        });
+      },
 
       features: () => {
         const defaultFeatures = [
@@ -623,6 +968,107 @@ ${presetList}
         });
       },
 
+      dsName: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') {
+          return Promise.resolve(projectName ?? 'my-ds');
+        }
+        if (dsNameFromArgs !== null) {
+          // Flag/JSON path used to interpolate the value verbatim — guard with
+          // the same regex the interactive prompt enforces. Inputs like
+          // `../../tmp` and `123_app` would otherwise reach scaffold output
+          // paths and class names unchecked.
+          const err = validateDsName(dsNameFromArgs);
+          if (err) {
+            console.error(`Invalid --ds-name "${dsNameFromArgs}": ${err}`);
+            process.exit(1);
+          }
+          return Promise.resolve(dsNameFromArgs);
+        }
+        // Resolve the project name from the prompt-result context if the
+        // user just typed it in this same wizard run — `projectName` is the
+        // captured CLI positional which is null when invoked as plain
+        // `npx create-helix`, so accepting defaults always seeded
+        // dsName='my-ds' even when the user picked a great name like
+        // 'acme-ui'. The interactive group records the typed name under
+        // ctx.results.name; falling back to that gives sensible defaults.
+        const enteredName = (ctx.results.name as string | undefined) ?? null;
+        // Strip the @scope/ prefix before validating as a dsName candidate
+        // so '@acme/design-system' surfaces 'design-system' as the prompt
+        // default — same forgiveness as the JSON / API paths. Without this,
+        // scoped names always fell back to 'my-ds' even though the
+        // unscoped basename is itself a perfectly valid dsName.
+        const rawDsDefault = dsNameFromArgs ?? enteredName ?? projectName ?? 'my-ds';
+        const dsDefault = unscopeName(rawDsDefault);
+        const dsInitial = validateDsName(dsDefault) === undefined ? dsDefault : 'my-ds';
+        return p.text({
+          message: 'Design system codename',
+          placeholder: dsInitial,
+          initialValue: dsInitial,
+          validate: (v) => validateDsName(v),
+        });
+      },
+
+      tokenPrefix: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') {
+          return Promise.resolve('--hx');
+        }
+        if (tokenPrefixFromArgs !== null) {
+          // See validateDsName comment — same flag/JSON validation gap.
+          const err = validateTokenPrefix(tokenPrefixFromArgs);
+          if (err) {
+            console.error(`Invalid --token-prefix "${tokenPrefixFromArgs}": ${err}`);
+            process.exit(1);
+          }
+          return Promise.resolve(tokenPrefixFromArgs);
+        }
+        // Derive the default from dsName so the consumer's brand layer
+        // gets its own --{ds}-* namespace by default. Defaulting to --hx
+        // produced cyclic self-references in the generated bridge layer
+        // (--hx-button-bg: var(--hx-button-bg, ...)) and silently
+        // dropped the entire override surface.
+        //
+        // Special-case dsName='hx' to match the JSON/API derivations: the
+        // literal '--hx' is reserved by validateTokenPrefix, so seeding
+        // it as the prompt's initialValue would make Enter on the default
+        // fail immediately.
+        const dsResult = (ctx.results.dsName as string) ?? dsNameFromArgs ?? projectName ?? 'my-ds';
+        const defaultPrefix = dsResult === 'hx' ? `--${dsResult}-ds` : `--${dsResult}`;
+        return p.text({
+          message: 'CSS token prefix',
+          placeholder: defaultPrefix,
+          initialValue: defaultPrefix,
+          validate: (v) => validateTokenPrefix(v),
+        });
+      },
+
+      brandTagline: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        // Brand-storytelling prompts are wc-storybook-only. Other frameworks
+        // get an empty string here and the scaffolder applies a neutral default.
+        if (fw !== 'wc-storybook') return Promise.resolve('');
+        if (brandTaglineFromArgs !== null) return Promise.resolve(brandTaglineFromArgs);
+        return p.text({
+          message: 'Brand tagline ' + pc.dim('(rendered into Cover + Brand MDX)'),
+          placeholder: 'Design system extending HELiX',
+          initialValue: '',
+        });
+      },
+
+      brandVerticals: (ctx: { results: Record<string, unknown> } = { results: {} }) => {
+        const fw = (ctx.results.framework as string) ?? templateArg;
+        if (fw !== 'wc-storybook') return Promise.resolve('');
+        if (brandVerticalsFromArgs !== null) {
+          return Promise.resolve(brandVerticalsFromArgs.join(','));
+        }
+        return p.text({
+          message: 'Brand verticals ' + pc.dim('(comma-separated; empty = single-brand mode)'),
+          placeholder: 'fintech, wellness',
+          initialValue: '',
+        });
+      },
+
       installDeps: () =>
         isNoInstall
           ? Promise.resolve(false)
@@ -641,20 +1087,60 @@ ${presetList}
 
   const options: ProjectOptions = {
     name: project.name as string,
+    // Same unscoping as the JSON path: scoped names like
+    // @acme/design-system land in ./design-system/ rather than nested
+    // ./@acme/design-system/ directories. package.json records the full
+    // scoped name; only the on-disk folder is unscoped.
     directory:
       outputDirArg !== null
         ? path.resolve(process.cwd(), outputDirArg)
-        : path.resolve(process.cwd(), project.name as string),
+        : path.resolve(process.cwd(), unscopeName(project.name as string)),
     framework: project.framework as Framework,
     componentBundles: project.componentBundles as ComponentBundle[],
-    typescript: (project.features as string[]).includes('typescript'),
+    // wc-storybook is a Lit + TypeScript + token-pipeline factory. The
+    // emitted scaffold ALWAYS uses TypeScript (strict mode for decorators)
+    // and ALWAYS emits the token build pipeline (build-tokens.ts ->
+    // tokens.css). Reading the generic features set here let users opt
+    // out of flags the template requires, producing inconsistent output
+    // (summary said "TypeScript: no" while the emitted tsconfig.json /
+    // .ts files were unchanged). Force them on for wc-storybook so the
+    // generated scaffold matches its own contract.
+    typescript:
+      project.framework === 'wc-storybook' || (project.features as string[]).includes('typescript'),
     eslint: (project.features as string[]).includes('eslint'),
-    designTokens: (project.features as string[]).includes('tokens'),
+    designTokens:
+      project.framework === 'wc-storybook' || (project.features as string[]).includes('tokens'),
     darkMode: (project.features as string[]).includes('dark-mode'),
     installDeps: project.installDeps as boolean,
     dryRun: isDryRun,
     force: isForce,
     verbose: isVerbose,
+    dsName: project.dsName as string,
+    tokenPrefix: project.tokenPrefix as string,
+    // Brand-storytelling fields. Empty string from non-wc-storybook frameworks
+    // resolves to undefined so the scaffolder's neutral defaults kick in.
+    brandTagline: ((project.brandTagline as string) ?? '').trim() || undefined,
+    brandVerticals: (() => {
+      const raw = ((project.brandVerticals as string) ?? '').trim();
+      if (!raw) return undefined;
+      const list = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      return list.length > 0 ? list : undefined;
+    })(),
+    // heroScenarios deferred — consumers populate via helix.storybook.config.ts.
+    heroScenarios: undefined,
+    // v0.7.0 Phase B — derive monorepoMode from the prompt's Q2 answer.
+    // wc-storybook coerces to false (DS-only scaffold). For app
+    // frameworks, monorepoMode tracks the DS-include answer 1:1 — Phase
+    // B doesn't ship the "monorepo without DS" combo. Phase A's stub
+    // monorepo emitters throw "not yet implemented" until Phases D/E/F
+    // fill them in.
+    monorepoMode:
+      project.framework === 'wc-storybook' ? false : (project.includeDesignSystem as boolean),
+    includeDesignSystem:
+      project.framework === 'wc-storybook' ? false : (project.includeDesignSystem as boolean),
   };
 
   const template = TEMPLATES.find((t) => t.id === options.framework);
@@ -673,6 +1159,32 @@ ${presetList}
   if (!isQuiet) s.start('Scaffolding project...');
   await scaffoldProject(options);
   if (!isQuiet) s.stop(pc.green('Project scaffolded'));
+
+  // ── Dependency audit ─────────────────────────────────────────────────────
+  if (!skipAudit) {
+    // Audit every package the template adds to the consumer project, not
+    // just `dependencies`. wc-storybook is a library-mode template that
+    // puts almost the entire toolchain (Storybook, Vite, Playwright,
+    // ESLint, Helix packages) in devDependencies + peerDependencies —
+    // auditing only `dependencies` would silently skip vulnerability /
+    // license coverage on most of the actual install footprint.
+    const templateDeps = {
+      ...(template?.dependencies ?? {}),
+      ...(template?.devDependencies ?? {}),
+      ...(template?.peerDependencies ?? {}),
+    };
+    const auditResult = await auditDependencies(templateDeps);
+    if (!auditResult.networkError) {
+      for (const v of auditResult.vulnerabilities) {
+        p.log.warn(
+          `${v.package}@${v.version} has ${v.count} ${v.severity} vulnerability/vulnerabilities`,
+        );
+      }
+      for (const l of auditResult.licenseIssues) {
+        p.log.warn(`${l.package}@${l.version} uses a non-standard license: ${l.license}`);
+      }
+    }
+  }
 
   if (isNoInstall) {
     console.log(pc.dim('  Skipping dependency installation. Run `npm install` when ready.'));
@@ -695,6 +1207,21 @@ ${presetList}
         stdio: 'pipe',
       });
       if (!isQuiet) s.stop(pc.green('Dependencies installed'));
+      // wc-storybook ships scripts/generate-catalog.ts; run it now so the
+      // ~120 hx-* catalog stories are populated BEFORE the consumer boots
+      // Storybook for the first time. Without this, the sidebar shows
+      // only the 8 Phase 2 component pages on first boot, which is a
+      // confusing "where are the other components" UX (v0.6.0 Phase G).
+      if (options.framework === 'wc-storybook') {
+        if (!isQuiet) s.start('Generating component catalog (pnpm cem:catalog)...');
+        try {
+          execSync('pnpm cem:catalog', { cwd: options.directory, stdio: 'pipe' });
+          if (!isQuiet) s.stop(pc.green('Component catalog generated'));
+        } catch {
+          if (!isQuiet)
+            s.stop(pc.yellow('Catalog generation failed — run `pnpm cem:catalog` manually'));
+        }
+      }
     } catch {
       try {
         execSync('npm install', {
@@ -702,14 +1229,37 @@ ${presetList}
           stdio: 'pipe',
         });
         if (!isQuiet) s.stop(pc.green('Dependencies installed (npm)'));
+        if (options.framework === 'wc-storybook') {
+          if (!isQuiet) s.start('Generating component catalog (npm run cem:catalog)...');
+          try {
+            execSync('npm run cem:catalog', { cwd: options.directory, stdio: 'pipe' });
+            if (!isQuiet) s.stop(pc.green('Component catalog generated'));
+          } catch {
+            if (!isQuiet)
+              s.stop(pc.yellow('Catalog generation failed — run `npm run cem:catalog` manually'));
+          }
+        }
       } catch {
         if (!isQuiet) s.stop(pc.yellow('Could not install dependencies — run manually'));
       }
     }
   }
 
+  // For scoped names like @acme/design-system the scaffold lands at
+  // ./design-system/, not ./@acme/design-system/. Print the actual on-disk
+  // directory so the suggested `cd` command works as typed.
+  const cdTarget =
+    path.relative(process.cwd(), options.directory) || unscopeName(project.name as string);
+  // wc-storybook scaffolds emit scripts/generate-catalog.ts. When the
+  // consumer skipped --install-deps, surface an explicit cem:catalog
+  // step in the next-steps banner so the HELiX/* sidebar populates on
+  // first boot. When --install-deps ran, the catalog generation
+  // already happened in the post-install block above (Phase G).
+  const isWcStorybook = options.framework === 'wc-storybook';
+  const needsManualCatalog = isWcStorybook && !options.installDeps;
   const nextSteps = [
-    `cd ${project.name}`,
+    `cd ${cdTarget}`,
+    ...(needsManualCatalog ? ['pnpm install', 'pnpm cem:catalog'] : []),
     options.framework === 'vanilla' ? 'open index.html' : 'npm run dev',
   ];
 
@@ -743,6 +1293,35 @@ ${presetList}
     );
   }
   console.log();
+
+  // ── Scaffold timing display ──────────────────────────────────────────────
+  if (!isQuiet) {
+    const scaffoldTiming = getLastScaffoldTiming();
+    if (scaffoldTiming !== null) {
+      const { totalMs, fileCount, bytesWritten, phases } = scaffoldTiming;
+      let sizeStr: string;
+      if (bytesWritten >= 1024 * 1024) {
+        sizeStr = `${(bytesWritten / (1024 * 1024)).toFixed(2)} MB`;
+      } else if (bytesWritten >= 1024) {
+        sizeStr = `${(bytesWritten / 1024).toFixed(2)} KB`;
+      } else {
+        sizeStr = `${bytesWritten} B`;
+      }
+      console.log(pc.dim(`  Performance: ${totalMs}ms · ${fileCount} files · ${sizeStr}`));
+      if (isVerbose) {
+        console.log(pc.dim('  Per-phase timing:'));
+        console.log(pc.dim(`    validation: ${phases.validationMs}ms`));
+        console.log(pc.dim(`    template resolution: ${phases.templateResolutionMs}ms`));
+        console.log(pc.dim(`    file generation: ${phases.fileGenerationMs}ms`));
+        console.log(pc.dim(`    file writing: ${phases.fileWritingMs}ms`));
+      }
+    }
+  }
+
+  const updateMsg = await updateCheckPromise;
+  if (updateMsg && !isQuiet) {
+    logger.warn(updateMsg);
+  }
 
   if (!isQuiet) p.outro(pc.green('Done!') + ' ' + pc.dim('Build something beautiful with HELiX.'));
 }

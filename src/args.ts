@@ -20,12 +20,53 @@ export interface ParsedArgs {
   isDrupal: boolean;
   noConfig: boolean;
   verbose: boolean;
+  /**
+   * v0.6.0 Phase C — when true, the interactive framework prompt and the
+   * `list` command both include templates marked `experimental: true`.
+   * Default is false; the 13 stub-quality scaffolders are hidden behind
+   * this flag. API callers (scaffold({framework: ...})) bypass the prompt
+   * filter entirely and don't need this flag.
+   */
+  showExperimental: boolean;
+  /**
+   * v0.6.0 Phase F — when true, `doctor` skips checks that may be slow or
+   * require a filesystem walk into the consumer's `node_modules` (currently
+   * just the icons-base-path reachability probe). CI runs that don't have
+   * Storybook on disk yet stay green; the production-environment health
+   * checks (Node version, package managers, network, etc.) still run.
+   */
+  doctorQuick: boolean;
+  /**
+   * v0.7.0 Phase B — when true, the interactive prompt skips the
+   * "Include @{scope}/design-system?" follow-up question and forces
+   * monorepoMode:true (DS + app via pnpm workspaces + turbo). Only
+   * meaningful for the react-next / react-vite paths — the wc-storybook
+   * primary framework coerces this to false because a DS-only scaffold
+   * isn't a monorepo.
+   */
+  monorepo: boolean;
+  /**
+   * v0.7.0 Phase B — when true, the interactive prompt skips the
+   * "Include @{scope}/design-system?" follow-up question and forces
+   * includeDesignSystem:false (single-app shape, no monorepo wrapping).
+   * `--design-system` is the default and doesn't need a flag; passing
+   * `--no-design-system` is the only explicit form. Ignored when the
+   * primary framework is wc-storybook (the scaffold IS the DS).
+   */
+  noDesignSystem: boolean;
 
   // Template options
   template: Framework | null;
   preset: DrupalPreset | null;
   bundles: ComponentBundle[] | null;
   outputDir: string | null;
+
+  // Design system factory (wc-storybook)
+  dsName: string | null;
+  tokenPrefix: string | null;
+  brandTagline: string | null;
+  /** Comma-separated list of brand verticals; null when flag absent */
+  brandVerticals: string[] | null;
 
   // Boolean toggles
   typescript: boolean;
@@ -40,6 +81,15 @@ export interface ParsedArgs {
     darkMode: boolean;
     tokens: boolean;
   };
+
+  // Audit
+  skipAudit: boolean;
+
+  // Offline mode
+  offline: boolean;
+
+  // Profile
+  profile: string | null;
 
   // Meta
   showVersion: boolean;
@@ -80,6 +130,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const isDrupal = argv.includes('--drupal');
   const noConfig = argv.includes('--no-config');
   const verbose = argv.includes('--verbose');
+  const skipAudit = argv.includes('--skip-audit');
+  const offline = argv.includes('--offline');
+  const showExperimental = argv.includes('--show-experimental');
+  const doctorQuick = argv.includes('--quick');
+  // v0.7.0 Phase B — `--monorepo` forces monorepoMode:true (skips Q2).
+  // `--no-design-system` forces includeDesignSystem:false → monorepoMode
+  // effectively false for app frameworks. `--design-system` is implicit
+  // (the default) and not parsed as its own flag. wc-storybook ignores
+  // both — DS-only scaffold isn't a monorepo, and the scaffold itself
+  // IS the DS.
+  const monorepo = argv.includes('--monorepo');
+  const noDesignSystem = argv.includes('--no-design-system');
 
   // Boolean toggles (default true, disabled by --no-*)
   const typescript = !argv.includes('--no-typescript');
@@ -95,10 +157,84 @@ export function parseArgs(argv: string[]): ParsedArgs {
     tokens: argv.includes('--tokens') || argv.includes('--no-tokens'),
   };
 
-  // --template
-  const templateArgIndex = argv.indexOf('--template');
-  const templateStr = templateArgIndex !== -1 ? (argv[templateArgIndex + 1] ?? null) : null;
+  // Set of every documented CLI option so readValueFlag (defined below)
+  // can distinguish "next argv is the value" from "next argv is the
+  // next flag". Scoped to this function so both the legacy flags
+  // (--template / --preset / --bundles / --output-dir / --profile) and
+  // the wc-storybook flags (--ds-name / --token-prefix / --brand-*)
+  // share one parser. Missing entries cause space-form value-flags to
+  // incorrectly capture the next flag as the value.
+  const KNOWN_OPTIONS = new Set([
+    '--ds-name',
+    '--token-prefix',
+    '--brand-tagline',
+    '--brand-verticals',
+    '--template',
+    '--name',
+    '--directory',
+    '--output-dir',
+    '-o',
+    '--profile',
+    '--config',
+    '--bundles',
+    '--preset',
+    '--yes',
+    '-y',
+    '--json',
+    '--dry-run',
+    '--force',
+    '--verbose',
+    '--quiet',
+    '-q',
+    '--no-install',
+    '--no-eslint',
+    '--no-tokens',
+    '--no-typescript',
+    '--no-dark-mode',
+    '--typescript',
+    '--eslint',
+    '--tokens',
+    '--dark-mode',
+    '--skip-audit',
+    '--offline',
+    '--no-config',
+    '--drupal',
+    '--show-experimental',
+    '--quick',
+    '--monorepo',
+    '--no-design-system',
+    '--help',
+    '-h',
+    '--version',
+    '-v',
+  ]);
+  // Helper: read a value flag accepting either `--flag value` or
+  // `--flag=value`. The repo's own docs use both forms; routing every
+  // value-flag through this helper keeps the two surfaces consistent
+  // (previously --template / --preset / --bundles / --output-dir /
+  // --profile silently dropped the `=` form).
+  const readValueFlag = (flag: string): string | null => {
+    const eqPrefix = `${flag}=`;
+    const eqEntry = argv.find((a) => a.startsWith(eqPrefix));
+    if (eqEntry !== undefined) return eqEntry.slice(eqPrefix.length);
+    const idx = argv.indexOf(flag);
+    if (idx === -1) return null;
+    const next = argv[idx + 1];
+    if (next === undefined || KNOWN_OPTIONS.has(next)) return null;
+    return next;
+  };
+
+  // --template (accepts both `--template wc-storybook` and `--template=wc-storybook`)
+  const templateStr = readValueFlag('--template');
   const validFrameworks = TEMPLATES.map((t) => t.id as Framework);
+  // Production vs experimental split — v0.6.0 Phase C. Errors lean on this
+  // list both to gate the "Re-run with --show-experimental" hint AND to
+  // build the abbreviated valid-options string when the requested template
+  // doesn't exist at all. API/json callers still get the full list via the
+  // separate JSON-mode validation path.
+  const productionFrameworks = TEMPLATES.filter((t) => !t.experimental).map(
+    (t) => t.id as Framework,
+  );
 
   if (templateStr !== null && !validFrameworks.includes(templateStr as Framework)) {
     throw new HelixError(
@@ -106,11 +242,24 @@ export function parseArgs(argv: string[]): ParsedArgs {
       `Invalid template: "${templateStr}". Valid options: ${validFrameworks.join(', ')}`,
     );
   }
+  // Friendly redirect for hidden experimental templates: the value IS a real
+  // template id, but it's been moved behind --show-experimental in v0.6.0.
+  // Error names the flag inline (DXA Q3 — triple-discoverability point #2)
+  // unless the caller already passed --show-experimental, in which case the
+  // gate is open and we fall through.
+  if (templateStr !== null && !showExperimental) {
+    const requested = TEMPLATES.find((t) => t.id === templateStr);
+    if (requested?.experimental === true) {
+      throw new HelixError(
+        ErrorCode.INVALID_TEMPLATE,
+        `Template '${templateStr}' is experimental. Re-run with --show-experimental to enable, or pick from: ${productionFrameworks.join(', ')}.`,
+      );
+    }
+  }
   const template = templateStr as Framework | null;
 
-  // --preset
-  const presetArgIndex = argv.indexOf('--preset');
-  const presetStr = presetArgIndex !== -1 ? (argv[presetArgIndex + 1] ?? null) : null;
+  // --preset (accepts both space- and `=`-forms)
+  const presetStr = readValueFlag('--preset');
 
   if (presetStr !== null && !isValidPreset(presetStr)) {
     throw new HelixError(
@@ -120,9 +269,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
   const preset = presetStr as DrupalPreset | null;
 
-  // --bundles
-  const bundlesArgIndex = argv.indexOf('--bundles');
-  const bundlesStr = bundlesArgIndex !== -1 ? (argv[bundlesArgIndex + 1] ?? null) : null;
+  // --bundles (accepts both space- and `=`-forms)
+  const bundlesStr = readValueFlag('--bundles');
   const validBundles = COMPONENT_BUNDLES.map((b) => b.id as ComponentBundle);
 
   let bundles: ComponentBundle[] | null = null;
@@ -138,10 +286,32 @@ export function parseArgs(argv: string[]): ParsedArgs {
     bundles = requested;
   }
 
-  // --output-dir / -o
-  const outputDirArgIndex =
-    argv.indexOf('--output-dir') !== -1 ? argv.indexOf('--output-dir') : argv.indexOf('-o');
-  const outputDir = outputDirArgIndex !== -1 ? (argv[outputDirArgIndex + 1] ?? null) : null;
+  // --output-dir / -o (accepts both space- and `=`-forms on either alias)
+  const outputDir = readValueFlag('--output-dir') ?? readValueFlag('-o');
+
+  // --profile (accepts both space- and `=`-forms)
+  const profile = readValueFlag('--profile');
+
+  // --ds-name (design system codename, used by wc-storybook)
+  const dsName = readValueFlag('--ds-name');
+
+  // --token-prefix (CSS custom property prefix, used by wc-storybook)
+  const tokenPrefix = readValueFlag('--token-prefix');
+
+  // --brand-tagline (used by wc-storybook factory Cover + Brand MDX)
+  const brandTagline = readValueFlag('--brand-tagline');
+
+  // --brand-verticals (comma-separated list, used by wc-storybook brand toolbar)
+  const brandVerticalsRaw = readValueFlag('--brand-verticals');
+  const brandVerticals: string[] | null =
+    brandVerticalsRaw === null
+      ? null
+      : brandVerticalsRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+  // heroScenarios are interactive-only — too complex for a CLI flag; --yes
+  // / non-interactive flows fall back to neutral defaults in the scaffolder.
 
   return {
     subcommand,
@@ -164,7 +334,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
     darkMode,
     tokens,
     explicitFlags,
+    skipAudit,
+    offline,
+    profile,
+    dsName,
+    tokenPrefix,
+    brandTagline,
+    brandVerticals,
     showVersion,
     showHelp,
+    showExperimental,
+    doctorQuick,
+    monorepo,
+    noDesignSystem,
   };
 }

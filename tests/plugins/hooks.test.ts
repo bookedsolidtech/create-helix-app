@@ -1,65 +1,58 @@
 import { describe, it, expect, vi } from 'vitest';
 import { HookManager, buildHookContext } from '../../src/plugins/hooks.js';
-import type { HookContext, ProjectOptions } from '../../src/types.js';
-
-function makeOptions(overrides: Partial<ProjectOptions> = {}): ProjectOptions {
-  return {
-    name: 'test-app',
-    directory: '/tmp/test-app',
-    framework: 'react-next',
-    componentBundles: ['all'],
-    typescript: true,
-    eslint: true,
-    designTokens: false,
-    darkMode: false,
-    installDeps: false,
-    ...overrides,
-  };
-}
-
-function makeContext(overrides: Partial<HookContext> = {}): HookContext {
-  return buildHookContext(
-    overrides.projectName ?? 'test-app',
-    overrides.template ?? 'react-next',
-    overrides.outputDir ?? '/tmp/test-app',
-    overrides.options ?? makeOptions(),
-    overrides.files ?? {},
-  );
-}
 
 describe('HookManager — registration', () => {
-  it('starts with zero hooks', () => {
+  it('starts with zero hooks for any name', () => {
     const manager = new HookManager();
-    expect(manager.count).toBe(0);
+    expect(manager.count('pre-scaffold')).toBe(0);
   });
 
-  it('increments count on register', () => {
+  it('increments count for the registered lifecycle', () => {
+    const manager = new HookManager();
+    manager.register('pre-scaffold', vi.fn());
+    manager.register('pre-scaffold', vi.fn());
+    expect(manager.count('pre-scaffold')).toBe(2);
+  });
+
+  it('count is independent per lifecycle', () => {
     const manager = new HookManager();
     manager.register('pre-scaffold', vi.fn());
     manager.register('post-scaffold', vi.fn());
-    expect(manager.count).toBe(2);
+    expect(manager.count('pre-scaffold')).toBe(1);
+    expect(manager.count('post-scaffold')).toBe(1);
+    expect(manager.count('pre-write')).toBe(0);
   });
 
-  it('hasHooks returns false when no hooks registered', () => {
+  it('names() returns empty array when no hooks registered', () => {
     const manager = new HookManager();
-    expect(manager.hasHooks('pre-scaffold')).toBe(false);
+    expect(manager.names()).toEqual([]);
   });
 
-  it('hasHooks returns true after registering for lifecycle', () => {
+  it('names() returns all registered hook names', () => {
     const manager = new HookManager();
     manager.register('pre-scaffold', vi.fn());
-    expect(manager.hasHooks('pre-scaffold')).toBe(true);
-    expect(manager.hasHooks('post-scaffold')).toBe(false);
+    manager.register('post-write', vi.fn());
+    const names = manager.names();
+    expect(names).toContain('pre-scaffold');
+    expect(names).toContain('post-write');
+    expect(names).toHaveLength(2);
+  });
+
+  it('names() does not include duplicates for same lifecycle', () => {
+    const manager = new HookManager();
+    manager.register('pre-scaffold', vi.fn());
+    manager.register('pre-scaffold', vi.fn());
+    expect(manager.names()).toEqual(['pre-scaffold']);
   });
 });
 
-describe('HookManager — lifecycle events', () => {
-  it('fires pre-scaffold hook', async () => {
+describe('HookManager — execute', () => {
+  it('fires pre-scaffold hook with context', async () => {
     const manager = new HookManager();
     const hook = vi.fn();
     manager.register('pre-scaffold', hook);
-    const ctx = makeContext();
-    await manager.run('pre-scaffold', ctx);
+    const ctx = buildHookContext('test-app', '/tmp/test-app');
+    await manager.execute('pre-scaffold', ctx);
     expect(hook).toHaveBeenCalledOnce();
     expect(hook).toHaveBeenCalledWith(ctx);
   });
@@ -68,8 +61,7 @@ describe('HookManager — lifecycle events', () => {
     const manager = new HookManager();
     const hook = vi.fn();
     manager.register('post-scaffold', hook);
-    const ctx = makeContext();
-    await manager.run('post-scaffold', ctx);
+    await manager.execute('post-scaffold', buildHookContext('test-app', '/tmp/test-app'));
     expect(hook).toHaveBeenCalledOnce();
   });
 
@@ -77,8 +69,7 @@ describe('HookManager — lifecycle events', () => {
     const manager = new HookManager();
     const hook = vi.fn();
     manager.register('pre-write', hook);
-    const ctx = makeContext();
-    await manager.run('pre-write', ctx);
+    await manager.execute('pre-write', buildHookContext('test-app', '/tmp/test-app'));
     expect(hook).toHaveBeenCalledOnce();
   });
 
@@ -86,17 +77,15 @@ describe('HookManager — lifecycle events', () => {
     const manager = new HookManager();
     const hook = vi.fn();
     manager.register('post-write', hook);
-    const ctx = makeContext();
-    await manager.run('post-write', ctx);
+    await manager.execute('post-write', buildHookContext('test-app', '/tmp/test-app'));
     expect(hook).toHaveBeenCalledOnce();
   });
 
-  it('does not fire hooks for other lifecycles', async () => {
+  it('does not fire hooks registered for a different lifecycle', async () => {
     const manager = new HookManager();
     const hook = vi.fn();
     manager.register('pre-scaffold', hook);
-    const ctx = makeContext();
-    await manager.run('post-scaffold', ctx);
+    await manager.execute('post-scaffold', buildHookContext('test-app', '/tmp/test-app'));
     expect(hook).not.toHaveBeenCalled();
   });
 
@@ -112,137 +101,75 @@ describe('HookManager — lifecycle events', () => {
     manager.register('pre-scaffold', () => {
       order.push(3);
     });
-    await manager.run('pre-scaffold', makeContext());
+    await manager.execute('pre-scaffold', buildHookContext('test-app', '/tmp/test-app'));
     expect(order).toEqual([1, 2, 3]);
   });
 
-  it('returns unmodified context when hook returns void', async () => {
+  it('does nothing when no hooks registered for lifecycle', async () => {
     const manager = new HookManager();
-    manager.register('pre-scaffold', () => {
-      /* void */
+    await expect(
+      manager.execute('pre-scaffold', buildHookContext('test-app', '/tmp/test-app')),
+    ).resolves.toBeUndefined();
+  });
+
+  it('awaits async hooks before calling next', async () => {
+    const order: string[] = [];
+    const manager = new HookManager();
+    manager.register('pre-scaffold', async () => {
+      await new Promise((r) => setTimeout(r, 10));
+      order.push('first');
     });
-    const ctx = makeContext();
-    const result = await manager.run('pre-scaffold', ctx);
-    expect(result).toEqual(ctx);
-  });
-});
-
-describe('HookManager — modify context', () => {
-  it('allows hook to modify projectName', async () => {
-    const manager = new HookManager();
-    manager.register('pre-scaffold', (ctx) => ({
-      ...ctx,
-      projectName: 'modified-name',
-    }));
-    const result = await manager.run('pre-scaffold', makeContext());
-    expect(result.projectName).toBe('modified-name');
+    manager.register('pre-scaffold', () => {
+      order.push('second');
+    });
+    await manager.execute('pre-scaffold', buildHookContext('test-app', '/tmp/test-app'));
+    expect(order).toEqual(['first', 'second']);
   });
 
-  it('allows hook to modify outputDir', async () => {
-    const manager = new HookManager();
-    manager.register('pre-scaffold', (ctx) => ({
-      ...ctx,
-      outputDir: '/tmp/new-output',
-    }));
-    const result = await manager.run('pre-scaffold', makeContext());
-    expect(result.outputDir).toBe('/tmp/new-output');
-  });
-
-  it('allows hook to modify files', async () => {
-    const manager = new HookManager();
-    manager.register('pre-write', (ctx) => ({
-      ...ctx,
-      files: { 'index.html': '<html/>' },
-    }));
-    const result = await manager.run('pre-write', makeContext());
-    expect(result.files['index.html']).toBe('<html/>');
-  });
-
-  it('passes modified context from one hook to the next', async () => {
-    const manager = new HookManager();
-    manager.register('pre-scaffold', (ctx) => ({ ...ctx, projectName: 'first' }));
-    manager.register('pre-scaffold', (ctx) => ({
-      ...ctx,
-      projectName: ctx.projectName + '-second',
-    }));
-    const result = await manager.run('pre-scaffold', makeContext());
-    expect(result.projectName).toBe('first-second');
-  });
-});
-
-describe('HookManager — abort on error', () => {
   it('throws when a hook throws', async () => {
     const manager = new HookManager();
-    manager.register(
-      'pre-scaffold',
-      () => {
-        throw new Error('hook failed intentionally');
-      },
-      'test-plugin',
-    );
-    await expect(manager.run('pre-scaffold', makeContext())).rejects.toThrow(
-      'Hook "test-plugin" [pre-scaffold] aborted: hook failed intentionally',
-    );
+    manager.register('pre-scaffold', () => {
+      throw new Error('hook failed intentionally');
+    });
+    await expect(
+      manager.execute('pre-scaffold', buildHookContext('test-app', '/tmp/test-app')),
+    ).rejects.toThrow('hook failed intentionally');
   });
 
-  it('stops executing subsequent hooks after abort', async () => {
+  it('stops executing subsequent hooks after one throws', async () => {
     const manager = new HookManager();
     const secondHook = vi.fn();
     manager.register('pre-scaffold', () => {
       throw new Error('abort!');
     });
     manager.register('pre-scaffold', secondHook);
-    await expect(manager.run('pre-scaffold', makeContext())).rejects.toThrow();
+    await expect(
+      manager.execute('pre-scaffold', buildHookContext('test-app', '/tmp/test-app')),
+    ).rejects.toThrow();
     expect(secondHook).not.toHaveBeenCalled();
   });
-
-  it('includes hook name in error when pluginName provided', async () => {
-    const manager = new HookManager();
-    manager.register(
-      'post-scaffold',
-      () => {
-        throw new Error('bad');
-      },
-      'my-plugin',
-    );
-    await expect(manager.run('post-scaffold', makeContext())).rejects.toThrow('my-plugin');
-  });
 });
 
-describe('HookManager — invalid context validation', () => {
-  it('throws when hook returns invalid context', async () => {
-    const manager = new HookManager();
-    manager.register('pre-scaffold', () => ({ invalid: true }) as unknown as HookContext);
-    await expect(manager.run('pre-scaffold', makeContext())).rejects.toThrow(
-      'Hook returned invalid context',
-    );
-  });
-
-  it('accepts null return (treated as void)', async () => {
-    const manager = new HookManager();
-    manager.register('pre-scaffold', () => null as unknown as void);
-    const ctx = makeContext();
-    const result = await manager.run('pre-scaffold', ctx);
-    expect(result).toEqual(ctx);
-  });
-});
-
-describe('.helixrc.json lifecycle', () => {
-  it('buildHookContext creates correct context shape', () => {
-    const opts = makeOptions();
-    const ctx = buildHookContext('my-app', 'react-next', '/tmp/my-app', opts);
+describe('buildHookContext', () => {
+  it('creates context with projectName and directory', () => {
+    const ctx = buildHookContext('my-app', '/tmp/my-app');
     expect(ctx.projectName).toBe('my-app');
-    expect(ctx.template).toBe('react-next');
-    expect(ctx.outputDir).toBe('/tmp/my-app');
-    expect(ctx.options).toBe(opts);
-    expect(ctx.files).toEqual({});
+    expect(ctx.directory).toBe('/tmp/my-app');
   });
 
-  it('buildHookContext accepts custom files', () => {
-    const opts = makeOptions();
-    const ctx = buildHookContext('my-app', 'react-next', '/tmp/my-app', opts, {
-      'a.ts': 'content',
-    });
-    expect(ctx.files).toEqual({ 'a.ts': 'content' });
+  it('spreads extras into the context', () => {
+    const ctx = buildHookContext('my-app', '/tmp/my-app', { template: 'react-next', foo: 42 });
+    expect(ctx.template).toBe('react-next');
+    expect(ctx.foo).toBe(42);
+  });
+
+  it('extras default to empty object when not provided', () => {
+    const ctx = buildHookContext('my-app', '/tmp/my-app');
+    expect(Object.keys(ctx)).toEqual(['projectName', 'directory']);
+  });
+
+  it('extras can override projectName and directory', () => {
+    const ctx = buildHookContext('my-app', '/tmp/my-app', { projectName: 'overridden' });
+    expect(ctx.projectName).toBe('overridden');
   });
 });

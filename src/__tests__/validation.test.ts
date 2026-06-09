@@ -1,0 +1,395 @@
+import { describe, it, expect } from 'vitest';
+import {
+  validateProjectName,
+  validateDirectory,
+  validateFramework,
+  validatePreset,
+  validateThemeName,
+  validateDsName,
+  validateTokenPrefix,
+  VALID_FRAMEWORKS,
+  VALID_PRESETS,
+} from '../validation.js';
+
+// ---------------------------------------------------------------------------
+// validateDsName — wc-storybook design system codename
+// ---------------------------------------------------------------------------
+
+describe('validateDsName', () => {
+  it('accepts a simple lowercase name', () => {
+    expect(validateDsName('bolt')).toBeUndefined();
+  });
+
+  it('accepts a hyphenated name', () => {
+    expect(validateDsName('my-ds')).toBeUndefined();
+  });
+
+  it('accepts trailing digits', () => {
+    expect(validateDsName('ds2')).toBeUndefined();
+  });
+
+  it('rejects empty string', () => {
+    expect(validateDsName('')).toBe('Required');
+  });
+
+  it('rejects path-traversal-shaped input', () => {
+    expect(validateDsName('../../tmp')).toBeDefined();
+  });
+
+  it('rejects names starting with a digit', () => {
+    expect(validateDsName('123_app')).toBeDefined();
+  });
+
+  it('rejects underscores (unlike validateProjectName)', () => {
+    expect(validateDsName('my_ds')).toBeDefined();
+  });
+
+  it('rejects uppercase letters', () => {
+    expect(validateDsName('MyDs')).toBeDefined();
+  });
+
+  it('rejects whitespace', () => {
+    expect(validateDsName('my ds')).toBeDefined();
+  });
+
+  it('rejects slashes (path-traversal)', () => {
+    expect(validateDsName('foo/bar')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateTokenPrefix — wc-storybook CSS custom property prefix
+// ---------------------------------------------------------------------------
+
+describe('validateTokenPrefix', () => {
+  // --hx is now reserved for the upstream HELiX namespace. Allowing it
+  // would let scaffolders emit cyclic bridge declarations (a generated
+  // `--hx-button-bg: var(--hx-button-bg, ...)` rule which CSS drops
+  // silently). Consumer brands must pick their own prefix.
+  it('rejects --hx as reserved for upstream HELiX', () => {
+    expect(validateTokenPrefix('--hx')).toMatch(/reserved for the upstream HELiX/);
+  });
+
+  it('accepts a hyphenated suffix', () => {
+    expect(validateTokenPrefix('--my-ds')).toBeUndefined();
+  });
+
+  it('accepts brand-specific prefixes', () => {
+    expect(validateTokenPrefix('--acme')).toBeUndefined();
+    expect(validateTokenPrefix('--bolt')).toBeUndefined();
+    expect(validateTokenPrefix('--aurora')).toBeUndefined();
+  });
+
+  it('rejects empty string', () => {
+    expect(validateTokenPrefix('')).toBe('Required');
+  });
+
+  it('rejects single dash prefix', () => {
+    expect(validateTokenPrefix('-bolt')).toBeDefined();
+  });
+
+  it('rejects no leading dashes', () => {
+    expect(validateTokenPrefix('bolt')).toBeDefined();
+  });
+
+  it('rejects digit-leading suffix', () => {
+    expect(validateTokenPrefix('--1bolt')).toBeDefined();
+  });
+
+  it('rejects uppercase suffix', () => {
+    expect(validateTokenPrefix('--Bolt')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateProjectName
+// ---------------------------------------------------------------------------
+
+describe('validateProjectName', () => {
+  it('accepts a simple lowercase name', () => {
+    expect(validateProjectName('my-app')).toBeUndefined();
+  });
+
+  it('accepts a name with digits', () => {
+    expect(validateProjectName('app123')).toBeUndefined();
+  });
+
+  it('accepts a name with underscores', () => {
+    expect(validateProjectName('my_app')).toBeUndefined();
+  });
+
+  it('accepts a name starting with a digit', () => {
+    expect(validateProjectName('1app')).toBeUndefined();
+  });
+
+  it('rejects an empty string', () => {
+    expect(validateProjectName('')).toBe('Project name is required');
+  });
+
+  it('rejects a whitespace-only string', () => {
+    expect(validateProjectName('   ')).toBe('Project name is required');
+  });
+
+  it('rejects a name with a forward slash that is NOT an npm scope', () => {
+    // @scope/name is now allowed for publishable library scaffolds
+    // (wc-storybook). A bare slash without the @-prefix is still
+    // rejected because it has no scope semantics — it's a path
+    // separator. The error message comes from the unscoped-pattern
+    // check since `my/app` doesn't match either branch.
+    expect(validateProjectName('my/app')).toMatch(
+      /lowercase letters, numbers, hyphens, and underscores/,
+    );
+  });
+
+  it('rejects a name with a backslash', () => {
+    expect(validateProjectName('my\\app')).toBe(
+      'Project name cannot contain backslash path separators',
+    );
+  });
+
+  it('accepts npm scoped names for publishable libraries', () => {
+    expect(validateProjectName('@acme/design-system')).toBeUndefined();
+    expect(validateProjectName('@booked/ui-kit')).toBeUndefined();
+  });
+
+  it('rejects malformed scoped names', () => {
+    // empty scope or empty name segment
+    expect(validateProjectName('@/x')).toMatch(/Scoped names must follow @scope\/name/);
+    expect(validateProjectName('@a/')).toMatch(/Scoped names must follow @scope\/name/);
+    expect(validateProjectName('@/')).toMatch(/Scoped names must follow @scope\/name/);
+  });
+
+  it('rejects a name starting with a dot', () => {
+    expect(validateProjectName('.hidden')).toBe('Project name cannot start with a dot');
+  });
+
+  it('rejects ".." as a project name', () => {
+    expect(validateProjectName('..')).toBe('Project name cannot start with a dot');
+  });
+
+  it('rejects a name longer than 214 characters', () => {
+    const longName = 'a'.repeat(215);
+    expect(validateProjectName(longName)).toBe(
+      'Project name must be 214 characters or fewer (npm limit)',
+    );
+  });
+
+  it('accepts a name exactly 214 characters long', () => {
+    const maxName = 'a'.repeat(214);
+    expect(validateProjectName(maxName)).toBeUndefined();
+  });
+
+  it('rejects "node_modules" as a reserved name', () => {
+    expect(validateProjectName('node_modules')).toMatch(/reserved name/);
+  });
+
+  it('rejects "favicon.ico" as a reserved name', () => {
+    expect(validateProjectName('favicon.ico')).toMatch(/reserved name/);
+  });
+
+  it('rejects "__proto__" as a reserved name', () => {
+    expect(validateProjectName('__proto__')).toMatch(/reserved name/);
+  });
+
+  it('rejects "constructor" as a reserved name', () => {
+    expect(validateProjectName('constructor')).toMatch(/reserved name/);
+  });
+
+  it('rejects "prototype" as a reserved name', () => {
+    expect(validateProjectName('prototype')).toMatch(/reserved name/);
+  });
+
+  it('rejects uppercase letters', () => {
+    expect(validateProjectName('MyApp')).toMatch(/lowercase/);
+  });
+
+  it('rejects a name with spaces', () => {
+    expect(validateProjectName('my app')).toMatch(/lowercase/);
+  });
+
+  it('rejects a name with special characters', () => {
+    expect(validateProjectName('my@app')).toMatch(/lowercase/);
+  });
+
+  it('rejects a name with a dollar sign', () => {
+    expect(validateProjectName('$app')).toMatch(/lowercase/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateDirectory
+// ---------------------------------------------------------------------------
+
+describe('validateDirectory', () => {
+  it('accepts a simple relative path', () => {
+    expect(validateDirectory('my-project')).toBeUndefined();
+  });
+
+  it('accepts an absolute path', () => {
+    expect(validateDirectory('/home/user/projects')).toBeUndefined();
+  });
+
+  it('accepts a nested relative path', () => {
+    expect(validateDirectory('projects/my-app')).toBeUndefined();
+  });
+
+  it('rejects an empty string', () => {
+    expect(validateDirectory('')).toBe('Directory path is required');
+  });
+
+  it('rejects a whitespace-only string', () => {
+    expect(validateDirectory('   ')).toBe('Directory path is required');
+  });
+
+  it('rejects a path containing a null byte', () => {
+    expect(validateDirectory('my-project\0hack')).toBe('Directory path cannot contain null bytes');
+  });
+
+  it('rejects a path containing non-printable ASCII characters', () => {
+    expect(validateDirectory('my\x01project')).toMatch(/non-printable/);
+  });
+
+  it('rejects a path with ../ traversal sequence', () => {
+    expect(validateDirectory('../etc/passwd')).toMatch(/traversal/);
+  });
+
+  it('rejects a path with ..\\ traversal sequence', () => {
+    expect(validateDirectory('..\\windows\\system32')).toMatch(/traversal/);
+  });
+
+  it('rejects a bare ".."', () => {
+    expect(validateDirectory('..')).toMatch(/traversal|cannot be/);
+  });
+
+  it('rejects a path where a segment is ".."', () => {
+    expect(validateDirectory('projects/../../../etc')).toMatch(/traversal/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateFramework
+// ---------------------------------------------------------------------------
+
+describe('validateFramework', () => {
+  it('returns true for every valid framework id', () => {
+    for (const fw of VALID_FRAMEWORKS) {
+      expect(validateFramework(fw)).toBe(true);
+    }
+  });
+
+  it('returns false for an empty string', () => {
+    expect(validateFramework('')).toBe(false);
+  });
+
+  it('returns false for an unknown framework', () => {
+    expect(validateFramework('django')).toBe(false);
+  });
+
+  it('returns false for a near-miss framework id', () => {
+    expect(validateFramework('react')).toBe(false);
+  });
+
+  it('returns false for an uppercase variant of a valid framework', () => {
+    expect(validateFramework('React-Next')).toBe(false);
+  });
+
+  it('VALID_FRAMEWORKS contains the expected 16 entries', () => {
+    expect(VALID_FRAMEWORKS).toHaveLength(16);
+  });
+
+  it('VALID_FRAMEWORKS includes react-next', () => {
+    expect(VALID_FRAMEWORKS).toContain('react-next');
+  });
+
+  it('VALID_FRAMEWORKS includes stencil', () => {
+    expect(VALID_FRAMEWORKS).toContain('stencil');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validatePreset
+// ---------------------------------------------------------------------------
+
+describe('validatePreset', () => {
+  it('returns true for every valid preset id', () => {
+    for (const preset of VALID_PRESETS) {
+      expect(validatePreset(preset)).toBe(true);
+    }
+  });
+
+  it('returns false for an empty string', () => {
+    expect(validatePreset('')).toBe(false);
+  });
+
+  it('returns false for an unknown preset', () => {
+    expect(validatePreset('enterprise')).toBe(false);
+  });
+
+  it('returns false for an uppercase variant', () => {
+    expect(validatePreset('Standard')).toBe(false);
+  });
+
+  it('VALID_PRESETS contains the expected 5 entries', () => {
+    expect(VALID_PRESETS).toHaveLength(5);
+  });
+
+  it('VALID_PRESETS includes ecommerce', () => {
+    expect(VALID_PRESETS).toContain('ecommerce');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateThemeName
+// ---------------------------------------------------------------------------
+
+describe('validateThemeName', () => {
+  it('accepts a simple lowercase theme name', () => {
+    expect(validateThemeName('my-theme')).toBeUndefined();
+  });
+
+  it('accepts a theme name with underscores', () => {
+    expect(validateThemeName('my_theme')).toBeUndefined();
+  });
+
+  it('accepts a theme name with digits after the first character', () => {
+    expect(validateThemeName('theme2')).toBeUndefined();
+  });
+
+  it('rejects an empty string', () => {
+    expect(validateThemeName('')).toBe('Theme name is required');
+  });
+
+  it('rejects a whitespace-only string', () => {
+    expect(validateThemeName('   ')).toBe('Theme name is required');
+  });
+
+  it('rejects a name longer than 128 characters', () => {
+    const longName = 'a'.repeat(129);
+    expect(validateThemeName(longName)).toBe('Theme name must be 128 characters or fewer');
+  });
+
+  it('accepts a name exactly 128 characters long', () => {
+    const maxName = 'a'.repeat(128);
+    expect(validateThemeName(maxName)).toBeUndefined();
+  });
+
+  it('rejects a name containing a null byte', () => {
+    expect(validateThemeName('my\0theme')).toBe('Theme name cannot contain null bytes');
+  });
+
+  it('rejects a name starting with a digit', () => {
+    expect(validateThemeName('1theme')).toMatch(/lowercase/);
+  });
+
+  it('rejects uppercase letters', () => {
+    expect(validateThemeName('MyTheme')).toMatch(/lowercase/);
+  });
+
+  it('rejects a name with special characters', () => {
+    expect(validateThemeName('my@theme')).toMatch(/lowercase/);
+  });
+
+  it('rejects a name with spaces', () => {
+    expect(validateThemeName('my theme')).toMatch(/lowercase/);
+  });
+});

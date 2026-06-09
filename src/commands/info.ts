@@ -22,7 +22,19 @@ export function showTemplateInfo(id: string, json: boolean): void {
             hint: template.hint,
             dependencies: template.dependencies,
             devDependencies: template.devDependencies,
+            // peerDependencies is the consumer-host contract surface for
+            // library templates (e.g. wc-storybook's @helixui/library /
+            // @helixui/tokens 3.3.1 cascade pin). Tooling that audits or
+            // pre-installs template requirements needs this — only emit
+            // when populated to keep app-style template output minimal.
+            ...(template.peerDependencies && Object.keys(template.peerDependencies).length > 0
+              ? { peerDependencies: template.peerDependencies }
+              : {}),
             features: template.features,
+            // v0.6.0 Phase C — experimental flag surfaces in JSON so
+            // tooling/CI can branch on it (e.g. block experimental in
+            // policy gates) without having to maintain its own allowlist.
+            ...(template.experimental === true ? { experimental: true } : {}),
           },
           null,
           2,
@@ -32,6 +44,17 @@ export function showTemplateInfo(id: string, json: boolean): void {
     }
 
     console.log('');
+    if (template.experimental === true) {
+      // v0.6.0 Phase C — info'd experimental templates lead with a warning
+      // so consumers reading the detail page understand why the template
+      // doesn't surface in the default prompt.
+      console.log(
+        pc.yellow(
+          '  ⚠ This template is experimental — minimal scaffold, may not be production-ready.',
+        ),
+      );
+      console.log('');
+    }
     console.log(pc.bold('  ' + template.name));
     console.log(pc.dim('  ' + template.description));
     console.log('');
@@ -50,6 +73,15 @@ export function showTemplateInfo(id: string, json: boolean): void {
     if (Object.keys(template.devDependencies).length > 0) {
       console.log(pc.bold('  Dev Dependencies'));
       for (const [pkg, version] of Object.entries(template.devDependencies)) {
+        console.log(`    ${pc.cyan(pkg.padEnd(36))} ${pc.dim(version)}`);
+      }
+      console.log('');
+    }
+
+    if (template.peerDependencies && Object.keys(template.peerDependencies).length > 0) {
+      console.log(pc.bold('  Peer Dependencies'));
+      console.log(pc.dim('    (the consumer host MUST satisfy these versions)'));
+      for (const [pkg, version] of Object.entries(template.peerDependencies)) {
         console.log(`    ${pc.cyan(pkg.padEnd(36))} ${pc.dim(version)}`);
       }
       console.log('');

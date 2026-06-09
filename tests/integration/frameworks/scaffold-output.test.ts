@@ -20,8 +20,10 @@ const FRAMEWORK_CONFIG_FILES: Record<Framework, string> = {
   astro: 'astro.config.mjs',
   vanilla: 'index.html',
   'lit-vite': 'vite.config.ts',
+  'wc-storybook': 'vite.config.ts',
   'preact-vite': 'vite.config.ts',
   stencil: 'stencil.config.ts',
+  ember: 'ember-cli-build.js',
 };
 
 const ALL_FRAMEWORKS: Framework[] = [
@@ -37,6 +39,7 @@ const ALL_FRAMEWORKS: Framework[] = [
   'astro',
   'vanilla',
   'lit-vite',
+  'wc-storybook',
   'preact-vite',
   'stencil',
 ];

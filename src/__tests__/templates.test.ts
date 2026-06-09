@@ -23,13 +23,14 @@ describe('TEMPLATES', () => {
     'astro',
     'vanilla',
     'lit-vite',
+    'wc-storybook',
     'preact-vite',
     'stencil',
     'ember',
   ];
 
-  it('defines exactly 15 framework templates', () => {
-    expect(TEMPLATES).toHaveLength(15);
+  it('defines exactly 16 framework templates', () => {
+    expect(TEMPLATES).toHaveLength(16);
   });
 
   it.each(expectedFrameworks)('includes template for %s', (framework) => {
@@ -63,10 +64,19 @@ describe('TEMPLATES', () => {
     expect(Object.keys(vanilla!.devDependencies)).toHaveLength(0);
   });
 
-  it('all non-vanilla templates depend on @helixui/library', () => {
+  it('all non-vanilla templates declare @helixui/library', () => {
+    // wc-storybook is a library-mode template — Helix lives in
+    // peerDependencies (consumer host contract) + devDependencies (local
+    // pipeline) instead of runtime dependencies, because vite.config.ts
+    // externalises @helixui/* and putting the package in `dependencies`
+    // would let downstream apps install a duplicate Helix runtime
+    // alongside their host. App-style templates still declare it in
+    // dependencies as before.
     const nonVanilla = TEMPLATES.filter((t) => t.id !== 'vanilla');
     for (const template of nonVanilla) {
-      expect(template.dependencies['@helixui/library']).toBeDefined();
+      const inDeps = Boolean(template.dependencies['@helixui/library']);
+      const inPeerDeps = Boolean(template.peerDependencies?.['@helixui/library']);
+      expect(inDeps || inPeerDeps).toBe(true);
     }
   });
 

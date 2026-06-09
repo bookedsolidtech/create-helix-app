@@ -1,9 +1,69 @@
 import fs from 'fs-extra';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import type { DrupalOptions, PresetConfig, SDCDefinition } from '../types.js';
 import { getPreset } from '../presets/loader.js';
 import { generateThemeLibraries } from './libraries.js';
 import { HelixError, ErrorCode } from '../errors.js';
+
+// Module-local require for resolving sibling dependencies via Node module
+// resolution — walks up node_modules trees from this file's location, which
+// correctly handles npm/pnpm/yarn workspace + hoisted installs of create-helix.
+const localRequire = createRequire(import.meta.url);
+
+/**
+ * Read the upstream @helixui/tokens CSS at scaffold time.
+ *
+ * Two-tier strategy:
+ *
+ *   1. PRIMARY (production): read the bundled copy from
+ *      `dist/assets/helix-tokens.css`, written by `scripts/add-shebang.mjs`
+ *      at create-helix's build time. This is what's shipped in the published
+ *      tarball and what users get from `npm create helix`. It is FIXED per
+ *      create-helix release — the same create-helix version always emits the
+ *      same scaffold bytes, no matter how the installer's npm/pnpm/yarn
+ *      resolves transitive deps.
+ *
+ *   2. FALLBACK (dev/test): if the bundled file isn't present (typical when
+ *      running from source, e.g. vitest tests against `src/`), resolve
+ *      through the installed @helixui/tokens via Node module resolution.
+ *      Resolves through the package's EXPORTED CSS subpaths — NOT
+ *      `./package.json`, which @helixui/tokens@3.x's exports map does NOT
+ *      publish (resolving it throws ERR_PACKAGE_PATH_NOT_EXPORTED).
+ *
+ * Returns null only when BOTH paths fail, in which case scaffoldDrupalTheme
+ * falls back to the generateHelixTokensStub() placeholder.
+ *
+ * The reason scaffold-time vendoring matters: Drupal theme users typically
+ * don't run `npm install` inside their theme directory — the documented
+ * setup is `cp -r theme/` + `drush theme:enable`. If we relied on the
+ * postinstall hook alone, the wiring would never activate.
+ */
+function readUpstreamHelixTokensCss(): string | null {
+  // PRIMARY: bundled copy in create-helix's own dist/assets/. After
+  // compilation, this file lives at dist/generators/drupal-theme.js, so
+  // ../assets/helix-tokens.css resolves to dist/assets/helix-tokens.css.
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const bundled = path.resolve(here, '..', 'assets', 'helix-tokens.css');
+    return fs.readFileSync(bundled, 'utf-8');
+  } catch {
+    /* not present — fall through to dev-path resolution */
+  }
+  // FALLBACK: resolve through transitive @helixui/tokens install. Used by
+  // vitest tests against src/, where dist/ artifacts don't exist yet.
+  const subpaths = ['@helixui/tokens/dist/tokens.css', '@helixui/tokens/tokens.css'];
+  for (const subpath of subpaths) {
+    try {
+      const cssPath = localRequire.resolve(subpath);
+      return fs.readFileSync(cssPath, 'utf-8');
+    } catch {
+      /* try next subpath */
+    }
+  }
+  return null;
+}
 
 /**
  * SECURITY: Path traversal guard.
@@ -85,11 +145,120 @@ export function generatePackageJson(themeName: string, preset: PresetConfig): st
       version: '1.0.0',
       private: true,
       description: `Drupal theme with HELiX ${preset.id} preset`,
+      scripts: {
+        // postinstall — vendor @helixui/tokens CSS into css/vendor/ so the
+        // Drupal library system can load it. Without this the @helixui/tokens
+        // dep is declared but never consumed at runtime, leaving every
+        // var(--hx-*, fallback) reference resolving to its inline fallback.
+        postinstall: 'node scripts/copy-helix-tokens.mjs',
+      },
       dependencies: { ...preset.dependencies },
     },
     null,
     2,
   );
+}
+
+/**
+ * Generates `css/vendor/helix-tokens.css` — a STUB written at scaffold time.
+ *
+ * Without this stub, a fresh Drupal scaffold would ship with a broken
+ * `@import url("vendor/helix-tokens.css")` reference in `css/style.css`:
+ * the postinstall script doesn't run until the user invokes
+ * `npm install` / `pnpm install` inside the theme dir, so on first open
+ * (e.g. inspecting the scaffold output in an editor) the import 404s.
+ *
+ * The stub makes the import resolve immediately to an empty `:root` block.
+ * The theme renders correctly (every `var(--hx-*, fallback)` resolves to
+ * its inline fallback) — just without HELiX brand tokens until install
+ * completes and `scripts/copy-helix-tokens.mjs` overwrites this file with
+ * the real upstream `@helixui/tokens/dist/tokens.css` content.
+ */
+export function generateHelixTokensStub(): string {
+  return `/**
+ * @file
+ * vendor/helix-tokens.css — placeholder, replaced by postinstall.
+ *
+ * This file is OVERWRITTEN by \`scripts/copy-helix-tokens.mjs\` when you run
+ * \`npm install\` (or \`pnpm install\` / \`yarn install\`) in this theme
+ * directory. Until that happens, every \`var(--hx-*, fallback)\` reference
+ * in the theme falls back to its inline default — the theme renders fine
+ * but without HELiX brand tokens.
+ *
+ * Do not edit by hand; edit \`css/helix-overrides.css\` instead.
+ */
+:root {
+  /* Stub — replaced on \`npm install\` from @helixui/tokens/tokens.css. */
+}
+`;
+}
+
+/**
+ * Generates `scripts/copy-helix-tokens.mjs` — the postinstall script that
+ * vendors `@helixui/tokens/dist/tokens.css` into `css/vendor/helix-tokens.css`
+ * so the Drupal library system can load it via the theme's standard CSS
+ * pipeline. The theme's `{theme}.libraries.yml` declares
+ * `css/vendor/helix-tokens.css` as part of the `helix-tokens` library, and
+ * `global` depends on `helix-tokens` so it always loads first in the cascade.
+ *
+ * Without this script the `@helixui/tokens` dependency would be declared in
+ * package.json but never actually consumed — every `var(--hx-*, fallback)`
+ * reference would resolve to its inline fallback rather than the brand
+ * token value, making the upstream theming layer effectively dead.
+ *
+ * Idempotent: copies on every install, overwriting prior output.
+ */
+export function generateCopyHelixTokensScript(): string {
+  return `#!/usr/bin/env node
+/**
+ * @file
+ * Postinstall hook: REFRESHES css/vendor/helix-tokens.css from whatever
+ * @helixui/tokens version is installed in this theme's resolution scope.
+ *
+ * The scaffold ALREADY vendors helix-tokens.css at scaffold time using
+ * create-helix's own @helixui/tokens dep, so the theme works without an
+ * \`npm install\` step. This script is the refresh path: if a developer DOES
+ * run \`npm install\` (or \`pnpm\` / \`yarn\`) in the theme directory and gets
+ * a newer @helixui/tokens, the vendored copy is kept in sync.
+ *
+ * Resolved via Node module resolution (createRequire) so this works in
+ * hoisted / workspace installs where @helixui/tokens lives in an ancestor
+ * node_modules rather than the theme's own.
+ */
+import { createRequire } from 'node:module';
+import { copyFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const themeRoot = dirname(here);
+const require = createRequire(import.meta.url);
+
+// Resolve through @helixui/tokens's EXPORTED subpaths — NOT package.json,
+// which the package's exports map does not publish (resolving './package.json'
+// throws ERR_PACKAGE_PATH_NOT_EXPORTED on a real install).
+let src;
+const subpaths = ['@helixui/tokens/dist/tokens.css', '@helixui/tokens/tokens.css'];
+for (const subpath of subpaths) {
+  try {
+    src = require.resolve(subpath);
+    break;
+  } catch {
+    /* try next subpath */
+  }
+}
+
+if (!src) {
+  console.error('[copy-helix-tokens] @helixui/tokens not found — has \`npm install\` completed?');
+  process.exit(1);
+}
+
+const destDir = join(themeRoot, 'css', 'vendor');
+const dest = join(destDir, 'helix-tokens.css');
+mkdirSync(destDir, { recursive: true });
+copyFileSync(src, dest);
+console.log('[copy-helix-tokens] vendored ' + src + ' -> ' + dest);
+`;
 }
 
 export function generateStyleCss(): string {
@@ -98,6 +267,17 @@ export function generateStyleCss(): string {
  * Global theme stylesheet.
  * Component-scoped styles live in components/{group}/{name}/{name}.css
  */
+/* Cascade & load notes:
+ *   - vendor/helix-tokens.css (upstream HELiX CSS variables) loads via the
+ *     {theme}/helix-tokens library that global depends on — at weight -200,
+ *     BEFORE this stylesheet — so token references resolve to upstream
+ *     values, not inline fallbacks. Do NOT also @import it here; doing
+ *     both would load + parse the same stylesheet twice on every page.
+ *   - helix-responsive.css ships responsive token defaults; helix-overrides.css
+ *     is where consumers reshape them. Load responsive FIRST so override
+ *     values win the cascade — the reverse order silently reset overrides
+ *     back to the scaffold defaults on every page render. */
+@import url("helix-responsive.css");
 @import url("helix-overrides.css");
 
 *,
@@ -108,10 +288,14 @@ export function generateStyleCss(): string {
 
 body {
   margin: 0;
-  font-family: var(--hx-font-family-base, system-ui, -apple-system, sans-serif);
-  color: var(--hx-color-text-primary, #111827);
-  background-color: var(--hx-color-background, #ffffff);
-  line-height: var(--hx-line-height-base, 1.5);
+  /* @helixui/tokens@3.x semantic body tokens — these resolve through the
+   * vendored helix-tokens.css. Pre-3.x names (--hx-font-family-base,
+   * --hx-color-background, --hx-line-height-base) are NOT exported in
+   * 3.x; switching to --hx-body-* lets the brand layer actually apply. */
+  font-family: var(--hx-body-font-family, system-ui, -apple-system, sans-serif);
+  color: var(--hx-body-color, #111827);
+  background-color: var(--hx-body-bg, #ffffff);
+  line-height: var(--hx-body-line-height, 1.5);
 }
 
 img {
@@ -125,36 +309,96 @@ export function generateHelixOverridesCss(): string {
   return `/**
  * @file
  * HELiX CSS custom property overrides.
- * Uncomment and modify to match client brand identity.
+ * Uncomment and modify to match client brand identity. All variable names
+ * below match @helixui/tokens@3.x's semantic-token exports — overrides set
+ * here take effect because the upstream value is what these names resolve
+ * to in vendor/helix-tokens.css.
  */
 :root {
-  /* Brand colors */
-  /* --hx-color-primary: #0052cc; */
-  /* --hx-color-primary-dark: #003d99; */
-  /* --hx-color-primary-light: #4c9aff; */
+  /* Brand colors (numeric scale — 50 lightest, 950 darkest) */
+  /* --hx-color-primary-500: #0052cc; */
+  /* --hx-color-primary-700: #003d99; */
+  /* --hx-color-primary-300: #4c9aff; */
 
-  /* Neutral colors */
+  /* Semantic text + surface tokens */
   /* --hx-color-text-primary: #111827; */
   /* --hx-color-text-secondary: #6b7280; */
-  /* --hx-color-background: #ffffff; */
-  /* --hx-color-surface: #f9fafb; */
-  /* --hx-color-border: #e5e7eb; */
+  /* --hx-body-bg: #ffffff; */
+  /* --hx-color-surface-default: #ffffff; */
+  /* --hx-color-surface-raised: #f9fafb; */
+  /* --hx-color-border-default: #e5e7eb; */
 
-  /* Typography */
-  /* --hx-font-family-base: 'Inter', system-ui, sans-serif; */
-  /* --hx-font-size-base: 1rem; */
-  /* --hx-line-height-base: 1.5; */
+  /* Body typography (semantic — these flow through to body styles) */
+  /* --hx-body-font-family: 'Inter', system-ui, sans-serif; */
+  /* --hx-body-font-size: 1rem; */
+  /* --hx-body-line-height: 1.5; */
 
-  /* Spacing scale */
-  /* --hx-space-1: 0.25rem; */
-  /* --hx-space-2: 0.5rem; */
-  /* --hx-space-4: 1rem; */
-  /* --hx-space-8: 2rem; */
+  /* Border radius (semantic sizes) */
+  /* --hx-border-radius-sm: 0.25rem; */
+  /* --hx-border-radius-md: 0.375rem; */
+  /* --hx-border-radius-lg: 0.5rem; */
+}
+`;
+}
 
-  /* Border radius */
-  /* --hx-radius-sm: 0.25rem; */
-  /* --hx-radius-md: 0.375rem; */
-  /* --hx-radius-lg: 0.5rem; */
+/**
+ * Generates css/helix-responsive.css — the starter responsive semantic mode.
+ *
+ * Per Charles Attisano (Helix design lead, _brainstorm canvas 329:1199 in
+ * wITXImaAPUCpBs2nRPv17k): every consumer of helix-tokens must declare its
+ * own responsive mode. helix-tokens upstream ships theme/contrast modes
+ * (default / dark / hc) but cannot ship breakpoints — every Drupal site
+ * has different breakpoint needs, so the consumer-side scaffolder owns
+ * the responsive defaults.
+ *
+ * Three token paths seeded today (mobile-first):
+ *   --hx-responsive-grid-columns       4 / 8 / 12
+ *   --hx-responsive-stack-gap          8px / 16px / 24px
+ *   --hx-responsive-font-size-scale    0.875 / 1 / 1
+ *
+ * Override by editing this file or re-declaring inside your own media
+ * queries. If your design system uses different breakpoints, rewrite the
+ * thresholds here (768px, 1280px) to match.
+ */
+export function generateHelixResponsiveCss(): string {
+  return `/**
+ * @file
+ * HELiX Responsive Semantic Mode — Starter Defaults.
+ *
+ * Per Charles Attisano (Helix design lead): every consumer of helix-tokens
+ * must declare a responsive semantic mode. helix-tokens upstream ships
+ * theme/contrast modes but cannot ship breakpoints — every consumer site
+ * has different breakpoint needs.
+ *
+ * Tokens defined here:
+ *   --hx-responsive-grid-columns       grid system column count
+ *   --hx-responsive-stack-gap          default vertical rhythm gap (px)
+ *   --hx-responsive-font-size-scale    multiplier on the type ramp
+ */
+
+:root {
+  /* mobile (default — applied below the first breakpoint) */
+  --hx-responsive-grid-columns: 4;
+  --hx-responsive-stack-gap: 8px;
+  --hx-responsive-font-size-scale: 0.875;
+}
+
+@media (min-width: 768px) {
+  :root {
+    /* tablet */
+    --hx-responsive-grid-columns: 8;
+    --hx-responsive-stack-gap: 16px;
+    --hx-responsive-font-size-scale: 1;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    /* desktop */
+    --hx-responsive-grid-columns: 12;
+    --hx-responsive-stack-gap: 24px;
+    --hx-responsive-font-size-scale: 1;
+  }
 }
 `;
 }
@@ -441,9 +685,9 @@ function generateNodeTeaserTwig(): string {
       <img slot="image" src="{{ image_url }}" alt="{{ image_alt|default('') }}" loading="lazy">
     {% endif %}
 
-    <div slot="header" class="node-teaser__header">
+    <div slot="heading" class="node-teaser__header">
       {% if category %}
-        <hx-badge variant="neutral" size="sm">{{ category }}</hx-badge>
+        <hx-badge variant="neutral" hx-size="sm">{{ category }}</hx-badge>
       {% endif %}
     </div>
 
@@ -462,7 +706,7 @@ function generateNodeTeaserTwig(): string {
 
     <div slot="footer" class="node-teaser__meta">
       {% if author_name %}
-        <hx-avatar size="sm" label="{{ author_name }}"></hx-avatar>
+        <hx-avatar hx-size="sm" label="{{ author_name }}"></hx-avatar>
         <hx-text variant="body-xs">{{ author_name }}</hx-text>
       {% endif %}
       {% if date %}
@@ -720,8 +964,13 @@ ${themeName}/
 │   └── views/
 ├── css/                 ← Global stylesheets
 │   ├── style.css
-│   └── helix-overrides.css
+│   ├── helix-overrides.css
+│   ├── helix-responsive.css
+│   └── vendor/
+│       └── helix-tokens.css   ← vendored from @helixui/tokens by postinstall
 ├── js/                  ← Drupal behaviors (once() pattern)
+├── scripts/
+│   └── copy-helix-tokens.mjs  ← postinstall: vendors @helixui/tokens CSS
 ├── templates/           ← Template overrides — delegate to SDCs
 └── docker/              ← Standalone test stack (not for production)
 \`\`\`
@@ -736,10 +985,42 @@ Override HELiX CSS custom properties in \`css/helix-overrides.css\`:
 
 \`\`\`css
 :root {
-  --hx-color-primary: #your-brand-color;
-  --hx-font-family-base: 'Your Font', sans-serif;
+  /* Brand colors use @helixui/tokens@3.x's numeric scale —
+   * 500 is the primary brand color; 700 is dark; 300 is light. */
+  --hx-color-primary-500: #your-brand-color;
+  /* Body typography flows through the semantic --hx-body-* tokens. */
+  --hx-body-font-family: 'Your Font', sans-serif;
 }
 \`\`\`
+
+## Responsive mode
+
+Every \`create-helix\` Drupal scaffold ships with a starter responsive
+semantic mode in \`css/helix-responsive.css\` (mobile / tablet / desktop).
+\`helix-tokens\` (upstream) ships theme/contrast modes but cannot ship
+breakpoints — every consumer site has different breakpoint needs, so the
+scaffolder seeds the responsive defaults consumer-side.
+
+Token paths seeded today:
+
+- \`--hx-responsive-grid-columns\` — grid system column count
+- \`--hx-responsive-stack-gap\` — default vertical rhythm gap
+- \`--hx-responsive-font-size-scale\` — multiplier on the type ramp
+
+Override the values or rewrite the breakpoint thresholds in
+\`css/helix-responsive.css\` to match your design system. Example:
+
+\`\`\`css
+@media (min-width: 1024px) {
+  :root {
+    --hx-responsive-grid-columns: 16;
+    --hx-responsive-stack-gap: 32px;
+  }
+}
+\`\`\`
+
+(Source: per Charles Attisano, Helix design lead — every starter must include
+a responsive semantic mode.)
 
 ## Architecture
 
@@ -788,6 +1069,36 @@ export async function scaffoldDrupalTheme(options: DrupalOptions): Promise<void>
     'utf-8',
   );
 
+  // scripts/ — postinstall vendoring for @helixui/tokens (see
+  // generateCopyHelixTokensScript). Paired with a stub at
+  // css/vendor/helix-tokens.css below so the @import resolves immediately
+  // (no 404 in a fresh scaffold opened before `npm install`).
+  await fs.ensureDir(path.join(dir, 'scripts'));
+  await fs.writeFile(
+    path.join(dir, 'scripts', 'copy-helix-tokens.mjs'),
+    generateCopyHelixTokensScript(),
+    'utf-8',
+  );
+
+  // css/vendor/helix-tokens.css — vendor the upstream HELiX tokens CSS at
+  // scaffold time, reading from create-helix's own @helixui/tokens dep.
+  // This activates the tokens layer immediately, without requiring the user
+  // to run `npm install` inside the theme — Drupal's documented theme setup
+  // is `cp -r` + `drush theme:enable`, neither of which triggers a Node
+  // install, so a postinstall-only approach would leave the wiring dormant.
+  // The postinstall script (copy-helix-tokens.mjs) still runs IF the user
+  // does `npm install`, refreshing the file from whatever version their
+  // install resolved. Falls back to a stub only if create-helix's @helixui/
+  // tokens dep is somehow unreachable (defensive — it's a declared runtime
+  // dependency, so this branch is rare).
+  await fs.ensureDir(path.join(dir, 'css', 'vendor'));
+  const upstreamTokensCss = readUpstreamHelixTokensCss();
+  await fs.writeFile(
+    path.join(dir, 'css', 'vendor', 'helix-tokens.css'),
+    upstreamTokensCss ?? generateHelixTokensStub(),
+    'utf-8',
+  );
+
   await fs.writeFile(path.join(dir, 'README.md'), generateReadme(themeName, preset), 'utf-8');
 
   // css/
@@ -796,6 +1107,11 @@ export async function scaffoldDrupalTheme(options: DrupalOptions): Promise<void>
   await fs.writeFile(
     path.join(dir, 'css', 'helix-overrides.css'),
     generateHelixOverridesCss(),
+    'utf-8',
+  );
+  await fs.writeFile(
+    path.join(dir, 'css', 'helix-responsive.css'),
+    generateHelixResponsiveCss(),
     'utf-8',
   );
 

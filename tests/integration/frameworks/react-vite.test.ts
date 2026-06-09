@@ -46,11 +46,25 @@ describe('react-vite integration', () => {
     ]);
   });
 
-  it('helix-setup.ts imports @helixui/library', async () => {
+  it('helix-setup.ts loads @helixui/library after setBasePath', async () => {
     const o = opts('rv-imports');
     await scaffoldProject(o);
     const content = await readText(o.directory, 'src/helix-setup.ts');
-    expect(content).toContain("import '@helixui/library'");
+    // react-vite's helix-setup.ts is its runtime loader (main.tsx imports
+    // it). It points the @helixui/icons registry at /icons/ BEFORE
+    // loading the library — and does so inside an async IIFE rather than
+    // with a top-level await, which would break `vite build` (default
+    // browser target has no TLA support).
+    expect(content).toContain("import { setBasePath } from '@helixui/icons'");
+    expect(content).toContain("setBasePath('/icons')");
+    expect(content).toContain("await import('@helixui/library')");
+    // No top-level await — the load is wrapped in a self-invoking async
+    // function. (A `void (async () => {` prefix is the marker.)
+    expect(content).toContain('void (async () => {');
+    expect(content).not.toMatch(/^await import/m);
+    expect(content.indexOf("setBasePath('/icons')")).toBeLessThan(
+      content.indexOf("await import('@helixui/library')"),
+    );
   });
 
   it('main.tsx always imports helix-setup', async () => {
@@ -58,6 +72,27 @@ describe('react-vite integration', () => {
     await scaffoldProject(o);
     const main = await readText(o.directory, 'src/main.tsx');
     expect(main).toContain("import './helix-setup'");
+  });
+
+  it('wires the @helixui/icons local-sprite setup (postinstall + script + gitignore)', async () => {
+    const o = opts('rv-icons-setup');
+    await scaffoldProject(o);
+
+    // scripts/copy-helix-icons.mjs resolves both sprite SVGs and copies
+    // them into public/icons/.
+    const copyScript = await readText(o.directory, 'scripts/copy-helix-icons.mjs');
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain('createRequire(import.meta.url)');
+    expect(copyScript).toContain("join(process.cwd(), 'public', 'icons')");
+
+    // package.json postinstall runs the copy script.
+    const pkg = await readJson<{ scripts: Record<string, string> }>(o.directory, 'package.json');
+    expect(pkg.scripts['postinstall']).toBe('node scripts/copy-helix-icons.mjs');
+
+    // .gitignore excludes the postinstall-generated sprite dir.
+    const gitignore = await readText(o.directory, '.gitignore');
+    expect(gitignore).toContain('public/icons/');
   });
 
   it('helix.d.ts declares React JSX namespace for hx-* elements', async () => {
@@ -95,9 +130,13 @@ describe('react-vite integration', () => {
     const o = opts('rv-navbar');
     await scaffoldProject(o);
     const content = await readText(o.directory, 'src/components/Navbar.tsx');
-    expect(content).toContain('hx-icon-button');
+    // v0.9.1 cross-kit audit: theme toggle is now a native <button> with
+    // aria-label (was hx-icon-button + hx-click event listener). Matches
+    // astro + svelte-kit toggle pattern; passes axe-core's button-name
+    // rule out of the box.
+    expect(content).toContain('theme-toggle');
     expect(content).toContain('onToggleTheme');
-    expect(content).toContain('hx-click');
+    expect(content).toContain('aria-label');
   });
 
   it('index.html has OG meta tags', async () => {

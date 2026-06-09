@@ -34,3 +34,19 @@ npm run preflight  # verify + test (full pre-push check)
 - Never use `--no-verify`
 - Commit messages: concise, imperative ("Add Vue support", not "Added")
 - Branch strategy: `feature/* -> dev -> staging -> main`
+
+<!-- rea:managed:start v=1 -->
+
+## REA Governance (managed — do not edit this block)
+
+- **Policy**: `.rea/policy.yaml` — profile `bst-internal`
+- **Autonomy**: `L3` (ceiling `L3`)
+- **Blocked paths**: 8 entries — see the policy file
+- **block_ai_attribution**: `true` (enforced by commit-msg hook)
+
+Protected-path changes (`src/gateway/middleware/`, `hooks/`, `src/policy/`,
+`.github/workflows/`) require a `/codex-review` audit entry before push.
+
+Run `rea doctor` to verify the install. Run `rea check` to inspect state.
+
+<!-- rea:managed:end -->

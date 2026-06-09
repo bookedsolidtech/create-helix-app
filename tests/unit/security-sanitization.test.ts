@@ -132,7 +132,13 @@ describe('project name sanitization in generated HTML', () => {
     await scaffoldProject(opts);
 
     const html = await fs.readFile(path.join(opts.directory, 'index.html'), 'utf-8');
-    expect(html).toContain('<title>foo&amp;bar</title>');
+    // v0.9.1 cross-kit audit: react-vite title now reads
+    // "{name} — built with create-helix" (was just "{name}"). Loosened
+    // the assertion to check the ampersand encoding without depending
+    // on the exact title-template suffix, so future template-string
+    // tweaks don't churn this test.
+    expect(html).toMatch(/<title>foo&amp;bar( — built with create-helix)?<\/title>/);
+    expect(html).not.toContain('foo&bar');
   });
 
   it('project name with quotes is encoded in title', async () => {

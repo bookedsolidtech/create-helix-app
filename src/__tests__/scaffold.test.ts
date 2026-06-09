@@ -106,6 +106,80 @@ describe('scaffoldProject — optional features', () => {
     expect(content).toContain('data-theme="dark"');
   });
 
+  // ─── Responsive semantic mode (every consumer must declare one) ─────────────
+  //
+  // Per Charles Attisano (Helix design lead, _brainstorm canvas 329:1199 in
+  // wITXImaAPUCpBs2nRPv17k): every consumer of helix-tokens must declare its
+  // own responsive mode, since upstream cannot ship breakpoints. These tests
+  // are the regression guard.
+
+  it('generates helix-responsive.css when designTokens is true', async () => {
+    const opts = makeOptions({ name: 'responsive-true' });
+    await scaffoldProject(opts);
+    expect(await fs.pathExists(path.join(opts.directory, 'helix-responsive.css'))).toBe(true);
+  });
+
+  it('does NOT generate helix-responsive.css when designTokens is false', async () => {
+    const opts = makeOptions({ name: 'responsive-false', designTokens: false });
+    await scaffoldProject(opts);
+    expect(await fs.pathExists(path.join(opts.directory, 'helix-responsive.css'))).toBe(false);
+  });
+
+  it('seeds the responsive token paths in helix-responsive.css', async () => {
+    const opts = makeOptions({ name: 'responsive-seed' });
+    await scaffoldProject(opts);
+    const content = await fs.readFile(path.join(opts.directory, 'helix-responsive.css'), 'utf-8');
+    expect(content).toContain('--hx-responsive-grid-columns');
+    expect(content).toContain('--hx-responsive-stack-gap');
+    expect(content).toContain('--hx-responsive-font-size-scale');
+  });
+
+  it('declares at least three responsive breakpoints (mobile / tablet / desktop)', async () => {
+    const opts = makeOptions({ name: 'responsive-breakpoints' });
+    await scaffoldProject(opts);
+    const content = await fs.readFile(path.join(opts.directory, 'helix-responsive.css'), 'utf-8');
+    // mobile is the implicit :root default; tablet + desktop are min-width
+    // media queries. Both must be present.
+    expect(content).toMatch(/@media\s*\(\s*min-width:\s*768px\s*\)/);
+    expect(content).toMatch(/@media\s*\(\s*min-width:\s*1280px\s*\)/);
+  });
+
+  it('helix-tokens.css imports helix-responsive.css', async () => {
+    const opts = makeOptions({ name: 'responsive-imported' });
+    await scaffoldProject(opts);
+    const content = await fs.readFile(path.join(opts.directory, 'helix-tokens.css'), 'utf-8');
+    expect(content).toContain("@import './helix-responsive.css'");
+  });
+
+  it.each([
+    'react-next',
+    'react-vite',
+    'remix',
+    'vue-nuxt',
+    'vue-vite',
+    'solid-vite',
+    'qwik-vite',
+    'svelte-kit',
+    'angular',
+    'astro',
+    'vanilla',
+    'lit-vite',
+    'preact-vite',
+    'stencil',
+    'ember',
+  ] as const)(
+    'generates helix-responsive.css for framework %s',
+    async (framework) => {
+      const opts = makeOptions({
+        name: `responsive-${framework}`,
+        framework,
+      });
+      await scaffoldProject(opts);
+      expect(await fs.pathExists(path.join(opts.directory, 'helix-responsive.css'))).toBe(true);
+    },
+    30_000,
+  );
+
   it('generates eslint.config.js when eslint is true', async () => {
     const opts = makeOptions({ name: 'eslint-true' });
     await scaffoldProject(opts);
@@ -297,11 +371,11 @@ describe('scaffoldProject — svelte-kit', () => {
     expect(pkg.scripts.preview).toBe('vite preview');
   });
 
-  it('svelte.config.js uses adapter-auto', async () => {
+  it('svelte.config.js uses adapter-static (v0.9.0+; was adapter-auto in v0.8.x)', async () => {
     const opts = makeOptions({ name: 'sk-adapter', framework: 'svelte-kit' });
     await scaffoldProject(opts);
     const config = await fs.readFile(path.join(opts.directory, 'svelte.config.js'), 'utf-8');
-    expect(config).toContain('@sveltejs/adapter-auto');
+    expect(config).toContain('@sveltejs/adapter-static');
   });
 });
 
@@ -914,5 +988,74 @@ describe('scaffoldProject — force flag', () => {
 
     await expect(scaffoldProject(opts)).resolves.not.toThrow();
     expect(await fs.pathExists(path.join(opts.directory, 'package.json'))).toBe(true);
+  });
+});
+
+// ─── wc-storybook scripts/build-tokens.ts watcher shape ──────────────────────
+//
+// Regression guard for the ~3s rebuild loop. The wc-storybook scaffold emits
+// scripts/build-tokens.ts as a template string from src/scaffold.ts. INPUT
+// (src/tokens/tokens.json) and OUTPUT (src/tokens/tokens.css) live in the
+// same directory; on macOS, fs.watch is backed by FSEvents which can fire
+// when *sibling* files change, so without a self-write guard the watcher
+// loops on its own write to tokens.css. The fix:
+//   - bump the debounce window from 80ms → 500ms (covers the macOS event
+//     burst from a single editor save without feeling laggy)
+//   - track lastWriteTime after every OUTPUT write; ignore fs.watch events
+//     that fire within SELF_WRITE_WINDOW_MS of our own write
+// These tests assert the emitter ships both pieces. Runtime verification
+// (does storybook stop flickering?) still requires the user to run the
+// scaffolded project — we cannot verify FSEvents behavior in unit tests.
+
+describe('scaffoldProject — wc-storybook build-tokens watcher', () => {
+  async function readBuildTokens(name: string): Promise<string> {
+    const opts = makeOptions({
+      name,
+      framework: 'wc-storybook',
+      dsName: 'bolt',
+      tokenPrefix: '--bolt',
+    });
+    await scaffoldProject(opts);
+    const buildTokensPath = path.join(opts.directory, 'scripts', 'build-tokens.ts');
+    expect(await fs.pathExists(buildTokensPath)).toBe(true);
+    return fs.readFile(buildTokensPath, 'utf-8');
+  }
+
+  it('emits a self-write guard so fs.watch ignores its own output write', async () => {
+    const content = await readBuildTokens('build-tokens-self-write');
+    // The guard must record the time of every OUTPUT write…
+    expect(content).toMatch(/lastWriteTime\s*=\s*Date\.now\(\)/);
+    // …and consult it inside the fs.watch callback before scheduling a rebuild.
+    expect(content).toContain('SELF_WRITE_WINDOW_MS');
+    expect(content).toMatch(/Date\.now\(\)\s*-\s*lastWriteTime\s*<\s*SELF_WRITE_WINDOW_MS/);
+  });
+
+  it('emits a debounce window long enough to cover the macOS fs-event burst', async () => {
+    const content = await readBuildTokens('build-tokens-debounce');
+    // The 80ms debounce we shipped previously was too short; 500ms is the
+    // floor we want to keep. Allow values >= 300ms to leave headroom for
+    // future tuning, but block any regression back to the sub-300ms range.
+    const debounceMatch = content.match(/REBUILD_DEBOUNCE_MS\s*=\s*(\d+)/);
+    expect(debounceMatch).not.toBeNull();
+    const debounceMs = Number(debounceMatch![1]);
+    expect(debounceMs).toBeGreaterThanOrEqual(300);
+    // And the setTimeout in the watcher callback must consume the constant,
+    // not a hard-coded number — guards against regressing back to a literal
+    // 80ms.
+    expect(content).toMatch(/setTimeout\([\s\S]+?,\s*REBUILD_DEBOUNCE_MS\)/);
+  });
+
+  it('uses fs.watch on the parent directory (atomic-save survival)', async () => {
+    // The watcher previously called fs.watch(INPUT, ...) directly. Editors
+    // that save by atomic rename (VS Code, JetBrains, prettier-on-save)
+    // sever that watcher's inode handle on the first save and tokens.css
+    // stops rebuilding. Watching the parent directory and filtering by
+    // basename survives atomic replaces. This test guards against
+    // regressing back to the file-level form.
+    const content = await readBuildTokens('build-tokens-fs-watch');
+    expect(content).toContain('fs.watch(inputDir');
+    expect(content).not.toContain('fs.watch(INPUT,');
+    // No chokidar dep — the directory-watch fix is built on node:fs.
+    expect(content).not.toMatch(/from\s+['"]chokidar['"]/);
   });
 });

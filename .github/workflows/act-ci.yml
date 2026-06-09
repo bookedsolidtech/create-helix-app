@@ -1,9 +1,16 @@
 # ============================================================================
-# Local CI — Quality gates for nektos/act
+# Local CI — Quality gates for nektos/act ONLY
 # ============================================================================
 # Mirrors the core quality gates from ci.yml but avoids GitHub-specific actions
 # (pnpm/action-setup, actions/setup-node) that break in act due to PATH
 # corruption and missing API context.
+#
+# Trigger: workflow_dispatch only. GitHub never auto-triggers this workflow
+# — every job below DUPLICATES coverage already provided by ci.yml +
+# ci-matrix.yml + integration-tests.yml, so running it on every PR would
+# pay a second full CI pass for zero new signal. act passes
+# workflow_dispatch via `act workflow_dispatch -W .github/workflows/act-ci.yml`,
+# which is what scripts/act-ci.sh now does.
 #
 # Usage: ./scripts/act-ci.sh [--job <job-name>] [--list]
 # Jobs: lint, format, type-check, build, test, test-full, quality-gates
@@ -12,7 +19,7 @@
 name: Local CI
 
 on:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -90,7 +97,12 @@ jobs:
     name: Test Full (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ env.ACT_MATRIX_TESTS == 'true' || env.ACT_FULL_TESTS == 'true' }}
+    # vars (not env) — job-level `if:` cannot access the env context. act
+    # passes these through with --var (see scripts/act-ci.sh); on GitHub
+    # they default to empty so the matrix job is skipped (intended — this
+    # workflow targets local act runs). Without this fix the whole workflow
+    # fails to parse on GitHub and shows "workflow file issue" in 0s.
+    if: ${{ vars.ACT_MATRIX_TESTS == 'true' || vars.ACT_FULL_TESTS == 'true' }}
     strategy:
       fail-fast: false
       matrix:

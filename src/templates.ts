@@ -1,8 +1,170 @@
 // @design-system-approved: CLI-001 Terminal colors (picocolors), not CSS values
 import pc from 'picocolors';
-import type { TemplateConfig, ComponentBundleConfig } from './types.js';
+import type {
+  TemplateConfig,
+  ComponentBundleConfig,
+  AnyTemplateConfig,
+  CustomTemplateConfig,
+} from './types.js';
+// Single source of truth for the HELiX dependency pins. Every template —
+// not just wc-storybook — tracks current Helix through these constants. The
+// per-template literal `^1.0.0` / `^0.3.0` pins they replaced were set once
+// and never tracked Helix's releases, so scaffolds were born ~2 majors stale
+// (surfaced by the Pulse implementation test). Bump in `helix-versions.ts`.
+import {
+  HELIX_LIBRARY_VERSION,
+  HELIX_TOKENS_VERSION,
+  HELIX_ICONS_VERSION,
+} from './helix-versions.js';
 
 export const TEMPLATES: TemplateConfig[] = [
+  {
+    id: 'wc-storybook',
+    name: 'Design System + Storybook 10',
+    description:
+      'Lit 3 component library factory — custom token prefix, HelixElement base class, full Storybook 10 dev environment with Playwright story tests',
+    hint: 'beta — design system factory',
+    color: pc.magenta,
+    dependencies: {
+      // lit is the only runtime dep — Helix packages are externalised by
+      // vite.config.ts and live as peerDependencies. Keeping
+      // @helixui/library or @helixui/tokens here would let downstream
+      // installers pull a second copy of the Helix runtime alongside
+      // their own host install, tripping duplicate
+      // customElements.define() registrations and breaking element
+      // identity (e.g. `<hx-button>` already defined).
+      lit: '^3.2.0',
+    },
+    // peerDeps document the cascade-token contract version the consumer host
+    // MUST satisfy. The wc-storybook factory ships components that bridge
+    // --{prefix}-* tokens into Helix's --hx-* names — that bridge ASSUMES
+    // the action.* semantic tier, on-{role}-strong text tokens, and the
+    // on-dark-* border family that Helix 3.3.1 introduced. Pinning these as
+    // peerDeps surfaces the version contract in `npm ls` output and trips
+    // pnpm's strict-peer-deps check if a downstream installs an
+    // older Helix that doesn't export the cascade.
+    peerDependencies: {
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
+    },
+    devDependencies: {
+      // Helix packages also live as devDependencies so the scaffold's own
+      // dev/test/build pipeline (Storybook, vitest, smoke probe) resolves
+      // them without forcing the consumer's host to be installed yet.
+      // peerDependencies declares the version CONTRACT; devDependencies
+      // satisfies the LOCAL install. They share a version pin to keep
+      // the contract honest.
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      // v0.6.0 Phase B — @helixui/icons provides the <hx-icon> registry
+      // (setBasePath, registerIconLibrary) and bundles the helix + fa-free
+      // sprite assets at `dist/{helix,fa-free-solid}.svg`. preview.ts
+      // imports setBasePath; main.ts adds `dist/` to staticDirs.
+      '@helixui/icons': HELIX_ICONS_VERSION,
+      // Storybook 10.4 graph. The whole @storybook/* family moves together at
+      // a ^10.4.2 floor because addon-vitest@10.4 peer-requires
+      // `storybook ^10.4.2` (and the renderer/addons all peer-require the same
+      // exact-minor storybook), so a split floor (e.g. core at ^10.2.8) floats
+      // core to 10.4.x on a fresh, lockfile-less install and trips the peer
+      // contract. Pinning the family at ^10.4.2 keeps the graph coherent under
+      // pnpm's default AND `strict-peer-dependencies=true` (enterprise CI).
+      // @storybook/addon-designs was DROPPED: 11.1.3 caps its storybook /
+      // addon-docs peers at `^10.2.0-0`, which is unsatisfiable against a 10.4
+      // core. It was never wired into a story (the `design` parameter is opt-in
+      // and unused by the scaffold), so removing it is behaviour-neutral.
+      storybook: '^10.4.2',
+      '@storybook/web-components': '^10.4.2',
+      '@storybook/web-components-vite': '^10.4.2',
+      '@storybook/addon-a11y': '^10.4.2',
+      '@storybook/addon-docs': '^10.4.2',
+      '@storybook/addon-themes': '^10.4.2',
+      '@storybook/addon-vitest': '^10.4.2',
+      // 2026-05-09 Phase 2 — addon parity with upstream Helix storybook.
+      // Versions sourced from helix/apps/storybook/package.json. Chromatic
+      // addon version intentionally tracks the @chromatic-com major (not
+      // Storybook's), per their release cadence — 5.2.x accepts a ^10.4 core.
+      '@chromatic-com/storybook': '^5.2.1',
+      '@storybook/addon-links': '^10.4.2',
+      'storybook-addon-pseudo-states': '^10.4.2',
+      '@custom-elements-manifest/analyzer': '^0.10.0',
+      concurrently: '^9.1.0',
+      dotenv: '^16.4.5',
+      tsx: '^4.19.0',
+      // Vitest 4. addon-vitest@10.4 peer-requires the Playwright browser
+      // provider as the split-out `@vitest/browser-playwright ^4.0.0` package
+      // (Vitest 4 moved the provider out of `@vitest/browser`). vitest,
+      // @vitest/browser, @vitest/browser-playwright and @vitest/ui all float
+      // together at ^4 — the provider package peer-pins vitest at an exact 4.x,
+      // so a single caret major keeps them lockstep on a fresh install.
+      vitest: '^4.0.0',
+      '@vitest/browser': '^4.0.0',
+      // Playwright provider for Vitest 4 browser mode (was bundled inside
+      // @vitest/browser in v3; now a dedicated package). vitest.config.ts
+      // imports `{ playwright }` from here.
+      '@vitest/browser-playwright': '^4.0.0',
+      // @vitest/ui is required by `pnpm test:ui` (vitest --ui). Without it
+      // the script fails immediately on a fresh scaffold with vitest's
+      // missing-package error. Pinned at the same major as vitest.
+      '@vitest/ui': '^4.0.0',
+      // ESLint stack — the scaffold emits eslint.config.js by default
+      // (gated only on --no-eslint), but the consumer's editor/CI would
+      // fail loading the config without these packages. Pinned at the
+      // same majors used in create-helix-app's own dev pipeline so
+      // editor extensions resolve consistently.
+      eslint: '^9.0.0',
+      '@eslint/js': '^9.0.0',
+      'typescript-eslint': '^8.0.0',
+      // playwright is required by the @vitest/browser-playwright provider
+      // (vitest.config.ts ships with `provider: playwright()`). Pinning here
+      // avoids a fail-on-first-run when consumers boot vitest right after
+      // scaffold + install. (@vitest/browser-playwright peer-requires
+      // `playwright: *`, so this floor satisfies the contract.)
+      playwright: '^1.50.0',
+      vite: '^6.4.0',
+      typescript: '^5.7.0',
+      // .storybook/main.ts imports node:path / node:url and the generated
+      // tsconfig includes the .storybook directory in the type-check
+      // graph. Without @types/node declared, a fresh wc-storybook scaffold
+      // can fail `pnpm type-check` on the first run when the typings are
+      // not transitively hoisted by the package manager.
+      '@types/node': '^22.0.0',
+      // React is required because the scaffold emits .tsx docs helpers
+      // (HelixDocsPage, A11yStatusCard, ConsumerObligations, etc.) that
+      // import from 'react' and '@storybook/addon-docs/blocks'. Storybook
+      // 10's web-components-vite renderer ships with React under the hood
+      // for autodocs — declaring it explicitly here so `pnpm install`
+      // resolves the import without relying on hoisting.
+      react: '^19.0.0',
+      'react-dom': '^19.0.0',
+      '@types/react': '^19.0.0',
+      '@types/react-dom': '^19.0.0',
+      // Shiki — syntax highlighter consumed by the CodeBlock / CodeTabs
+      // helpers under src/stories/_components/. Pinned to the same major
+      // as helix/apps/storybook so grammar/theme exports stay aligned.
+      // @shikijs/themes and @shikijs/langs are sub-package imports the
+      // CodeBlock helper references directly (e.g.
+      // `import('@shikijs/themes/github-dark-dimmed')`); under pnpm's
+      // strict-hoisting these MUST be declared explicitly so TS module
+      // resolution and runtime imports both succeed in fresh installs.
+      shiki: '^4.0.2',
+      '@shikijs/themes': '^4.0.2',
+      '@shikijs/langs': '^4.0.2',
+    },
+    features: [
+      'web-components',
+      'storybook',
+      'autodocs',
+      'cem',
+      'shadow-dom',
+      'helix-tokens',
+      'theme-switching',
+      'a11y',
+      'playwright-story-tests',
+      'token-generator',
+      'figma-token-sync',
+    ],
+  },
   {
     id: 'react-next',
     name: 'React + Next.js 16',
@@ -13,8 +175,9 @@ export const TEMPLATES: TemplateConfig[] = [
       next: '^16.0.0',
       react: '^19.1.0',
       'react-dom': '^19.1.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
@@ -37,8 +200,9 @@ export const TEMPLATES: TemplateConfig[] = [
     dependencies: {
       react: '^19.1.0',
       'react-dom': '^19.1.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
@@ -62,8 +226,9 @@ export const TEMPLATES: TemplateConfig[] = [
       isbot: '^5.1.0',
       react: '^19.1.0',
       'react-dom': '^19.1.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       '@lit/react': '^1.0.0',
     },
     devDependencies: {
@@ -76,6 +241,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['ssr', 'nested-routes', 'react-wrappers', 'form-integration'],
+    experimental: true,
   },
   {
     id: 'vue-nuxt',
@@ -85,13 +251,15 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.green,
     dependencies: {
       nuxt: '^4.0.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       typescript: '^5.7.0',
     },
     features: ['ssr', 'native-wc-support', 'auto-imports'],
+    experimental: true,
   },
   {
     id: 'vue-vite',
@@ -101,8 +269,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.green,
     dependencies: {
       vue: '^3.5.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       '@vitejs/plugin-vue': '^5.2.0',
@@ -110,6 +279,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['hot-reload', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'solid-vite',
@@ -119,8 +289,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.blue,
     dependencies: {
       'solid-js': '^1.9.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       'vite-plugin-solid': '^2.11.0',
@@ -128,6 +299,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['hot-reload', 'fine-grained-reactivity', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'qwik-vite',
@@ -137,33 +309,38 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.magenta,
     dependencies: {
       '@builder.io/qwik': '^1.14.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       vite: '^6.4.0',
       typescript: '^5.7.0',
     },
     features: ['resumability', 'zero-hydration', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'svelte-kit',
     name: 'SvelteKit',
-    description: 'Svelte 5 + SvelteKit, native custom element support',
-    hint: 'beta — template under review',
+    description: 'Svelte 5 runes + SvelteKit 2 + adapter-static, native <hx-*> consumption',
+    hint: 'SvelteKit (web-components-native, runes + adapter-static)',
     color: pc.red,
     dependencies: {
-      '@sveltejs/kit': '^2.20.0',
-      svelte: '^5.28.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@sveltejs/kit': '^2.0.0',
+      svelte: '^5.0.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
-      '@sveltejs/adapter-auto': '^6.0.0',
-      vite: '^6.4.0',
+      '@sveltejs/adapter-static': '^3.0.0',
+      '@sveltejs/vite-plugin-svelte': '^6.0.0',
+      'svelte-check': '^4.0.0',
+      vite: '^7.0.0',
       typescript: '^5.7.0',
     },
-    features: ['ssr', 'native-wc-support', 'runes'],
+    features: ['static', 'native-wc-support', 'runes', 'view-transitions'],
   },
   {
     id: 'angular',
@@ -176,8 +353,9 @@ export const TEMPLATES: TemplateConfig[] = [
       '@angular/compiler': '^18.0.0',
       '@angular/platform-browser': '^18.0.0',
       '@angular/platform-browser-dynamic': '^18.0.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
       rxjs: '^7.8.0',
       'zone.js': '^0.15.0',
     },
@@ -187,22 +365,25 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '~5.5.0',
     },
     features: ['signals', 'standalone-components', 'custom-elements-schema'],
+    experimental: true,
   },
   {
     id: 'astro',
     name: 'Astro',
-    description: 'Content-first with islands architecture, zero JS by default',
-    hint: 'beta — template under review',
+    description: 'Astro 5 + adapter-static + view transitions, native <hx-*> consumption',
+    hint: 'Astro (web-components-native, static-first)',
     color: pc.yellow,
     dependencies: {
       astro: '^5.7.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
+      '@astrojs/check': '^0.9.0',
       typescript: '^5.7.0',
     },
-    features: ['islands', 'zero-js-default', 'content-collections'],
+    features: ['islands', 'view-transitions', 'native-wc-support'],
   },
   {
     id: 'vanilla',
@@ -213,6 +394,7 @@ export const TEMPLATES: TemplateConfig[] = [
     dependencies: {},
     devDependencies: {},
     features: ['zero-config', 'cdn', 'no-build-step'],
+    experimental: true,
   },
   {
     id: 'lit-vite',
@@ -222,14 +404,16 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.blue,
     dependencies: {
       lit: '^3.2.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       vite: '^6.4.0',
       typescript: '^5.7.0',
     },
     features: ['web-components', 'reactive-properties', 'decorators', 'shadow-dom'],
+    experimental: true,
   },
   {
     id: 'preact-vite',
@@ -240,8 +424,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.magenta,
     dependencies: {
       preact: '^10.26.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       '@preact/preset-vite': '^2.9.0',
@@ -249,6 +434,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['hot-reload', 'react-compatible-api', 'hooks', 'native-wc-support'],
+    experimental: true,
   },
   {
     id: 'stencil',
@@ -259,13 +445,15 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.cyan,
     dependencies: {
       '@stencil/core': '^4.22.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       typescript: '^5.7.0',
     },
     features: ['web-components', 'shadow-dom', 'lazy-loading', 'decorators'],
+    experimental: true,
   },
   {
     id: 'ember',
@@ -275,8 +463,9 @@ export const TEMPLATES: TemplateConfig[] = [
     color: pc.red,
     dependencies: {
       'ember-source': '^6.0.0',
-      '@helixui/library': '^1.0.0',
-      '@helixui/tokens': '^0.3.0',
+      '@helixui/library': HELIX_LIBRARY_VERSION,
+      '@helixui/tokens': HELIX_TOKENS_VERSION,
+      '@helixui/icons': HELIX_ICONS_VERSION,
     },
     devDependencies: {
       'ember-cli': '^6.0.0',
@@ -284,6 +473,7 @@ export const TEMPLATES: TemplateConfig[] = [
       typescript: '^5.7.0',
     },
     features: ['classic-routing', 'conventions', 'native-wc-support', 'octane'],
+    experimental: true,
   },
 ];
 
@@ -412,6 +602,33 @@ export const COMPONENT_BUNDLES: ComponentBundleConfig[] = [
 
 export function getTemplate(id: string): TemplateConfig | undefined {
   return TEMPLATES.find((t) => t.id === id);
+}
+
+/**
+ * Merges built-in templates with custom templates loaded from a templateDir.
+ *
+ * Rules:
+ * - If a custom template has the same ID as a built-in, the custom version wins.
+ * - New custom templates (no matching built-in ID) are appended after all built-ins.
+ *
+ * @param customs - Custom template definitions loaded from templateDir.
+ * @returns Merged array with built-ins first (minus overrides), then new customs.
+ */
+export function mergeWithCustomTemplates(customs: CustomTemplateConfig[]): AnyTemplateConfig[] {
+  const result: AnyTemplateConfig[] = [...TEMPLATES];
+
+  for (const custom of customs) {
+    const existingIndex = result.findIndex((t) => t.id === custom.id);
+    if (existingIndex >= 0) {
+      // Custom template overrides built-in with same ID
+      result[existingIndex] = custom;
+    } else {
+      // New custom template — append after built-ins
+      result.push(custom);
+    }
+  }
+
+  return result;
 }
 
 export function getComponentsForBundles(bundles: string[]): string[] {

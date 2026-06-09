@@ -18,6 +18,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    environment: npm-publish
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +32,15 @@ jobs:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
+
+      - name: Install npm 11.5.1+ for OIDC trusted publishing
+        run: |
+          # pnpm publish auths via OIDC natively (pnpm 9.13+), but
+          # ensuring npm CLI ≥ 11.5.1 is the belt-and-suspenders fallback
+          # for any path that shells out to npm. `--force` bypasses the
+          # broken arborist self-resolution in Node 22.22.x bundled npm.
+          npm install -g npm@11.5.1 --force
+          npm --version
 
       - run: pnpm install --frozen-lockfile
 
@@ -46,27 +56,32 @@ jobs:
           commit: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
           HUSKY: '0'
 
-      - name: Generate SBOM
-        if: steps.changesets.outputs.published == 'true'
-        run: pnpm run sbom
-
-      - name: Upload SBOM as release artifact
-        if: steps.changesets.outputs.published == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-cyclonedx
-          path: sbom.json
-          retention-days: 90
+      # SBOM generation removed in v0.9.4. The prior cyclonedx-npm-based step
+      # was both broken (`pnpm ls --all` rejected by pnpm) and architecturally
+      # wrong (cyclonedx-npm only reads package-lock.json, ignoring
+      # pnpm.overrides for vite/fast-uri). Swapping to cdxgen would solve
+      # those, but cdxgen's ~675 transitive deps include sequelize@6.x with
+      # HIGH-severity advisories that cascade into our audit gate, and
+      # cdxgen's `--required-only` filter drops production transitives —
+      # neither extreme produced an accurate, ship-safe SBOM. Picking a
+      # workable SBOM stack is its own focused task (see open task tracker);
+      # for now the SBOM step is dropped so it stops blocking release
+      # notifications (Discord-notify below is gated after this step in
+      # earlier revisions of the workflow — without the SBOM step there
+      # is no gate to fail).
 
       - name: Notify Discord on release
-        if: steps.changesets.outputs.published == 'true' && secrets.DISCORD_WEBHOOK_URL != ''
+        if: steps.changesets.outputs.published == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL not set — skipping notification"
+            exit 0
+          fi
           curl -H "Content-Type: application/json" \
             -d '{
               "embeds": [{

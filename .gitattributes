@@ -1,0 +1,6 @@
+# Treat E2E visual baselines as binary — prevents prettier/eslint from
+# touching them, and stops Git from attempting text diffs on PNG bytes.
+# v0.8.0 Phase D — Astro monorepo visual gate ships these as committed
+# baselines so PR reviewers can inspect the rendered output diffs visually.
+tests/e2e/screenshots/** binary
+*.png binary

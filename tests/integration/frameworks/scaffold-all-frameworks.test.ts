@@ -66,6 +66,7 @@ const FRAMEWORKS_WITHOUT_INDEX_HTML: Framework[] = [
   'astro',
   'stencil',
   'ember',
+  'wc-storybook',
 ];
 
 const ALL_FRAMEWORKS: Framework[] = TEMPLATES.map((t) => t.id);
@@ -84,6 +85,7 @@ const FRAMEWORK_KEY_DEP: Record<Framework, string> = {
   astro: 'astro',
   vanilla: '@helixui/library',
   'lit-vite': 'lit',
+  'wc-storybook': 'lit',
   'preact-vite': 'preact',
   stencil: '@stencil/core',
   ember: 'ember-source',
@@ -126,16 +128,26 @@ describe.each(ALL_FRAMEWORKS)('scaffold-all-frameworks: %s', (framework) => {
     }
   });
 
-  it('package.json includes @helixui/library in dependencies', async () => {
+  it('package.json declares @helixui/library somewhere', async () => {
     if (framework === 'vanilla') return; // vanilla uses CDN, not npm dep
     const o = makeOpts(framework, 'helix-dep');
     await scaffoldProject(o);
     const pkg = (await readJson(path.join(o.directory, 'package.json'))) as {
       dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
     };
+    // wc-storybook publishes as a library — Helix lives in peerDependencies
+    // (consumer-host contract) + devDependencies (local pipeline) rather
+    // than runtime `dependencies`. App-style templates still declare it
+    // in dependencies as before. Either form is valid.
+    const declared =
+      pkg.dependencies['@helixui/library'] ??
+      pkg.peerDependencies?.['@helixui/library'] ??
+      pkg.devDependencies?.['@helixui/library'];
     expect(
-      pkg.dependencies['@helixui/library'],
-      'expected @helixui/library in dependencies',
+      declared,
+      `expected @helixui/library declared in ${framework} package.json`,
     ).toBeDefined();
   });
 

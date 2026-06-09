@@ -69,6 +69,30 @@ describe('drupal theme scaffolding — all presets', () => {
       expect(libs).toContain('helix-overrides:');
     });
 
+    // Per Charles Attisano (Helix design lead): every consumer of helix-tokens
+    // must declare its own responsive mode. Regression guard for task #16.
+    it('emits css/helix-responsive.css with the seeded responsive token paths', async () => {
+      const dir = path.join(ROOT, `${presetId}-responsive`);
+      await scaffoldDrupalTheme({
+        themeName: `test_${presetId}_resp`,
+        directory: dir,
+        preset: presetId,
+      });
+      await assertFilesExist(dir, ['css/helix-responsive.css']);
+      const css = await readText(dir, 'css/helix-responsive.css');
+      expect(css).toContain('--hx-responsive-grid-columns');
+      expect(css).toContain('--hx-responsive-stack-gap');
+      expect(css).toContain('--hx-responsive-font-size-scale');
+      expect(css).toMatch(/@media\s*\(\s*min-width:\s*768px\s*\)/);
+      expect(css).toMatch(/@media\s*\(\s*min-width:\s*1280px\s*\)/);
+
+      const libs = await readText(dir, `test_${presetId}_resp.libraries.yml`);
+      expect(libs).toContain('helix-responsive:');
+
+      const style = await readText(dir, 'css/style.css');
+      expect(style).toContain('@import url("helix-responsive.css")');
+    });
+
     it('all SDCs exist at components/{group}/{name}/ path', async () => {
       const dir = path.join(ROOT, `${presetId}-sdcdirs`);
       await scaffoldDrupalTheme({

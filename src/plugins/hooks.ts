@@ -1,65 +1,79 @@
-import type { HookConfig, HookContext, HookFn, HookLifecycle } from '../types.js';
+/**
+ * HookManager — lightweight synchronous/async hook system for the plugin
+ * pipeline.  Hooks are keyed by name and executed in registration order.
+ */
 
+export type HookContext = {
+  /** Name of the project being scaffolded. */
+  projectName: string;
+  /** Absolute path to the output directory. */
+  directory: string;
+  /** Arbitrary extra values supplied by the caller. */
+  [key: string]: unknown;
+};
+
+export type HookFn = (context: HookContext) => void | Promise<void>;
+
+/**
+ * Manages named hooks that can be registered and executed in order.
+ */
 export class HookManager {
-  private hooks: HookConfig[] = [];
+  private readonly hooks: Map<string, HookFn[]> = new Map();
 
-  register(lifecycle: HookLifecycle, hook: HookFn, pluginName?: string): void {
-    this.hooks.push({ lifecycle, hook, pluginName });
-  }
-
-  async run(lifecycle: HookLifecycle, context: HookContext): Promise<HookContext> {
-    let ctx = context;
-    const relevant = this.hooks.filter((h) => h.lifecycle === lifecycle);
-    for (const { hook, pluginName } of relevant) {
-      try {
-        const result = await hook(ctx);
-        if (result !== undefined && result !== null) {
-          ctx = validateHookContext(result, ctx);
-        }
-      } catch (err) {
-        const name = pluginName ?? 'unknown';
-        const message = err instanceof Error ? err.message : String(err);
-        throw new Error(`Hook "${name}" [${lifecycle}] aborted: ${message}`);
-      }
+  /**
+   * Register a handler for the given hook name.
+   *
+   * @param name  - Hook identifier (e.g. "beforeScaffold", "afterScaffold").
+   * @param fn    - Handler to invoke when the hook fires.
+   */
+  register(name: string, fn: HookFn): void {
+    if (!this.hooks.has(name)) {
+      this.hooks.set(name, []);
     }
-    return ctx;
+    const handlers = this.hooks.get(name);
+    if (handlers) handlers.push(fn);
   }
 
-  hasHooks(lifecycle: HookLifecycle): boolean {
-    return this.hooks.some((h) => h.lifecycle === lifecycle);
+  /**
+   * Execute all handlers for the given hook name in registration order.
+   * Each handler is awaited before the next is called.
+   *
+   * @param name    - Hook name to fire.
+   * @param context - Context object passed to every handler.
+   */
+  async execute(name: string, context: HookContext): Promise<void> {
+    const handlers = this.hooks.get(name) ?? [];
+    for (const fn of handlers) {
+      await fn(context);
+    }
   }
 
-  get count(): number {
-    return this.hooks.length;
+  /**
+   * Return the number of handlers registered for a given hook name.
+   */
+  count(name: string): number {
+    return this.hooks.get(name)?.length ?? 0;
+  }
+
+  /**
+   * Return all registered hook names.
+   */
+  names(): string[] {
+    return Array.from(this.hooks.keys());
   }
 }
 
+/**
+ * Build a minimal `HookContext` from raw scaffold options.
+ *
+ * @param projectName - Name of the project.
+ * @param directory   - Output directory path.
+ * @param extras      - Any additional context properties.
+ */
 export function buildHookContext(
   projectName: string,
-  template: string,
-  outputDir: string,
-  options: HookContext['options'],
-  files: Record<string, string> = {},
+  directory: string,
+  extras: Record<string, unknown> = {},
 ): HookContext {
-  return { projectName, template, outputDir, files, options };
-}
-
-function validateHookContext(result: HookContext, previous: HookContext): HookContext {
-  if (
-    typeof result !== 'object' ||
-    result === null ||
-    typeof result.projectName !== 'string' ||
-    typeof result.template !== 'string' ||
-    typeof result.outputDir !== 'string' ||
-    typeof result.files !== 'object' ||
-    result.files === null ||
-    typeof result.options !== 'object' ||
-    result.options === null
-  ) {
-    throw new Error(
-      `Hook returned invalid context. Expected HookContext shape but got: ${JSON.stringify(result)}. ` +
-        `Previous context: projectName="${previous.projectName}"`,
-    );
-  }
-  return result;
+  return { projectName, directory, ...extras };
 }

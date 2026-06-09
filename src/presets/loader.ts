@@ -1,5 +1,6 @@
 import type { PresetConfig, DrupalPreset, SDCDefinition } from '../types.js';
 import { HelixError, ErrorCode } from '../errors.js';
+import { HELIX_TOKENS_VERSION } from '../helix-versions.js';
 
 export const VALID_PRESETS: DrupalPreset[] = [
   'standard',
@@ -184,7 +185,20 @@ const ECOMMERCE_SDCS: SDCDefinition[] = [...STANDARD_SDCS, ...ECOMMERCE_ADDITION
 
 const SHARED_DEPENDENCIES: Record<string, string> = {
   '@helixui/drupal-starter': '^0.1.0',
-  '@helixui/tokens': '^0.2.0',
+  // v0.9.3 — Drupal preset surface aligned with the centralized
+  // helix-versions.ts pin, and wired to consume tokens at runtime (see
+  // generators/drupal-theme.ts: the postinstall script vendors
+  // @helixui/tokens/tokens.css into css/vendor/, where the generated
+  // {theme}.libraries.yml's `helix-tokens` library loads it). Pre-v0.9.3
+  // Drupal scaffolds declared this dep but never consumed its CSS — fresh
+  // scaffolds now actually do.
+  //
+  // NOTE: `doctor` and `upgrade` still exempt @helixui/tokens for projects
+  // that declare @helixui/drupal-starter, because `runUpgrade` is still
+  // package.json-only — it cannot yet rewrite a pre-v0.9.3 theme's
+  // libraries.yml / style.css / scripts/ wiring. Once that lands (v0.9.4
+  // follow-up) the exemptions can be removed.
+  '@helixui/tokens': HELIX_TOKENS_VERSION,
 };
 
 export const PRESETS: PresetConfig[] = [

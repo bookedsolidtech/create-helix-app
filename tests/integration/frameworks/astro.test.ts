@@ -49,11 +49,44 @@ describe('astro integration', () => {
     const o = opts('astro-layout');
     await scaffoldProject(o);
     const layout = await readText(o.directory, 'src/layouts/Layout.astro');
-    expect(layout).toContain("import '@helixui/library'");
+    // The library is loaded via a dynamic import in the runtime <script>
+    // so setBasePath() can run first (a static import would hoist above
+    // it). See src/scaffold/_shared/helix-icons-setup.ts.
+    expect(layout).toContain("await import('@helixui/library')");
     expect(layout).toContain('<script>');
     expect(layout).toContain('hx-theme');
     expect(layout).toContain('hx-top-nav');
     expect(layout).toContain('<slot />');
+  });
+
+  it('wires the @helixui/icons local-sprite setup (postinstall + setBasePath + gitignore)', async () => {
+    const o = opts('astro-icons-setup');
+    await scaffoldProject(o);
+
+    // 1. Layout.astro runtime loader calls setBasePath('/icons') BEFORE
+    //    @helixui/library loads — otherwise <hx-icon> sprites resolve to
+    //    the blocked cross-origin jsdelivr CDN default.
+    const layout = await readText(o.directory, 'src/layouts/Layout.astro');
+    expect(layout).toContain("import { setBasePath } from '@helixui/icons'");
+    expect(layout).toContain("setBasePath('/icons')");
+    expect(layout.indexOf("setBasePath('/icons')")).toBeLessThan(
+      layout.indexOf("await import('@helixui/library')"),
+    );
+
+    // 2. scripts/copy-helix-icons.mjs is emitted and resolves both sprites.
+    const copyScript = await readText(o.directory, 'scripts/copy-helix-icons.mjs');
+    expect(copyScript).toContain('@helixui/icons/dist/helix.svg');
+    expect(copyScript).toContain('@helixui/icons/dist/fa-free-solid.svg');
+    expect(copyScript).toContain('createRequire(import.meta.url)');
+    expect(copyScript).toContain("join(process.cwd(), 'public', 'icons')");
+
+    // 3. package.json postinstall runs the copy script.
+    const pkg = await readJson<{ scripts: Record<string, string> }>(o.directory, 'package.json');
+    expect(pkg.scripts['postinstall']).toBe('node scripts/copy-helix-icons.mjs');
+
+    // 4. .gitignore excludes the postinstall-generated sprite dir.
+    const gitignore = await readText(o.directory, '.gitignore');
+    expect(gitignore).toContain('public/icons/');
   });
 
   it('index.astro uses Layout and contains production hx-* components', async () => {
