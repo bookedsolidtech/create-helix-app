@@ -8573,7 +8573,6 @@ const config: StorybookConfig = {
     getAbsolutePath('@storybook/addon-themes'),
     // 2026-05-09 Phase 2 — addon parity with upstream Helix storybook.
     getAbsolutePath('@storybook/addon-links'),
-    getAbsolutePath('@storybook/addon-designs'),
     getAbsolutePath('storybook-addon-pseudo-states'),
     getAbsolutePath('@chromatic-com/storybook'),
   ],
@@ -8867,13 +8866,12 @@ const preview: Preview = {
     viewport: { options: helixViewports },
     actions: { argTypesRegex: '^hx-.*' },
     pseudo: {},
-    // The @storybook/addon-designs "design" parameter is OPT-IN per
-    // story — when a real Figma URL is configured, the consumer adds
-    // it to the individual story's parameters block (e.g.
-    //   design: { type: 'figma', url: 'https://figma.com/...' }
-    // ). Setting a global default with url:'/' produced a broken
-    // external link on every story page; dropping the global default
-    // leaves the addon dormant until the consumer wires it intentionally.
+    // Figma design linking is not wired by default. @storybook/addon-designs
+    // was dropped from the scaffold because its 11.x peer range caps storybook
+    // at ^10.2 and is incompatible with the Storybook 10.4 graph. Consumers who
+    // want it can add the addon back (a version compatible with their Storybook
+    // core) and set a per-story design parameter
+    //   ( design: { type: 'figma', url: 'https://figma.com/...' } ).
   },
 
   /**
@@ -12800,6 +12798,7 @@ setProjectAnnotations([projectAnnotations]);
     path.join(options.directory, 'vitest.config.ts'),
     `import { defineConfig } from 'vitest/config';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
+import { playwright } from '@vitest/browser-playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12825,7 +12824,10 @@ export default defineConfig({
     name: 'storybook',
     browser: {
       enabled: true,
-      provider: 'playwright',
+      // Vitest 4 moved the browser provider out of a plain string and into a
+      // factory imported from the dedicated @vitest/browser-playwright
+      // package (the v3 string form was removed).
+      provider: playwright(),
       headless: true,
       instances: [{ browser: 'chromium' }],
     },

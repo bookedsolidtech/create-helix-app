@@ -125,12 +125,11 @@ describe('wc-storybook brand fields — ProjectOptions threading', () => {
 // ---------------------------------------------------------------------------
 
 describe('wc-storybook Phase 2 — addon sync', () => {
-  it('main.ts wires all 4 new addons to match upstream Helix storybook', async () => {
+  it('main.ts wires the parity addons to match upstream Helix storybook', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-addons' });
     await scaffoldProject(opts);
     const main = await fs.readFile(path.join(opts.directory, '.storybook', 'main.ts'), 'utf-8');
     expect(main).toContain("getAbsolutePath('@storybook/addon-links')");
-    expect(main).toContain("getAbsolutePath('@storybook/addon-designs')");
     expect(main).toContain("getAbsolutePath('storybook-addon-pseudo-states')");
     expect(main).toContain("getAbsolutePath('@chromatic-com/storybook')");
     // And keeps the existing four
@@ -138,9 +137,12 @@ describe('wc-storybook Phase 2 — addon sync', () => {
     expect(main).toContain("getAbsolutePath('@storybook/addon-docs')");
     expect(main).toContain("getAbsolutePath('@storybook/addon-vitest')");
     expect(main).toContain("getAbsolutePath('@storybook/addon-themes')");
+    // addon-designs was dropped: its 11.x peer range caps storybook at ^10.2
+    // and is incompatible with the Storybook 10.4 graph.
+    expect(main).not.toContain('@storybook/addon-designs');
   });
 
-  it('package.json declares all 4 new addons in devDependencies', async () => {
+  it('package.json declares the parity addons in devDependencies', async () => {
     const opts = makeWcStorybookOptions({ name: 'phase2-deps' });
     await scaffoldProject(opts);
     const pkg = JSON.parse(
@@ -148,9 +150,10 @@ describe('wc-storybook Phase 2 — addon sync', () => {
     ) as { devDependencies?: Record<string, string> };
     const dev = pkg.devDependencies ?? {};
     expect(dev['@chromatic-com/storybook']).toBeDefined();
-    expect(dev['@storybook/addon-designs']).toBeDefined();
     expect(dev['@storybook/addon-links']).toBeDefined();
     expect(dev['storybook-addon-pseudo-states']).toBeDefined();
+    // addon-designs was dropped (incompatible with the Storybook 10.4 graph).
+    expect(dev['@storybook/addon-designs']).toBeUndefined();
   });
 });
 

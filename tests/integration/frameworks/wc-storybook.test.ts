@@ -122,13 +122,18 @@ describe('wc-storybook integration', () => {
     expect(setup).toContain('./preview');
   });
 
-  it('vitest.config.ts has storybookTest plugin and playwright browser provider', async () => {
+  it('vitest.config.ts has storybookTest plugin and Vitest 4 playwright browser provider', async () => {
     const o = opts('wcs-vitest');
     await scaffoldProject(o);
     const vitest = await readText(o.directory, 'vitest.config.ts');
     expect(vitest).toContain('storybookTest');
     expect(vitest).toContain('@storybook/addon-vitest/vitest-plugin');
-    expect(vitest).toContain("provider: 'playwright'");
+    // Vitest 4 shape: provider is a factory imported from the dedicated
+    // @vitest/browser-playwright package, not the v3 `provider: 'playwright'`
+    // string.
+    expect(vitest).toContain("import { playwright } from '@vitest/browser-playwright'");
+    expect(vitest).toContain('provider: playwright()');
+    expect(vitest).not.toContain("provider: 'playwright'");
     expect(vitest).toContain('chromium');
     expect(vitest).toContain('fileParallelism: false');
     expect(vitest).toContain('testTimeout: 30000');
@@ -582,10 +587,17 @@ describe('wc-storybook integration', () => {
     expect(pkg.devDependencies['@custom-elements-manifest/analyzer']).toBeDefined();
     expect(pkg.devDependencies['vitest']).toBeDefined();
     expect(pkg.devDependencies['@vitest/browser']).toBeDefined();
-    // playwright is required by @vitest/browser when provider is 'playwright'
-    // (vitest.config.ts ships with that setting). Pin in devDeps so vitest
-    // boots without a fail-on-first-run after install.
+    // Vitest 4 split the Playwright provider into a dedicated package, which
+    // vitest.config.ts imports as `{ playwright }`. It must be a devDep or the
+    // first browser-mode test run fails to resolve the provider.
+    expect(pkg.devDependencies['@vitest/browser-playwright']).toBeDefined();
+    // playwright is required by the @vitest/browser-playwright provider
+    // (vitest.config.ts ships with `provider: playwright()`). Pin in devDeps so
+    // vitest boots without a fail-on-first-run after install.
     expect(pkg.devDependencies['playwright']).toBeDefined();
+    // addon-designs was dropped (its 11.x peer range caps storybook at ^10.2,
+    // incompatible with the Storybook 10.4 graph the scaffold now emits).
+    expect(pkg.devDependencies['@storybook/addon-designs']).toBeUndefined();
     expect(pkg.devDependencies['vite']).toBeDefined();
     // Token generator runtime + parallel watcher
     expect(pkg.devDependencies['tsx']).toBeDefined();
