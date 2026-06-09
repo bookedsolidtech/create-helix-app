@@ -112,7 +112,7 @@ const renderSettings = () => html\`
       activation="manual"
       style="display: block;"
     >
-      <hx-tab slot="tab" panel="general" active data-testid="tab-general">General</hx-tab>
+      <hx-tab slot="tab" panel="general" selected data-testid="tab-general">General</hx-tab>
       <hx-tab slot="tab" panel="notifications" data-testid="tab-notifications">Notifications</hx-tab>
       <hx-tab slot="tab" panel="accessibility" data-testid="tab-accessibility">Accessibility</hx-tab>
 

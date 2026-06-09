@@ -302,13 +302,13 @@ import { CodeBlock } from '../_components/CodeBlock';
     <h2>Recent activity</h2>
     <${dsName}-card>
       {/* Card heading IS part of the outline -> real h3 */}
-      <h3 slot="header">Latest comments</h3>
+      <h3 slot="heading">Latest comments</h3>
       <p>3 new replies on your shared documents.</p>
     </${dsName}-card>
 
     <${dsName}-card>
       {/* Decorative subheading not in outline -> ${dsName}-text level="h4" */}
-      <${dsName}-text slot="header" level="h4">Last sync</${dsName}-text>
+      <${dsName}-text slot="heading" level="h4">Last sync</${dsName}-text>
       <p>2026-05-07 08:31 UTC</p>
     </${dsName}-card>
   </section>
