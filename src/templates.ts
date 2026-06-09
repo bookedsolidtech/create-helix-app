@@ -62,31 +62,51 @@ export const TEMPLATES: TemplateConfig[] = [
       // sprite assets at `dist/{helix,fa-free-solid}.svg`. preview.ts
       // imports setBasePath; main.ts adds `dist/` to staticDirs.
       '@helixui/icons': HELIX_ICONS_VERSION,
-      storybook: '^10.2.8',
-      '@storybook/web-components': '^10.2.8',
-      '@storybook/web-components-vite': '^10.2.8',
-      '@storybook/addon-a11y': '^10.2.8',
-      '@storybook/addon-docs': '^10.2.8',
-      '@storybook/addon-themes': '^10.2.8',
-      '@storybook/addon-vitest': '^10.2.8',
+      // Storybook 10.4 graph. The whole @storybook/* family moves together at
+      // a ^10.4.2 floor because addon-vitest@10.4 peer-requires
+      // `storybook ^10.4.2` (and the renderer/addons all peer-require the same
+      // exact-minor storybook), so a split floor (e.g. core at ^10.2.8) floats
+      // core to 10.4.x on a fresh, lockfile-less install and trips the peer
+      // contract. Pinning the family at ^10.4.2 keeps the graph coherent under
+      // pnpm's default AND `strict-peer-dependencies=true` (enterprise CI).
+      // @storybook/addon-designs was DROPPED: 11.1.3 caps its storybook /
+      // addon-docs peers at `^10.2.0-0`, which is unsatisfiable against a 10.4
+      // core. It was never wired into a story (the `design` parameter is opt-in
+      // and unused by the scaffold), so removing it is behaviour-neutral.
+      storybook: '^10.4.2',
+      '@storybook/web-components': '^10.4.2',
+      '@storybook/web-components-vite': '^10.4.2',
+      '@storybook/addon-a11y': '^10.4.2',
+      '@storybook/addon-docs': '^10.4.2',
+      '@storybook/addon-themes': '^10.4.2',
+      '@storybook/addon-vitest': '^10.4.2',
       // 2026-05-09 Phase 2 — addon parity with upstream Helix storybook.
       // Versions sourced from helix/apps/storybook/package.json. Chromatic
       // addon version intentionally tracks the @chromatic-com major (not
-      // Storybook's), per their release cadence.
-      '@chromatic-com/storybook': '^5.1.2',
-      '@storybook/addon-designs': '^11.1.3',
-      '@storybook/addon-links': '^10.2.8',
-      'storybook-addon-pseudo-states': '^10.2.8',
+      // Storybook's), per their release cadence — 5.2.x accepts a ^10.4 core.
+      '@chromatic-com/storybook': '^5.2.1',
+      '@storybook/addon-links': '^10.4.2',
+      'storybook-addon-pseudo-states': '^10.4.2',
       '@custom-elements-manifest/analyzer': '^0.10.0',
       concurrently: '^9.1.0',
       dotenv: '^16.4.5',
       tsx: '^4.19.0',
-      vitest: '^3.0.0',
-      '@vitest/browser': '^3.0.0',
+      // Vitest 4. addon-vitest@10.4 peer-requires the Playwright browser
+      // provider as the split-out `@vitest/browser-playwright ^4.0.0` package
+      // (Vitest 4 moved the provider out of `@vitest/browser`). vitest,
+      // @vitest/browser, @vitest/browser-playwright and @vitest/ui all float
+      // together at ^4 — the provider package peer-pins vitest at an exact 4.x,
+      // so a single caret major keeps them lockstep on a fresh install.
+      vitest: '^4.0.0',
+      '@vitest/browser': '^4.0.0',
+      // Playwright provider for Vitest 4 browser mode (was bundled inside
+      // @vitest/browser in v3; now a dedicated package). vitest.config.ts
+      // imports `{ playwright }` from here.
+      '@vitest/browser-playwright': '^4.0.0',
       // @vitest/ui is required by `pnpm test:ui` (vitest --ui). Without it
       // the script fails immediately on a fresh scaffold with vitest's
       // missing-package error. Pinned at the same major as vitest.
-      '@vitest/ui': '^3.0.0',
+      '@vitest/ui': '^4.0.0',
       // ESLint stack — the scaffold emits eslint.config.js by default
       // (gated only on --no-eslint), but the consumer's editor/CI would
       // fail loading the config without these packages. Pinned at the
@@ -95,10 +115,11 @@ export const TEMPLATES: TemplateConfig[] = [
       eslint: '^9.0.0',
       '@eslint/js': '^9.0.0',
       'typescript-eslint': '^8.0.0',
-      // playwright is required by @vitest/browser when browser.provider is
-      // 'playwright' (vitest.config.ts ships with that setting). Pinning here
+      // playwright is required by the @vitest/browser-playwright provider
+      // (vitest.config.ts ships with `provider: playwright()`). Pinning here
       // avoids a fail-on-first-run when consumers boot vitest right after
-      // scaffold + install.
+      // scaffold + install. (@vitest/browser-playwright peer-requires
+      // `playwright: *`, so this floor satisfies the contract.)
       playwright: '^1.50.0',
       vite: '^6.4.0',
       typescript: '^5.7.0',

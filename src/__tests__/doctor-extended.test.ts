@@ -15,6 +15,7 @@ import {
   nodeSatisfiesEngines,
   runDoctor,
 } from '../doctor.js';
+import { HELIX_ICONS_VERSION } from '../helix-versions.js';
 
 // v0.6.0 Phase F — doctor extension. Each check lives behind a skip
 // boundary so the doctor stays useful outside scaffolded projects; the
@@ -61,7 +62,7 @@ describe('checkHelixIcons', () => {
     expect(result.message).toMatch(/pnpm install/);
   });
 
-  it('fails when @helixui/icons resolves but is below the ^1.0.1 floor (0.9.0)', () => {
+  it('fails when @helixui/icons resolves but is below the create-helix floor (0.9.0)', () => {
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       devDependencies: { '@helixui/icons': '^0.9.0' },
@@ -73,10 +74,10 @@ describe('checkHelixIcons', () => {
     const result = checkHelixIcons(tmp);
     expect(result.status).toBe('fail');
     expect(result.message).toMatch(/0\.9\.0/);
-    expect(result.message).toMatch(/\^1\.0\.1/);
+    expect(result.message).toContain(HELIX_ICONS_VERSION);
   });
 
-  it('fails when @helixui/icons is 1.0.0 — below the ^1.0.1 peer floor @helixui/library@3.x requires', () => {
+  it('fails when @helixui/icons is 1.0.0 — below the peer floor @helixui/library@3.x requires', () => {
     // The major-only check this replaced would have passed 1.0.0; the
     // tightened floor catches it (codex round-3 finding).
     writeJson(path.join(tmp, 'package.json'), {
@@ -90,10 +91,10 @@ describe('checkHelixIcons', () => {
     const result = checkHelixIcons(tmp);
     expect(result.status).toBe('fail');
     expect(result.message).toMatch(/1\.0\.0/);
-    expect(result.message).toMatch(/\^1\.0\.1/);
+    expect(result.message).toContain(HELIX_ICONS_VERSION);
   });
 
-  it('passes when @helixui/icons resolves at or above the ^1.0.1 floor', () => {
+  it('passes when @helixui/icons resolves at or above the create-helix floor', () => {
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       devDependencies: { '@helixui/icons': '^1.0.1' },
@@ -113,11 +114,11 @@ describe('checkHelixIcons', () => {
     writeJson(path.join(tmp, 'package.json'), { name: 'workspace-root', private: true });
     writeJson(path.join(tmp, 'apps', 'web', 'package.json'), {
       name: '@acme/web',
-      dependencies: { '@helixui/icons': '^1.0.1' },
+      dependencies: { '@helixui/icons': '^1.0.4' },
     });
     writeJson(path.join(tmp, 'apps', 'web', 'node_modules', '@helixui', 'icons', 'package.json'), {
       name: '@helixui/icons',
-      version: '1.0.1',
+      version: '1.0.4',
     });
     const result = checkHelixIcons(tmp);
     expect(result.status).toBe('ok');
@@ -244,7 +245,24 @@ describe('checkHelixLibrary / checkHelixTokens drift', () => {
     expect(result.message).toMatch(/create-helix upgrade/);
   });
 
-  it('passes when the installed @helixui/library major is current', () => {
+  it('passes when the installed @helixui/library is at or above the pinned floor', () => {
+    writeJson(path.join(tmp, 'package.json'), {
+      name: 'foo',
+      dependencies: { '@helixui/library': '^3.10.0' },
+    });
+    writeJson(path.join(tmp, 'node_modules', '@helixui', 'library', 'package.json'), {
+      name: '@helixui/library',
+      version: '3.10.0',
+    });
+    const result = checkHelixLibrary(tmp);
+    expect(result.status).toBe('ok');
+    expect(result.message).toMatch(/v3\.10\.0/);
+  });
+
+  it('fails when the installed @helixui/library is on the pinned major but below the 3.10 floor', () => {
+    // The scaffold templates emit 3.10-only APIs (slot="heading", hx-size); a
+    // same-major 3.9.x install no longer matches the generated markup, so doctor
+    // must flag it even though it clears the major check.
     writeJson(path.join(tmp, 'package.json'), {
       name: 'foo',
       dependencies: { '@helixui/library': '^3.9.1' },
@@ -254,8 +272,8 @@ describe('checkHelixLibrary / checkHelixTokens drift', () => {
       version: '3.9.1',
     });
     const result = checkHelixLibrary(tmp);
-    expect(result.status).toBe('ok');
-    expect(result.message).toMatch(/v3\.9\.1/);
+    expect(result.status).toBe('fail');
+    expect(result.message).toMatch(/below the 3\.10\.0 floor/);
   });
 
   it('fails when @helixui/tokens is majors behind', () => {

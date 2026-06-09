@@ -255,7 +255,7 @@ const meta = {
               <div style="font-size: 13px; color: var(--hx-color-text-secondary);">
                 acct-849172 · Editor · Engineering team
               </div>
-              <${ds}-button slot="footer" variant="primary" hx-size="small">Open profile</${ds}-button>
+              <${ds}-button slot="footer" variant="primary" hx-size="sm">Open profile</${ds}-button>
             </hx-card>
             <hx-alert variant="info" open>
               <strong slot="title">Two projects merged</strong>

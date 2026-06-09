@@ -24,16 +24,33 @@
  */
 
 /** `@helixui/library` range emitted into scaffolded package.json files. */
-export const HELIX_LIBRARY_VERSION = '^3.9.1';
-
-/** `@helixui/tokens` range emitted into scaffolded package.json files. */
-export const HELIX_TOKENS_VERSION = '^3.9.1';
+export const HELIX_LIBRARY_VERSION = '^3.10.0';
 
 /**
- * `@helixui/icons` range. `@helixui/library@3.x` peer-requires `1.0.1`
- * exactly; `^1.0.1` satisfies that while leaving room for 1.x patches.
+ * Minimum `@helixui/library` version a scaffolded project must RESOLVE to. The
+ * emitted templates use 3.10-only APIs (`slot="heading"`, `hx-size`), so an
+ * install below this floor — even on the same 3.x major — no longer matches the
+ * generated markup. `doctor` fails it and `upgrade` lifts the pin past it. Keep
+ * in lockstep with HELIX_LIBRARY_VERSION.
  */
-export const HELIX_ICONS_VERSION = '^1.0.1';
+export const HELIX_LIBRARY_MIN = '3.10.0';
+
+/**
+ * `@helixui/tokens` range emitted into scaffolded package.json files.
+ *
+ * Floor is `^3.9.4`, NOT `^3.10.0`: `@helixui/tokens@3.10.0` does not exist on
+ * npm, and `@helixui/library@3.10.0` depends on `@helixui/tokens` `3.9.4`
+ * exactly. A `^3.10.0` floor here would be unsatisfiable and break a fresh
+ * install. `^3.9.4` resolves to the published 3.9.4 the library expects while
+ * leaving room for future 3.x token patches.
+ */
+export const HELIX_TOKENS_VERSION = '^3.9.4';
+
+/**
+ * `@helixui/icons` range. `@helixui/library@3.x` peer-requires `1.0.4`
+ * exactly; `^1.0.4` satisfies that while leaving room for 1.x patches.
+ */
+export const HELIX_ICONS_VERSION = '^1.0.4';
 
 /**
  * Major version `@helixui/library` is pinned/tested against. The `doctor`

@@ -4,7 +4,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { validateDirectory } from '../validation.js';
 import { detectOffline, readRegistryCache, writeRegistryCache } from '../network.js';
-import { HELIX_LIBRARY_MAJOR, HELIX_ICONS_VERSION } from '../helix-versions.js';
+import { HELIX_LIBRARY_MAJOR, HELIX_LIBRARY_MIN, HELIX_ICONS_VERSION } from '../helix-versions.js';
 
 /** Prefixes that identify a HELiX project in package.json dependencies. */
 const HELIX_PREFIXES = ['@helix/', '@helixui/'] as const;
@@ -439,6 +439,28 @@ export async function runUpgrade(dir: string, options: UpgradeOptions = {}): Pro
     const knownIconsLatest = latestVersions['@helixui/icons'];
     if (knownIconsLatest === undefined || compareSemver(knownIconsLatest, iconsFloor) === -1) {
       latestVersions['@helixui/icons'] = iconsFloor;
+    }
+  }
+
+  // Same registry-independent floor for @helixui/library, but only WITHIN the
+  // pinned major: a 3.9.x install is pulled up to the 3.10 template floor
+  // (HELIX_LIBRARY_MIN) even offline, where there's no registry signal, so it
+  // matches the 3.10-only APIs the scaffold emits. A pre-3.x library is a major
+  // migration the user opts into (the major-drift signal covers that), NOT
+  // something the floor forces across a major boundary — hence the >= 3.0.0
+  // guard. buildUpgradePlan's own downgrade guard leaves a 4.x install alone.
+  // An unparseable current range (compareSemver → null) is left alone too.
+  const currentLibrary = installed['@helixui/library'];
+  const libraryOnPinnedMajor =
+    currentLibrary !== undefined &&
+    (compareSemver(currentLibrary.replace(/^[\^~]/, ''), `${HELIX_LIBRARY_MAJOR}.0.0`) ?? -1) >= 0;
+  if (libraryOnPinnedMajor) {
+    const knownLibraryLatest = latestVersions['@helixui/library'];
+    if (
+      knownLibraryLatest === undefined ||
+      compareSemver(knownLibraryLatest, HELIX_LIBRARY_MIN) === -1
+    ) {
+      latestVersions['@helixui/library'] = HELIX_LIBRARY_MIN;
     }
   }
 
